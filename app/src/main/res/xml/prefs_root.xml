@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Main settings menu: one row per page; summaries are filled in by ScreenFragment. -->
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+    <Preference
+        app:fragment="com.brownllama.continuum.SettingsActivity$ScreenFragment"
+        app:icon="@drawable/ic_appearance"
+        app:key="appearance"
+        app:title="@string/screen_appearance" />
+    <Preference
+        app:fragment="com.brownllama.continuum.SettingsActivity$ScreenFragment"
+        app:icon="@drawable/ic_size"
+        app:key="size"
+        app:title="@string/screen_size" />
+    <Preference
+        app:fragment="com.brownllama.continuum.SettingsActivity$ScreenFragment"
+        app:icon="@drawable/ic_typing"
+        app:key="typing"
+        app:title="@string/screen_typing" />
+    <Preference
+        app:fragment="com.brownllama.continuum.SettingsActivity$ScreenFragment"
+        app:icon="@drawable/ic_gestures"
+        app:key="gestures"
+        app:title="@string/screen_gestures" />
+    <Preference
+        app:fragment="com.brownllama.continuum.SettingsActivity$ScreenFragment"
+        app:icon="@drawable/ic_gif"
+        app:key="gifs"
+        app:title="@string/screen_gifs" />
+    <Preference
+        app:fragment="com.brownllama.continuum.SettingsActivity$ScreenFragment"
+        app:icon="@drawable/ic_tips"
+        app:key="guide"
+        app:title="@string/screen_guide" />
+    <Preference
+        app:icon="@drawable/ic_reset"
+        app:key="reset"
+        app:summary="@string/reset_summary"
+        app:title="@string/reset_title" />
+</PreferenceScreen>

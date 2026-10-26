@@ -1,0 +1,24 @@
+.gradle/
+.idea/
+.kotlin/
+build/
+local.properties
+*.iml
+.DS_Store
+
+# Generated from the original Minuum APK (Whirlscape data, keep private)
+app/src/main/assets/minuum_vocab.tsv
+oldMinuumFiles/
+# Screenshots of the original Minuum app (third-party material, local reference only)
+oldMinuumScreenshots/
+
+# Never commit signing keys
+*.jks
+*.keystore
+keystore.properties
+
+# Development only, not needed to build the app (kept locally)
+app/src/test/
+reports/
+research_notes/
+tools/

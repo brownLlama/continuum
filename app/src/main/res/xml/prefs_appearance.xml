@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Theme and layout. -->
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+    <ListPreference
+        app:defaultValue="chameleon"
+        app:entries="@array/theme_names"
+        app:entryValues="@array/theme_values"
+        app:key="theme"
+        app:title="@string/pref_theme"
+        app:useSimpleSummaryProvider="true" />
+    <ListPreference
+        app:defaultValue="qwertz"
+        app:entries="@array/layout_names"
+        app:entryValues="@array/layout_values"
+        app:key="layout"
+        app:title="@string/pref_layout"
+        app:useSimpleSummaryProvider="true" />
+</PreferenceScreen>

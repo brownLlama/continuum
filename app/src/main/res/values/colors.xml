@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Nord palette, https://www.nordtheme.com/docs/colors-and-palettes -->
+    <color name="nord0">#2E3440</color>
+    <color name="nord1">#3B4252</color>
+    <color name="nord2">#434C5E</color>
+    <color name="nord3">#4C566A</color>
+    <color name="nord4">#D8DEE9</color>
+    <color name="nord5">#E5E9F0</color>
+    <color name="nord6">#ECEFF4</color>
+    <color name="nord8">#88C0D0</color>
+    <color name="nord10">#5E81AC</color>
+    <color name="nord_line_light">#D3D9E3</color>
+</resources>

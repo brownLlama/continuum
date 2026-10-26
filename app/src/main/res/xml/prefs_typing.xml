@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Corrections, feedback and learned words. -->
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+    <SwitchPreferenceCompat
+        app:defaultValue="false"
+        app:key="autocorrect"
+        app:summary="@string/pref_autocorrect_summary"
+        app:title="@string/pref_autocorrect" />
+    <SwitchPreferenceCompat
+        app:defaultValue="false"
+        app:key="autocaps"
+        app:title="@string/pref_autocaps" />
+    <SeekBarPreference
+        android:max="170"
+        app:defaultValue="110"
+        app:key="hold_ms"
+        app:min="50"
+        app:seekBarIncrement="10"
+        app:showSeekBarValue="true"
+        app:summary="@string/pref_hold_ms_summary"
+        app:title="@string/pref_hold_ms"
+        app:updatesContinuously="true" />
+    <PreferenceCategory app:title="@string/cat_learned">
+        <Preference
+            app:icon="@drawable/ic_delete"
+            app:key="clear_learned_action"
+            app:summary="@string/pref_clear_summary"
+            app:title="@string/pref_clear" />
+    </PreferenceCategory>
+</PreferenceScreen>

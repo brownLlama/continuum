@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Guide: everything about using the keyboard, read-only. -->
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+    <PreferenceCategory app:title="@string/guide_cat_0">
+        <Preference
+            app:selectable="false"
+            app:summary="@string/guide_tap"
+            app:title="@string/guide_tap_title" />
+        <Preference
+            app:selectable="false"
+            app:summary="@string/guide_space"
+            app:title="@string/guide_space_title" />
+        <Preference
+            app:selectable="false"
+            app:summary="@string/guide_zoom"
+            app:title="@string/guide_zoom_title" />
+        <Preference
+            app:selectable="false"
+            app:summary="@string/guide_shift"
+            app:title="@string/guide_shift_title" />
+        <Preference
+            app:selectable="false"
+            app:summary="@string/guide_shift_menu"
+            app:title="@string/guide_shift_menu_title" />
+    </PreferenceCategory>
+    <PreferenceCategory app:title="@string/guide_cat_1">
+        <Preference
+            app:selectable="false"
+            app:summary="@string/guide_bar"
+            app:title="@string/guide_bar_title" />
+        <Preference
+            app:selectable="false"
+            app:summary="@string/guide_fix"
+            app:title="@string/guide_fix_title" />
+        <Preference
+            app:selectable="false"
+            app:summary="@string/guide_autocorrect"
+            app:title="@string/guide_autocorrect_title" />
+    </PreferenceCategory>
+    <PreferenceCategory app:title="@string/guide_cat_2">
+        <Preference
+            app:selectable="false"
+            app:summary="@string/guide_swipe_lr"
+            app:title="@string/guide_swipe_lr_title" />
+        <Preference
+            app:selectable="false"
+            app:summary="@string/guide_swipe_ud"
+            app:title="@string/guide_swipe_ud_title" />
+        <Preference
+            app:selectable="false"
+            app:summary="@string/guide_swipe_diag"
+            app:title="@string/guide_swipe_diag_title" />
+    </PreferenceCategory>
+    <PreferenceCategory app:title="@string/guide_cat_3">
+        <Preference
+            app:selectable="false"
+            app:summary="@string/guide_full"
+            app:title="@string/guide_full_title" />
+        <Preference
+            app:selectable="false"
+            app:summary="@string/guide_numbers"
+            app:title="@string/guide_numbers_title" />
+        <Preference
+            app:selectable="false"
+            app:summary="@string/guide_fields"
+            app:title="@string/guide_fields_title" />
+    </PreferenceCategory>
+    <PreferenceCategory app:title="@string/guide_cat_4">
+        <Preference
+            app:selectable="false"
+            app:summary="@string/guide_emoji"
+            app:title="@string/guide_emoji_title" />
+        <Preference
+            app:selectable="false"
+            app:summary="@string/guide_clipboard"
+            app:title="@string/guide_clipboard_title" />
+        <Preference
+            app:selectable="false"
+            app:summary="@string/guide_gif"
+            app:title="@string/guide_gif_title" />
+    </PreferenceCategory>
+    <PreferenceCategory app:title="@string/guide_cat_5">
+        <Preference
+            app:selectable="false"
+            app:summary="@string/guide_learning"
+            app:title="@string/guide_learning_title" />
+        <Preference
+            app:selectable="false"
+            app:summary="@string/guide_privacy"
+            app:title="@string/guide_privacy_title" />
+    </PreferenceCategory>
+    <PreferenceCategory app:title="@string/guide_cat_6">
+        <Preference
+            app:selectable="false"
+            app:summary="@string/guide_appearance"
+            app:title="@string/guide_appearance_title" />
+        <Preference
+            app:selectable="false"
+            app:summary="@string/guide_size"
+            app:title="@string/guide_size_title" />
+        <Preference
+            app:selectable="false"
+            app:summary="@string/guide_reset"
+            app:title="@string/guide_reset_title" />
+    </PreferenceCategory>
+    <PreferenceCategory app:title="@string/guide_cat_credits">
+        <Preference
+            app:selectable="false"
+            app:summary="@string/guide_credits"
+            app:title="@string/guide_credits_title" />
+    </PreferenceCategory>
+</PreferenceScreen>

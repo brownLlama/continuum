@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Keyboard heights and where it sits on the screen. -->
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+    <PreferenceCategory app:title="@string/cat_height">
+        <SeekBarPreference
+            android:max="100"
+            app:defaultValue="70"
+            app:key="mini_height"
+            app:min="40"
+            app:seekBarIncrement="5"
+            app:showSeekBarValue="true"
+            app:title="@string/pref_mini_height"
+            app:updatesContinuously="true" />
+        <SeekBarPreference
+            android:max="110"
+            app:defaultValue="80"
+            app:key="full_height"
+            app:min="50"
+            app:seekBarIncrement="5"
+            app:showSeekBarValue="true"
+            app:title="@string/pref_full_height"
+            app:updatesContinuously="true" />
+        <SeekBarPreference
+            android:max="180"
+            app:defaultValue="140"
+            app:key="bar_height"
+            app:min="100"
+            app:seekBarIncrement="5"
+            app:showSeekBarValue="true"
+            app:title="@string/pref_bar_height"
+            app:updatesContinuously="true" />
+    </PreferenceCategory>
+    <PreferenceCategory app:title="@string/cat_position">
+        <SeekBarPreference
+            android:max="30"
+            app:defaultValue="15"
+            app:key="bottom_space_dp"
+            app:min="0"
+            app:seekBarIncrement="1"
+            app:showSeekBarValue="true"
+            app:summary="@string/pref_bottom_space_dp_summary"
+            app:title="@string/pref_bottom_space_dp"
+            app:updatesContinuously="true" />
+        <SwitchPreferenceCompat
+            app:defaultValue="true"
+            app:key="hide_system_buttons"
+            app:summary="@string/pref_hide_system_buttons_summary"
+            app:title="@string/pref_hide_system_buttons" />
+    </PreferenceCategory>
+</PreferenceScreen>

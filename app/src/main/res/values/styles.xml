@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Settings rows use Material 3 switches instead of the preference library's default. -->
+    <style name="PreferenceTheme.Continuum" parent="PreferenceThemeOverlay">
+        <item name="switchPreferenceCompatStyle">@style/Preference.Switch.Continuum</item>
+    </style>
+
+    <style name="Preference.Switch.Continuum" parent="Preference.SwitchPreferenceCompat.Material">
+        <item name="widgetLayout">@layout/pref_switch</item>
+    </style>
+</resources>
