@@ -1,0 +1,196 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Continuum</string>
+    <string name="ime_name">Continuum</string>
+    <string name="subtype_en">Continuum</string>
+
+    <!-- Setup card -->
+    <string name="setup_title">Set up Continuum</string>
+    <string name="enable_keyboard">Enable</string>
+    <string name="select_keyboard">Switch to it</string>
+    <string name="status_disabled">Turn on Continuum in your keyboard settings, then switch to it.</string>
+    <string name="status_enabled">Almost done: switch to Continuum as your keyboard.</string>
+    <string name="try_hint">Try the keyboard here</string>
+
+    <!-- Main menu -->
+    <string name="screen_appearance">Appearance</string>
+    <string name="screen_size">Size &amp; position</string>
+    <string name="screen_typing">Typing</string>
+    <string name="screen_gestures">Gestures</string>
+    <string name="screen_guide">Guide</string>
+    <string name="summary_size">Mini %1$d%% · Full %2$d%% · Bar %3$d%%</string>
+    <string name="summary_typing_on">Autocorrect on · Hold %1$d ms</string>
+    <string name="summary_typing_off">Autocorrect off · Hold %1$d ms</string>
+    <string name="summary_gestures">← delete word · → space · ↓ numbers · ↑ full · ↖ ↗ enter</string>
+    <string name="version_title">Version</string>
+    <string name="summary_guide">How to type, gestures, emoji, clipboard, privacy</string>
+    <string name="reset_title">Reset to defaults</string>
+    <string name="reset_summary">Put every setting back as it was. Learned words and your KLIPY key are kept.</string>
+    <string name="reset_confirm_title">Reset all settings?</string>
+    <string name="reset_confirm_message">Theme, layout, sizes, typing and gesture settings go back to their defaults.</string>
+    <string name="reset_confirm">Reset</string>
+    <string name="reset_done">Settings reset</string>
+
+    <!-- Appearance -->
+    <string name="pref_theme">Theme</string>
+    <string name="pref_layout">Layout</string>
+
+    <!-- Size & position -->
+    <string name="cat_height">Height</string>
+    <string name="pref_mini_height">Mini keyboard (%)</string>
+    <string name="pref_full_height">Full keyboard (%)</string>
+    <string name="pref_bar_height">Suggestion bar (%)</string>
+    <string name="cat_position">Position</string>
+    <string name="pref_bottom_space_dp">Space below keyboard (dp)</string>
+    <string name="pref_bottom_space_dp_summary">Extra space between the keys and Android\'s navigation bar or gesture handle. The keys never overlap it.</string>
+    <string name="pref_hide_system_buttons">Hide system buttons</string>
+    <string name="pref_hide_system_buttons_summary">Removes Android\'s keyboard-switch and hide-keyboard buttons from under the keys (Android 16+), giving the space back. Hold shift, or the space bar in the full keyboard, to switch keyboards.</string>
+
+    <!-- Typing -->
+    <string name="pref_autocorrect">Autocorrect</string>
+    <string name="pref_autocorrect_summary">Full keyboard only. Off: words are typed exactly and learned. Also the switch in the suggestion bar.</string>
+    <string name="pref_autocaps">Auto-capitalisation</string>
+    <string name="pref_hold_ms">Press and hold (ms)</string>
+    <string name="pref_hold_ms_summary">How long to hold before a popup opens</string>
+    <string name="cat_learned">Learned words</string>
+    <string name="pref_clear">Forget learned words</string>
+    <string name="pref_clear_summary">Clear the words and phrases learned from your typing</string>
+    <string name="clear_confirm_title">Forget learned words?</string>
+    <string name="clear_confirm_message">Suggestions go back to the built-in dictionary. This can\'t be undone.</string>
+    <string name="clear_confirm">Forget</string>
+    <string name="cleared">Learned words cleared</string>
+
+    <!-- Gestures -->
+    <string name="cat_swipe">Sensitivity</string>
+    <string name="pref_swipe_min_dp">Shortest swipe (dp)</string>
+    <string name="gestures_intro">Every touch that moves is either a tap or a swipe (delete word, space, enter, numbers, full keyboard; see the Guide). A stroke is a swipe only if it\'s at least the shortest swipe, straight enough, and either fast enough or as long as a long swipe. Otherwise it counts as a tap where your finger first landed.</string>
+    <string name="pref_swipe_min_dp_summary">The minimum distance for a swipe. Anything shorter is always a tap, however fast. Raise it if quick taps turn into swipes; lower it for shorter swipes.</string>
+    <string name="pref_swipe_speed">Flick speed (dp / 100 ms)</string>
+    <string name="pref_swipe_speed_summary">How fast a short swipe must be. Lower: gentle flicks count as swipes. Higher: only quick flicks do, so slow sliding stays a tap.</string>
+    <string name="pref_swipe_long_dp">Long swipe (dp)</string>
+    <string name="pref_swipe_long_dp_summary">Strokes at least this long are swipes even when slow. Lower it if slow swipes are ignored; raise it if slow drags to a letter become swipes.</string>
+    <string name="pref_swipe_straightness">Straightness (%)</string>
+    <string name="pref_swipe_straightness_summary">How straight the path must be: the distance from start to end, as a share of the path\'s length. Higher: curved or wobbly strokes are taps. Lower: they still count as swipes.</string>
+
+
+    <!-- GIFs -->
+    <string name="screen_gifs">GIFs</string>
+    <string name="summary_gifs_on">Search powered by KLIPY</string>
+    <string name="summary_gifs_off">Add a free KLIPY key to search GIFs</string>
+    <string name="pref_show_gifs">Show GIFs</string>
+    <string name="pref_show_gifs_summary">The GIF and clipboard tabs in the emoji panel. Turn off if you don\'t use GIFs or have no KLIPY key. The clipboard then opens only from mini mode\'s symbol row.</string>
+    <string name="summary_gifs_hidden">Hidden from the keyboard</string>
+    <string name="pref_klipy_key">KLIPY API key</string>
+    <string name="pref_klipy_key_set">Key added</string>
+    <string name="pref_klipy_key_unset">Not set. Get a free key at partner.klipy.com</string>
+    <string name="pref_gifs_privacy_title">Privacy</string>
+    <string name="pref_gifs_privacy">Only GIF searches and the GIFs you pick are sent to KLIPY, with an anonymous ID. Nothing you type in apps is sent.</string>
+
+    <!-- Guide -->
+    <string name="guide_cat_0">Basics</string>
+    <string name="guide_tap_title">Tap roughly</string>
+    <string name="guide_tap">Mini mode puts every letter in one row. Tap near the letters you mean and Continuum works out the word from where you tapped, how common words are and what you usually type. The middle of the suggestion bar shows its best guess.</string>
+    <string name="guide_space_title">Space</string>
+    <string name="guide_space">Space types the middle suggestion. A second space right after a word types a full stop, and the bar then offers other punctuation to swap it for.</string>
+    <string name="guide_zoom_title">Exact letters, numbers and symbols</string>
+    <string name="guide_zoom">Hold on the letter row to zoom in. Slide sideways to pick one letter exactly, or slide up to the symbol row. Lift to type it.</string>
+    <string name="guide_shift_title">Capitals</string>
+    <string name="guide_shift">Tap shift for one capital, tap it twice quickly for caps lock. Auto-capitalisation (Typing) capitalises the start of each sentence.</string>
+    <string name="guide_shift_menu_title">Settings and other keyboards</string>
+    <string name="guide_shift_menu">Hold shift (it shows ⋯) and slide onto the sliders icon to open these settings, or onto the keyboard icon to switch to another keyboard. In the full keyboard, holding the space bar also switches keyboards.</string>
+    <string name="guide_cat_1">Fixing words</string>
+    <string name="guide_bar_title">Suggestion bar</string>
+    <string name="guide_bar">Tap a word to use it. Drag the bar sideways for more. Hold a word to remove it from suggestions for good. When a word has an emoji, it appears right after the word; tapping it replaces the word.</string>
+    <string name="guide_fix_title">Fix the last word</string>
+    <string name="guide_fix">Backspace right after a word reopens it, so you can pick a different suggestion. After you delete a whole word, the bar offers it again with its alternatives.</string>
+    <string name="guide_autocorrect_title">Autocorrect</string>
+    <string name="guide_autocorrect">Mini mode always picks the most likely word. In the full keyboard, autocorrect (the switch at the left of the bar, or Typing → Autocorrect) fixes typos like \"teh\"; with it off, letters are typed exactly as tapped.</string>
+    <string name="guide_cat_2">Gestures</string>
+    <string name="guide_swipe_lr_title">Swipe left or right</string>
+    <string name="guide_swipe_lr">Swipe left anywhere to delete the last word, right to type a space.</string>
+    <string name="guide_swipe_ud_title">Swipe up or down</string>
+    <string name="guide_swipe_ud">Swipe up in mini mode for the full keyboard. Swipe down to switch between letters and numbers; in the full keyboard, swipe down from the suggestion bar to go back to mini mode.</string>
+    <string name="guide_swipe_diag_title">Swipe diagonally up</string>
+    <string name="guide_swipe_diag">Up-left or up-right acts as enter. If swipes are mistaken for taps or the other way round, adjust Gestures → Sensitivity.</string>
+    <string name="guide_cat_3">Full keyboard</string>
+    <string name="guide_full_title">Keys and hints</string>
+    <string name="guide_full">A normal keyboard in the same style. The small character on each key is typed by holding it. Hold the full stop for , ! ?</string>
+    <string name="guide_numbers_title">Numbers and symbols</string>
+    <string name="guide_numbers">123 opens two pages of numbers and symbols. In mini mode, swipe down for the number row; hold on it to zoom in, like the letters.</string>
+    <string name="guide_fields_title">Passwords and numbers</string>
+    <string name="guide_fields">Password and number fields always open the full keyboard, type exactly what you tap, and never learn from what you type.</string>
+    <string name="guide_cat_4">Emoji, clipboard and GIFs</string>
+    <string name="guide_emoji_title">Emoji</string>
+    <string name="guide_emoji">In mini mode, hold the row, slide up and onto ☺. In the full keyboard, hold the comma. Tabs at the top jump between groups; your most used emoji come first.</string>
+    <string name="guide_clipboard_title">Clipboard</string>
+    <string name="guide_clipboard">In mini mode, hold the row, slide up and onto the clipboard at the far left. It\'s also a tab in the emoji panel, unless Show GIFs (Settings → GIFs) is off. Tap a clip to paste it, hold to delete it, or tap the bin to clear all. Continuum keeps up to 30 clips for 7 days and skips anything copied from password or private fields.</string>
+    <string name="guide_gif_title">GIFs</string>
+    <string name="guide_gif">In the emoji panel, tap GIF. Tap the search field to type, enter to search, then tap a GIF to send it. Apps that don\'t take GIFs get the link instead. Needs a free KLIPY key (Settings → GIFs), where you can also hide the GIF tab.</string>
+    <string name="guide_cat_5">Learning and privacy</string>
+    <string name="guide_learning_title">Learning your words</string>
+    <string name="guide_learning">Continuum learns the words you type, how you spell them, and which words follow which. A new word typed once shows up next to the best guess; type it again or pick it from the bar and it becomes a normal suggestion. Typing → Forget learned words clears everything learned.</string>
+    <string name="guide_privacy_title">Privacy</string>
+    <string name="guide_privacy">Everything you type stays on your phone and is never backed up to the cloud. Private (incognito) fields teach it nothing. The only thing that goes online is a GIF search, sent to KLIPY.</string>
+    <string name="guide_cat_6">Settings</string>
+    <string name="guide_appearance_title">Appearance</string>
+    <string name="guide_appearance">Theme: Chameleon (the default) gives each app\'s keyboard that app\'s own colour, with no two apps alike; or pick a fixed theme. Layout: QWERTZ or QWERTY.</string>
+    <string name="guide_size_title">Size &amp; position</string>
+    <string name="guide_size">Height sliders for the mini keyboard, the full keyboard and the suggestion bar, and the space under the keys. The keys always sit above Android\'s navigation bar or gesture handle.</string>
+    <string name="guide_reset_title">Reset to defaults</string>
+    <string name="guide_reset">On the main settings page. Puts every setting back to its default; your learned words and KLIPY key stay.</string>
+    <string name="guide_cat_credits">About</string>
+    <string name="guide_credits_title">Credits and licences</string>
+    <string name="guide_credits">Continuum is an independent continuation of Minuum, not affiliated with Whirlscape. Word frequencies: hermitdave/FrequencyWords, from OpenSubtitles (CC BY-SA 4.0). Common misspellings: Wikipedia contributors (CC BY-SA 4.0). Emoji list and emoji suggestions: Unicode, Inc. and Unicode CLDR (Unicode License V3). Libraries: AndroidX, Material Components and Kotlin (Apache 2.0). GIF search by KLIPY. Full notices: github.com/brownLlama/continuum, THIRD_PARTY_NOTICES.md.</string>
+
+    <!-- Shown by the keyboard -->
+    <string name="gif_search_hint">Search KLIPY</string>
+    <string name="gif_loading">Loading GIFs…</string>
+    <string name="gif_none">No GIFs found</string>
+    <string name="gif_error">Couldn\'t reach KLIPY. Check your connection.</string>
+    <string name="clip_title">Clipboard</string>
+    <string name="clip_empty">Copied text shows up here. Hold a clip to delete it.</string>
+    <string name="gif_no_key">Add a free KLIPY key in Continuum → GIFs</string>
+    <string name="gif_link_pasted">This app doesn\'t accept GIFs, so the link was pasted</string>
+    <string name="gif_send_failed">Couldn\'t download that GIF</string>
+    <string name="autocorrect_on">Autocorrect on</string>
+    <string name="autocorrect_off">Autocorrect off: words are typed and learned as written</string>
+    <string name="mode_locked">This field needs the full keyboard</string>
+
+    <!-- Chameleon takes each app's colour; the rest are KeyboardTheme.PRESETS. -->
+    <string-array name="theme_names">
+        <item>Chameleon (each app\'s colour)</item>
+        <item>Dark</item>
+        <item>Light</item>
+        <item>Nord</item>
+        <item>Nord Light</item>
+        <item>Dracula</item>
+        <item>Gruvbox</item>
+        <item>Solarized Dark</item>
+        <item>Solarized Light</item>
+        <item>Catppuccin</item>
+        <item>Tokyo Night</item>
+        <item>One Dark</item>
+    </string-array>
+    <string-array name="theme_values">
+        <item>chameleon</item>
+        <item>dark</item>
+        <item>light</item>
+        <item>nord</item>
+        <item>nord_light</item>
+        <item>dracula</item>
+        <item>gruvbox</item>
+        <item>solarized_dark</item>
+        <item>solarized_light</item>
+        <item>catppuccin</item>
+        <item>tokyo_night</item>
+        <item>one_dark</item>
+    </string-array>
+    <string-array name="layout_names">
+        <item>QWERTZ</item>
+        <item>QWERTY</item>
+    </string-array>
+    <string-array name="layout_values">
+        <item>qwertz</item>
+        <item>qwerty</item>
+    </string-array>
+</resources>

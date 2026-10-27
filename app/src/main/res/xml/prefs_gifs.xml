@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- GIF search through KLIPY: the user's own free key and what is sent. -->
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+    <SwitchPreferenceCompat
+        app:defaultValue="true"
+        app:key="show_gifs"
+        app:summary="@string/pref_show_gifs_summary"
+        app:title="@string/pref_show_gifs" />
+    <EditTextPreference
+        app:dependency="show_gifs"
+        app:key="klipy_key"
+        app:title="@string/pref_klipy_key" />
+    <Preference
+        app:selectable="false"
+        app:summary="@string/pref_gifs_privacy"
+        app:title="@string/pref_gifs_privacy_title" />
+</PreferenceScreen>

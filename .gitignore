@@ -1,0 +1,16 @@
+.gradle/
+.idea/
+.kotlin/
+build/
+local.properties
+*.iml
+.DS_Store
+
+# Never commit signing keys
+*.jks
+*.keystore
+keystore.properties
+
+# Development only, not needed to build the app (kept locally)
+app/src/test/
+tools/

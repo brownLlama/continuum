@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- How swipes are told apart from taps (swipe shortcuts are always on; the Guide lists them). -->
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+    <PreferenceCategory app:title="@string/cat_swipe">
+        <Preference
+            app:selectable="false"
+            app:summary="@string/gestures_intro" />
+        <SeekBarPreference
+            android:max="45"
+            app:defaultValue="25"
+            app:key="swipe_min_dp"
+            app:min="5"
+            app:seekBarIncrement="5"
+            app:showSeekBarValue="true"
+            app:summary="@string/pref_swipe_min_dp_summary"
+            app:title="@string/pref_swipe_min_dp"
+            app:updatesContinuously="true" />
+        <SeekBarPreference
+            android:max="45"
+            app:defaultValue="25"
+            app:key="swipe_speed"
+            app:min="5"
+            app:seekBarIncrement="5"
+            app:showSeekBarValue="true"
+            app:summary="@string/pref_swipe_speed_summary"
+            app:title="@string/pref_swipe_speed"
+            app:updatesContinuously="true" />
+        <SeekBarPreference
+            android:max="125"
+            app:defaultValue="75"
+            app:key="swipe_long_dp"
+            app:min="25"
+            app:seekBarIncrement="10"
+            app:showSeekBarValue="true"
+            app:summary="@string/pref_swipe_long_dp_summary"
+            app:title="@string/pref_swipe_long_dp"
+            app:updatesContinuously="true" />
+        <SeekBarPreference
+            android:max="90"
+            app:defaultValue="60"
+            app:key="swipe_straightness"
+            app:min="30"
+            app:seekBarIncrement="5"
+            app:showSeekBarValue="true"
+            app:summary="@string/pref_swipe_straightness_summary"
+            app:title="@string/pref_swipe_straightness"
+            app:updatesContinuously="true" />
+    </PreferenceCategory>
+</PreferenceScreen>

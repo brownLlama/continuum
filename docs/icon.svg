@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="18 18 72 72" width="160" height="160">
+  <!-- The launcher icon (res/drawable/ic_launcher_foreground.xml on nord0), as an adaptive icon's visible area. -->
+  <rect x="18" y="18" width="72" height="72" rx="16" fill="#2E3440"/>
+  <g transform="translate(0,-2)">
+    <path d="M54,47C60,38 76,36 76,47C76,58 60,56 54,47C48,38 32,36 32,47C32,58 48,56 54,47Z"
+          fill="none" stroke="#88C0D0" stroke-width="6" stroke-linejoin="round"/>
+    <path d="M32.4,66a2.6,2.6 0,1 0,5.2,0a2.6,2.6 0,1 0,-5.2,0ZM38.7,71a2.6,2.6 0,1 0,5.2,0a2.6,2.6 0,1 0,-5.2,0ZM45,66a2.6,2.6 0,1 0,5.2,0a2.6,2.6 0,1 0,-5.2,0ZM57.8,66a2.6,2.6 0,1 0,5.2,0a2.6,2.6 0,1 0,-5.2,0ZM64.1,71a2.6,2.6 0,1 0,5.2,0a2.6,2.6 0,1 0,-5.2,0ZM70.4,66a2.6,2.6 0,1 0,5.2,0a2.6,2.6 0,1 0,-5.2,0Z"
+          fill="#D8DEE9"/>
+    <path d="M50.6,71a3.4,3.4 0,1 0,6.8,0a3.4,3.4 0,1 0,-6.8,0Z" fill="#88C0D0"/>
+  </g>
+</svg>
