@@ -34,8 +34,10 @@
     <!-- Appearance -->
     <string name="pref_theme">Theme</string>
     <string name="pref_layout">Layout</string>
-    <string name="pref_llama">Llama visits</string>
-    <string name="pref_llama_summary">Now and then a little llama walks across the keys. Your taps go through it to the keys.</string>
+    <string name="pref_animals">Animal visits</string>
+    <string name="pref_animals_summary">Now and then a little animal walks across the keys. Your taps go through it to the keys.</string>
+    <string name="pref_animal_kinds">Animals</string>
+    <string name="pref_animal_kinds_none">None picked, so none visit</string>
 
     <!-- Size & position -->
     <string name="cat_height">Height</string>
@@ -159,7 +161,7 @@
     <string name="guide_reset">On the main settings page. Puts every setting back to its default; your learned words and KLIPY key stay.</string>
     <string name="guide_cat_credits">About</string>
     <string name="guide_credits_title">Credits and licences</string>
-    <string name="guide_credits">Continuum is an independent continuation of Minuum, not affiliated with Whirlscape. Word frequencies: hermitdave/FrequencyWords, from OpenSubtitles (CC BY-SA 4.0). Common misspellings: Wikipedia contributors (CC BY-SA 4.0). Emoji list and emoji suggestions: Unicode, Inc. and Unicode CLDR (Unicode License V3). Libraries: AndroidX, Material Components and Kotlin (Apache 2.0). GIF search by KLIPY. Full notices: github.com/brownLlama/continuum, THIRD_PARTY_NOTICES.md.</string>
+    <string name="guide_credits">Continuum is an independent continuation of Minuum, not affiliated with Whirlscape. Word frequencies: hermitdave/FrequencyWords, from OpenSubtitles (CC BY-SA 4.0). Common misspellings: Wikipedia contributors (CC BY-SA 4.0). Emoji list and emoji suggestions: Unicode, Inc. and Unicode CLDR (Unicode License V3). Keyboard font: Maple Mono (SIL Open Font License 1.1). Libraries: AndroidX, Material Components and Kotlin (Apache 2.0). GIF search by KLIPY. Full notices: github.com/brownLlama/continuum, THIRD_PARTY_NOTICES.md.</string>
 
     <!-- Shown by the keyboard -->
     <string name="gif_search_hint">Search KLIPY</string>
@@ -176,6 +178,23 @@
     <string name="mode_locked">This field needs the full keyboard</string>
 
     <!-- Chameleon takes each app's colour; the rest are KeyboardTheme.PRESETS. -->
+    <!-- Visiting animals: names in the order of Species.ALL, values are Species.key. -->
+    <string-array name="animal_names">
+        <item>Llama</item>
+        <item>Dog</item>
+        <item>Cat</item>
+        <item>Turtle</item>
+        <item>Sheep</item>
+        <item>Snow leopard</item>
+    </string-array>
+    <string-array name="animal_values" translatable="false">
+        <item>llama</item>
+        <item>dog</item>
+        <item>cat</item>
+        <item>turtle</item>
+        <item>sheep</item>
+        <item>snow_leopard</item>
+    </string-array>
     <string-array name="theme_names">
         <item>Chameleon (each app\'s colour)</item>
         <item>Dark</item>

@@ -78,8 +78,8 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
     interface Listener {
         /** A touch on the letters, to be decoded into a word (see [Tap] for the coordinates). */
         fun onLetterTap(tap: Tap)
-        /** Whether the llama may visit now (not in a password field…), see [Llama]. */
-        fun llamaMayVisit(): Boolean
+        /** Whether an animal may visit now (not in a password field…), see [Animal]. */
+        fun animalMayVisit(): Boolean
         /** Literal text to type: a digit, a symbol, or a long-press character. */
         fun onText(text: String)
         /** An emoji picked from the emoji panel. */
@@ -205,11 +205,11 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
     /** The field takes an email address: full mode's "," key becomes "@". */
     var emailField = false
         set(value) { if (field != value) { field = value; relayout() } }
-    /** Setting "Llama visits": now and then a llama walks across the keys (see [Llama]). */
-    var llamaVisits = Prefs.LLAMA_DEFAULT
+    /** Settings "Animal visits" and "Animals": which may walk across the keys now and then (none: off). */
+    internal var animals: List<Species> = Species.ALL
         set(value) {
             field = value
-            if (value) scheduleLlama() else endLlama(cancel = true)
+            if (value.isNotEmpty()) scheduleAnimal() else endAnimal(cancel = true)
         }
     /** The editor's action (EditorInfo.IME_ACTION_*), drawn on the enter key; NONE = plain enter arrow. */
     var enterAction = EditorInfo.IME_ACTION_NONE
@@ -920,9 +920,9 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
         touchTime = e.eventTime
         when (e.actionMasked) {
             MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN -> {
-                // The llama walks on (touches go to the keys); a visit only starts in a pause in typing.
+                // An animal walks on (touches go to the keys); a visit only starts in a pause in typing.
                 lastTouchAt = e.eventTime
-                scheduleLlama()
+                scheduleAnimal()
                 // A new finger landing finishes simple taps still in progress, keeping fast two-thumb typing in order.
                 for (p in pointers.values.toList()) if (p.flushable) release(p)
                 val i = e.actionIndex
@@ -1326,68 +1326,68 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
         }
     }
 
-    // ---- the llama ----------------------------------------------------------------------------
+    // ---- visiting animals --------------------------------------------------------------------
 
     /** 2 dp per sprite pixel, in whole screen pixels so it stays crisp. */
-    private val llama = Llama(max(1f, (2f * density).roundToInt().toFloat()))
-    private val llamaCheck = Runnable { maybeStartLlama() }
+    private val animal = Animal(max(1f, (2f * density).roundToInt().toFloat()))
+    private val animalCheck = Runnable { maybeStartAnimal() }
     private var lastTouchAt = 0L
 
-    /** Checks for a visit after a pause in typing of [LLAMA_IDLE_MS] (or after [delay]). */
-    private fun scheduleLlama(delay: Long = LLAMA_IDLE_MS) {
-        timer.removeCallbacks(llamaCheck)
-        if (llamaVisits && isAttachedToWindow && windowVisibility == VISIBLE) timer.postDelayed(llamaCheck, delay)
+    /** Checks for a visit after a pause in typing of [ANIMAL_IDLE_MS] (or after [delay]). */
+    private fun scheduleAnimal(delay: Long = ANIMAL_IDLE_MS) {
+        timer.removeCallbacks(animalCheck)
+        if (animals.isNotEmpty() && isAttachedToWindow && windowVisibility == VISIBLE) timer.postDelayed(animalCheck, delay)
     }
 
     /** Ends a visit at once (the keyboard changed under it); [cancel] also drops the next check. */
-    private fun endLlama(cancel: Boolean = false) {
-        if (cancel) timer.removeCallbacks(llamaCheck)
-        if (llama.visiting) {
-            llama.end()
+    private fun endAnimal(cancel: Boolean = false) {
+        if (cancel) timer.removeCallbacks(animalCheck)
+        if (animal.visiting) {
+            animal.end()
             invalidate()
         }
     }
 
     /**
-     * Starts a visit if one is due ([nextLlamaAt]) and the letters are showing in a pause in typing
+     * Starts a visit if one is due ([nextAnimalAt]) and the letters are showing in a pause in typing
      * (no finger down, no zoom, no GIF search, and the IME agrees).
      */
-    private fun maybeStartLlama() {
-        if (!llamaVisits || !animating || llama.visiting) return
+    private fun maybeStartAnimal() {
+        if (animals.isEmpty() || !animating || animal.visiting) return
         val now = SystemClock.uptimeMillis()
-        if (now < nextLlamaAt) return scheduleLlama(max(LLAMA_IDLE_MS, nextLlamaAt - now))
+        if (now < nextAnimalAt) return scheduleAnimal(max(ANIMAL_IDLE_MS, nextAnimalAt - now))
         val idle = pointers.isEmpty() && zoom == null && !gifSearching && panel == Panel.LETTERS &&
-            now - lastTouchAt >= LLAMA_IDLE_MS && listener.llamaMayVisit()
-        if (!idle) return scheduleLlama()
+            now - lastTouchAt >= ANIMAL_IDLE_MS && listener.animalMayVisit()
+        if (!idle) return scheduleAnimal()
         // Mini mode: along the letter row. Full mode: a random one of the four rows.
         val feet = if (mode == Mode.MINI) {
             letterRect.bottom - dp(4f)
         } else {
             barH + fullRowH * (1 + kotlin.random.Random.nextInt(4)) - dp(3f)
         }
-        llama.start(width.toFloat(), feet, now)
-        nextLlamaAt = now + randomBetween(LLAMA_EVERY_MS)
+        animal.start(animals.random(), width.toFloat(), feet, now)
+        nextAnimalAt = now + randomBetween(ANIMAL_EVERY_MS)
         invalidate()
     }
 
     private fun randomBetween(range: LongRange) = range.first + kotlin.random.Random.nextLong(range.last - range.first)
 
-    private fun drawLlama(c: Canvas) {
-        if (!llama.visiting) return
-        val next = llama.draw(c, width.toFloat(), SystemClock.uptimeMillis())
+    private fun drawAnimal(c: Canvas) {
+        if (!animal.visiting) return
+        val next = animal.draw(c, width.toFloat(), SystemClock.uptimeMillis())
         // Redraw only when it next moves a pixel or changes frame, not every display frame.
-        if (next >= 0) postInvalidateDelayed(next) else scheduleLlama()
+        if (next >= 0) postInvalidateDelayed(next) else scheduleAnimal()
     }
 
     override fun onWindowVisibilityChanged(visibility: Int) {
         super.onWindowVisibilityChanged(visibility)
         // Keyboard sessions are short, so a due visit comes a few seconds after it opens.
-        if (visibility == VISIBLE) scheduleLlama(randomBetween(LLAMA_OPEN_MS)) else endLlama(cancel = true)
+        if (visibility == VISIBLE) scheduleAnimal(randomBetween(ANIMAL_OPEN_MS)) else endAnimal(cancel = true)
     }
 
     override fun onDetachedFromWindow() {
         super.onDetachedFromWindow()
-        endLlama(cancel = true)
+        endAnimal(cancel = true)
         for (p in pointers.values) {
             timer.removeCallbacks(p.longPress)
             p.repeat?.let(timer::removeCallbacks)
@@ -1424,7 +1424,7 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
 
     private fun markPanelChange() {
         panelChangedAt = SystemClock.uptimeMillis()
-        endLlama()
+        endAnimal()
     }
 
     private val animating get() = isAttachedToWindow && ValueAnimator.areAnimatorsEnabled()
@@ -1532,7 +1532,7 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
         if (mode == Mode.MINI) {
             drawText(canvas, LANGUAGE, slotCenter(25), letterRect.bottom - miniRowH * 0.12f, miniRowH * 0.3f, t.dim, regular)
         }
-        drawLlama(canvas)
+        drawAnimal(canvas)
         drawPreviews(canvas)
         drawZoom(canvas)
     }
@@ -2176,13 +2176,13 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
     }
 
     companion object {
-        /** When the next llama visit is due (uptime ms; 0: the first time the keyboard opens). Kept while the app runs. */
-        private var nextLlamaAt = 0L
+        /** When the next animal visit is due (uptime ms; 0: the first time the keyboard opens). Kept while the app runs. */
+        private var nextAnimalAt = 0L
         /** Time from one visit to when the next is due, and from the keyboard opening to a due visit (ms). */
-        private val LLAMA_EVERY_MS = 3 * 60_000L..6 * 60_000L
-        private val LLAMA_OPEN_MS = 2_000L..6_000L
+        private val ANIMAL_EVERY_MS = 3 * 60_000L..6 * 60_000L
+        private val ANIMAL_OPEN_MS = 2_000L..6_000L
         /** The pause in typing a visit starts in. */
-        private const val LLAMA_IDLE_MS = 1_500L
+        private const val ANIMAL_IDLE_MS = 1_500L
         /** The strip always has at least this many slots, so a lone word still sits where it would among three. */
         private const val MIN_SLOTS = 3
         /** The narrowest a suggestion slot gets, as a share of the strip (so up to six short words fit). */

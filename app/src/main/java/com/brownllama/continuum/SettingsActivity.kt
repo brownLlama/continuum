@@ -20,6 +20,7 @@ import androidx.core.os.bundleOf
 import androidx.core.widget.doAfterTextChanged
 import androidx.fragment.app.Fragment
 import androidx.preference.EditTextPreference
+import androidx.preference.MultiSelectListPreference
 import androidx.preference.Preference
 import androidx.preference.PreferenceFragmentCompat
 import androidx.preference.PreferenceGroup
@@ -120,6 +121,12 @@ class SettingsActivity : AppCompatActivity(), PreferenceFragmentCompat.OnPrefere
                         requireContext().packageManager.getPackageInfo(requireContext().packageName, 0).versionName
                     }.getOrNull()
                 }
+                "appearance" -> findPreference<MultiSelectListPreference>(Prefs.ANIMAL_KINDS)?.summaryProvider =
+                    Preference.SummaryProvider<MultiSelectListPreference> { p ->
+                        // The picked animals, in the list's order.
+                        p.entryValues.indices.filter { p.entryValues[it] in p.values }.map { p.entries[it] }
+                            .joinToString(", ").ifEmpty { getString(R.string.pref_animal_kinds_none) }
+                    }
                 "shortcuts" -> {
                     findPreference<Preference>("shortcut_add")?.setOnPreferenceClickListener {
                         editShortcut(null)

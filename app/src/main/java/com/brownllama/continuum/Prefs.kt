@@ -27,9 +27,11 @@ object Prefs {
     const val BOTTOM_SPACE_DEFAULT = 15
     /** Hide the system's keyboard-switch / hide-keyboard buttons under the keys (Android 16+). */
     const val HIDE_SYSTEM_BUTTONS = "hide_system_buttons"
-    /** Now and then a llama walks across the keys (see keyboard/Llama.kt). */
-    const val LLAMA = "llama"
-    const val LLAMA_DEFAULT = true
+    /** Now and then an animal walks across the keys (see keyboard/Animals.kt): whether, and which. */
+    const val ANIMALS = "animals"
+    const val ANIMALS_DEFAULT = true
+    /** Species keys (Species.key); every one by default. */
+    const val ANIMAL_KINDS = "animal_kinds"
     const val AUTOCORRECT = "autocorrect"
     const val AUTOCORRECT_DEFAULT = false
     const val AUTOCAPS = "autocaps"
@@ -50,12 +52,13 @@ object Prefs {
     /**
      * Every setting "Reset to defaults" (main menu) clears, so the code's defaults apply again.
      * Not the KLIPY key, the text shortcuts, the learned words or the remembered mode. "haptics" and "previews" were
-     * switches once (now always off / always on) and are cleared so old values don't linger.
+     * switches once (now always off / always on), and "llama" became [ANIMALS]; they are cleared so old values
+     * don't linger.
      */
     val RESETTABLE = listOf(
         THEME, LAYOUT, MINI_HEIGHT, FULL_HEIGHT, BAR_HEIGHT, BOTTOM_SPACE, HIDE_SYSTEM_BUTTONS,
-        AUTOCORRECT, AUTOCAPS, LLAMA, HOLD_MS, SWIPE_MIN, SWIPE_LONG, SWIPE_SPEED, SWIPE_STRAIGHTNESS, SHOW_GIFS,
-        "haptics", "previews",
+        AUTOCORRECT, AUTOCAPS, ANIMALS, ANIMAL_KINDS, HOLD_MS, SWIPE_MIN, SWIPE_LONG, SWIPE_SPEED, SWIPE_STRAIGHTNESS, SHOW_GIFS,
+        "haptics", "previews", "llama",
     )
 
     /** Written with a timestamp to ask the IME to forget learned words. */

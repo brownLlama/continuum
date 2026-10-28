@@ -40,6 +40,7 @@ import com.brownllama.continuum.keyboard.EmojiHistory
 import com.brownllama.continuum.keyboard.KeyLayout
 import com.brownllama.continuum.keyboard.KeyboardView
 import com.brownllama.continuum.keyboard.KeyboardView.Shift
+import com.brownllama.continuum.keyboard.Species
 import com.brownllama.continuum.prediction.DecodeResult
 import com.brownllama.continuum.prediction.Decoder
 import com.brownllama.continuum.prediction.Dictionary
@@ -313,7 +314,9 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
         v.swipeSpeed = prefs.getInt(Prefs.SWIPE_SPEED, Prefs.SWIPE_SPEED_DEFAULT) / 100f
         v.swipeStraightness = prefs.getInt(Prefs.SWIPE_STRAIGHTNESS, Prefs.SWIPE_STRAIGHTNESS_DEFAULT) / 100f
         v.holdMs = prefs.getInt(Prefs.HOLD_MS, Prefs.HOLD_MS_DEFAULT).toLong()
-        v.llamaVisits = prefs.getBoolean(Prefs.LLAMA, Prefs.LLAMA_DEFAULT)
+        v.animals = if (!prefs.getBoolean(Prefs.ANIMALS, Prefs.ANIMALS_DEFAULT)) emptyList() else {
+            prefs.getStringSet(Prefs.ANIMAL_KINDS, null)?.mapNotNull(Species::named) ?: Species.ALL
+        }
     }
 
     // ---- editor lifecycle -----------------------------------------------------------------
@@ -430,7 +433,7 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
     }
 
     /** Not in password or number fields, not while searching GIFs. */
-    override fun llamaMayVisit() = predict && queryEditor == null
+    override fun animalMayVisit() = predict && queryEditor == null
 
     override fun onText(text: String) {
         val ic = editor() ?: return
