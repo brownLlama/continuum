@@ -107,7 +107,7 @@
     <string name="guide_autocorrect">Mini mode always picks the most likely word. In the full keyboard, autocorrect (the switch at the left of the bar, or Typing → Autocorrect) fixes typos like \"teh\"; with it off, letters are typed exactly as tapped.</string>
     <string name="guide_cat_2">Gestures</string>
     <string name="guide_swipe_lr_title">Swipe left or right</string>
-    <string name="guide_swipe_lr">Swipe left anywhere to delete the last word, right to type a space.</string>
+    <string name="guide_swipe_lr">Swipe left anywhere to delete the last word (punctuation after it goes first), right to type a space.</string>
     <string name="guide_swipe_ud_title">Swipe up or down</string>
     <string name="guide_swipe_ud">Swipe up in mini mode for the full keyboard. Swipe down to switch between letters and numbers; in the full keyboard, swipe down from the suggestion bar to go back to mini mode.</string>
     <string name="guide_swipe_diag_title">Swipe diagonally up</string>

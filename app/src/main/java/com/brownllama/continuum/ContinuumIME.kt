@@ -498,6 +498,10 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
         while (end > 0 && before[end - 1].isWhitespace()) end--
         var start = end
         while (start > 0 && !before[start - 1].isWhitespace()) start--
+        // Punctuation after a word ("word." or "word?!") goes on its own; the next swipe takes the word.
+        var punct = end
+        while (punct > start && !before[punct - 1].isLetterOrDigit()) punct--
+        if (punct > start) start = punct
         val n = before.length - start
         if (n > 0) ic.deleteSurroundingText(n, 0) else deleteBefore(ic)
         lastCommit = null

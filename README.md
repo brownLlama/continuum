@@ -113,7 +113,7 @@ Swipe up to get a normal keyboard drawn the same way: flat keys, one font, line 
 
 | Swipe | Does |
 |---|---|
-| ← left | Delete the last word |
+| ← left | Delete the last word (punctuation after it goes first) |
 | → right | Space |
 | ↑ up (mini mode) | Open the full keyboard |
 | ↓ down | Switch between letters and numbers |
