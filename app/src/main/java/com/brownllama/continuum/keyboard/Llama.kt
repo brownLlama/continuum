@@ -9,8 +9,8 @@ import kotlin.random.Random
 
 /**
  * The llama that now and then walks across the keys (setting "Llama visits"): a 16 × 17 pixel
- * sprite, [px] screen pixels per sprite pixel, drawn see-through over the keys. It only draws;
- * touches go to the keys underneath, and [leave] fades it out on the first one.
+ * sprite, [px] screen pixels per sprite pixel, drawn see-through over the keys. It only draws:
+ * touches go to the keys underneath, so it can keep walking while you type.
  *
  * A visit: in from one side along the row whose bottom is at [start]'s feet, 1–3 stops at random
  * spots (standing still or turning to look at you), out the other side. [KeyboardView] decides
@@ -32,7 +32,6 @@ internal class Llama(private val px: Float) {
     /** While stopped: until when, and which face it shows ([STAND] or [LOOK]). */
     private var stopUntil = 0L
     private var stopFace = STAND
-    private var leftAt = 0L
     private var lastAt = 0L
     private val paint = Paint()
 
@@ -44,15 +43,9 @@ internal class Llama(private val px: Float) {
         frameMs = 0L
         stopsLeft = 1 + Random.nextInt(3)
         stopUntil = 0L
-        leftAt = 0L
         lastAt = now
         planStop(width)
         visiting = true
-    }
-
-    /** Fades out where it is (a touch: typing comes first). */
-    fun leave(now: Long) {
-        if (visiting && leftAt == 0L) leftAt = now
     }
 
     /** Gone at once (the keyboard changed under it). */
@@ -72,14 +65,8 @@ internal class Llama(private val px: Float) {
         if (!visiting) return -1
         val dt = (now - lastAt).coerceIn(0L, MAX_STEP_MS)
         lastAt = now
-        var alpha = ALPHA
         val next: Long
-        if (leftAt != 0L) {
-            val fade = 1f - (now - leftAt) / LEAVE_MS.toFloat()
-            if (fade <= 0f) return (-1L).also { visiting = false }
-            alpha = (ALPHA * fade).toInt()
-            next = FADE_FRAME_MS
-        } else if (now < stopUntil) {
+        if (now < stopUntil) {
             next = stopUntil - now
         } else {
             if (stopUntil != 0L) {
@@ -105,7 +92,7 @@ internal class Llama(private val px: Float) {
         val left = floor(x / px) * px
         val top = feet - H * px
         paint.color = SHADOW
-        paint.alpha = SHADOW_ALPHA * alpha / 255
+        paint.alpha = SHADOW_ALPHA
         c.drawRect(left + 2 * px, feet - px / 2, left + 13 * px, feet, paint)
         for (r in face.indices) {
             val row = face[r]
@@ -113,7 +100,7 @@ internal class Llama(private val px: Float) {
                 val ch = row[if (dir > 0) col else W - 1 - col]
                 if (ch == '.') continue
                 paint.color = color(ch)
-                paint.alpha = alpha
+                paint.alpha = ALPHA
                 c.drawRect(left + col * px, top + r * px, left + (col + 1) * px, top + (r + 1) * px, paint)
             }
         }
@@ -133,8 +120,6 @@ internal class Llama(private val px: Float) {
         /** Sprite pixels per second (2 dp each: about 20 dp/s). */
         const val SPEED = 10
         const val FRAME_MS = 140L
-        const val LEAVE_MS = 150L
-        const val FADE_FRAME_MS = 16L
         const val MAX_STEP_MS = 100L
         /** 75%: the keys under it stay readable. */
         const val ALPHA = 191

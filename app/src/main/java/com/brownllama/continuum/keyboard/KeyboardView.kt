@@ -78,7 +78,7 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
     interface Listener {
         /** A touch on the letters, to be decoded into a word (see [Tap] for the coordinates). */
         fun onLetterTap(tap: Tap)
-        /** Whether the llama may visit now (not mid-word, not in a password field…), see [Llama]. */
+        /** Whether the llama may visit now (not in a password field…), see [Llama]. */
         fun llamaMayVisit(): Boolean
         /** Literal text to type: a digit, a symbol, or a long-press character. */
         fun onText(text: String)
@@ -920,8 +920,7 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
         touchTime = e.eventTime
         when (e.actionMasked) {
             MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN -> {
-                // Typing comes first: the llama fades out, and the idle wait for the next visit starts over.
-                llama.leave(e.eventTime)
+                // The llama walks on (touches go to the keys); a visit only starts in a pause in typing.
                 lastTouchAt = e.eventTime
                 scheduleLlama()
                 // A new finger landing finishes simple taps still in progress, keeping fast two-thumb typing in order.
@@ -1334,7 +1333,7 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
     private val llamaCheck = Runnable { maybeStartLlama() }
     private var lastTouchAt = 0L
 
-    /** Checks for a visit once the keyboard has been left alone for [LLAMA_IDLE_MS] (or [delay]). */
+    /** Checks for a visit after a pause in typing of [LLAMA_IDLE_MS] (or after [delay]). */
     private fun scheduleLlama(delay: Long = LLAMA_IDLE_MS) {
         timer.removeCallbacks(llamaCheck)
         if (llamaVisits && isAttachedToWindow && windowVisibility == VISIBLE) timer.postDelayed(llamaCheck, delay)
@@ -1350,13 +1349,12 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
     }
 
     /**
-     * Starts a visit if one is due ([nextLlamaAt]) and the keyboard is idle on the letters (no
-     * finger down, no zoom, no GIF search, nothing typed for a while, and the IME agrees).
+     * Starts a visit if one is due ([nextLlamaAt]) and the letters are showing in a pause in typing
+     * (no finger down, no zoom, no GIF search, and the IME agrees).
      */
     private fun maybeStartLlama() {
         if (!llamaVisits || !animating || llama.visiting) return
         val now = SystemClock.uptimeMillis()
-        if (nextLlamaAt == 0L) nextLlamaAt = now + randomBetween(LLAMA_FIRST_MS)
         if (now < nextLlamaAt) return scheduleLlama(max(LLAMA_IDLE_MS, nextLlamaAt - now))
         val idle = pointers.isEmpty() && zoom == null && !gifSearching && panel == Panel.LETTERS &&
             now - lastTouchAt >= LLAMA_IDLE_MS && listener.llamaMayVisit()
@@ -1383,7 +1381,8 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
 
     override fun onWindowVisibilityChanged(visibility: Int) {
         super.onWindowVisibilityChanged(visibility)
-        if (visibility == VISIBLE) scheduleLlama() else endLlama(cancel = true)
+        // Keyboard sessions are short, so a due visit comes a few seconds after it opens.
+        if (visibility == VISIBLE) scheduleLlama(randomBetween(LLAMA_OPEN_MS)) else endLlama(cancel = true)
     }
 
     override fun onDetachedFromWindow() {
@@ -2177,13 +2176,13 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
     }
 
     companion object {
-        /** When the next llama visit is due (uptime ms; 0 = not planned yet). Kept while the app runs. */
+        /** When the next llama visit is due (uptime ms; 0: the first time the keyboard opens). Kept while the app runs. */
         private var nextLlamaAt = 0L
-        /** The first visit after the keyboard starts, then the time between visits (ms). */
-        private val LLAMA_FIRST_MS = 60_000L..180_000L
-        private val LLAMA_EVERY_MS = 8 * 60_000L..20 * 60_000L
-        /** How long the keyboard must be left alone before the llama comes. */
-        private const val LLAMA_IDLE_MS = 4_000L
+        /** Time from one visit to when the next is due, and from the keyboard opening to a due visit (ms). */
+        private val LLAMA_EVERY_MS = 3 * 60_000L..6 * 60_000L
+        private val LLAMA_OPEN_MS = 2_000L..6_000L
+        /** The pause in typing a visit starts in. */
+        private const val LLAMA_IDLE_MS = 1_500L
         /** The strip always has at least this many slots, so a lone word still sits where it would among three. */
         private const val MIN_SLOTS = 3
         /** The narrowest a suggestion slot gets, as a share of the strip (so up to six short words fit). */

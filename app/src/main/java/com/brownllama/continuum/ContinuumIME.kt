@@ -429,8 +429,8 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
         redecode()
     }
 
-    /** Not mid-word, not in password or number fields, not while searching GIFs. */
-    override fun llamaMayVisit() = taps.isEmpty() && predict && queryEditor == null
+    /** Not in password or number fields, not while searching GIFs. */
+    override fun llamaMayVisit() = predict && queryEditor == null
 
     override fun onText(text: String) {
         val ic = editor() ?: return
