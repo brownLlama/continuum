@@ -4,15 +4,20 @@ import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import android.provider.Settings
+import android.text.InputFilter
 import android.text.InputType
 import android.view.View
+import android.view.WindowManager
+import android.widget.EditText
 import android.view.inputmethod.InputMethodManager
 import android.widget.Button
 import android.widget.TextView
 import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.edit
 import androidx.core.os.bundleOf
+import androidx.core.widget.doAfterTextChanged
 import androidx.fragment.app.Fragment
 import androidx.preference.EditTextPreference
 import androidx.preference.Preference
@@ -20,6 +25,8 @@ import androidx.preference.PreferenceFragmentCompat
 import androidx.preference.PreferenceGroup
 import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import com.google.android.material.snackbar.Snackbar
+import com.google.android.material.textfield.TextInputLayout
 
 /**
  * The app's launcher screen. On top: a setup card (only until Continuum is the current keyboard)
@@ -113,7 +120,13 @@ class SettingsActivity : AppCompatActivity(), PreferenceFragmentCompat.OnPrefere
                         requireContext().packageManager.getPackageInfo(requireContext().packageName, 0).versionName
                     }.getOrNull()
                 }
-                "shortcuts" -> addShortcutRows()
+                "shortcuts" -> {
+                    findPreference<Preference>("shortcut_add")?.setOnPreferenceClickListener {
+                        editShortcut(null)
+                        true
+                    }
+                    showShortcuts()
+                }
                 "gifs" -> findPreference<EditTextPreference>(Prefs.KLIPY_KEY)?.apply {
                     // Show whether a key is set, not the key itself.
                     summaryProvider = Preference.SummaryProvider<EditTextPreference> {
@@ -137,22 +150,101 @@ class SettingsActivity : AppCompatActivity(), PreferenceFragmentCompat.OnPrefere
             setDivider(null) // sections are separated by their headings, not lines
         }
 
-        /** One row per shortcut key (##a … ##9), showing its text or "Not set"; an empty text removes it. */
-        private fun addShortcutRows() {
+        private val prefs get() = preferenceManager.sharedPreferences!!
+
+        private fun shortcutText(key: Char) = prefs.getString(Prefs.shortcut(key), null)?.takeIf(String::isNotEmpty)
+
+        /** Lists the saved shortcuts (a–z, then 0–9); "Add shortcut" goes once all keys are used. */
+        private fun showShortcuts() {
             val list = findPreference<PreferenceGroup>("shortcut_list") ?: return
-            for (key in Prefs.SHORTCUT_KEYS) {
+            list.removeAll()
+            val used = Prefs.SHORTCUT_KEYS.filter { shortcutText(it) != null }
+            for (key in used) {
                 list.addPreference(
-                    EditTextPreference(requireContext()).apply {
-                        this.key = Prefs.shortcut(key)
+                    Preference(requireContext()).apply {
                         title = getString(R.string.pref_shortcut_title, key)
-                        dialogTitle = title
+                        summary = shortcutText(key)
+                        isPersistent = false
                         isIconSpaceReserved = false
-                        summaryProvider = Preference.SummaryProvider<EditTextPreference> {
-                            it.text?.takeIf(String::isNotEmpty) ?: getString(R.string.pref_shortcut_unset)
+                        isSingleLineTitle = true
+                        setOnPreferenceClickListener {
+                            editShortcut(key)
+                            true
                         }
                     },
                 )
             }
+            list.isVisible = used.isNotEmpty()
+            findPreference<Preference>("shortcut_add")?.isVisible = used.length < Prefs.SHORTCUT_KEYS.length
+        }
+
+        /**
+         * Adds a shortcut ([current] null) or edits the one saved for [current]. Save is enabled once
+         * the key is free (or [current]) and the text isn't empty; changing the key moves the shortcut.
+         */
+        private fun editShortcut(current: Char?) {
+            val view = layoutInflater.inflate(R.layout.dialog_shortcut, null)
+            val keyLayout = view.findViewById<TextInputLayout>(R.id.key_layout)
+            val keyField = view.findViewById<EditText>(R.id.key)
+            val textField = view.findViewById<EditText>(R.id.text)
+            // Only a-z / 0-9, stored lowercase (##E and ##e are the same shortcut).
+            keyField.filters = arrayOf(
+                InputFilter { src, start, end, _, _, _ ->
+                    src.subSequence(start, end).filter { it.lowercaseChar() in Prefs.SHORTCUT_KEYS }.toString().lowercase()
+                },
+                InputFilter.LengthFilter(1),
+            )
+            current?.let {
+                keyField.setText(it.toString())
+                textField.setText(shortcutText(it))
+            }
+            val builder = MaterialAlertDialogBuilder(requireContext())
+                .setTitle(if (current == null) R.string.shortcut_new else R.string.shortcut_edit)
+                .setView(view)
+                .setNegativeButton(android.R.string.cancel, null)
+                .setPositiveButton(R.string.shortcut_save) { _, _ ->
+                    val key = keyField.text.single()
+                    prefs.edit {
+                        if (current != null && current != key) remove(Prefs.shortcut(current))
+                        putString(Prefs.shortcut(key), textField.text.toString())
+                    }
+                    showShortcuts()
+                }
+            if (current != null) builder.setNeutralButton(R.string.shortcut_delete) { _, _ -> deleteShortcut(current) }
+            val dialog = builder.show()
+            val save = dialog.getButton(AlertDialog.BUTTON_POSITIVE)
+            /** Whether the key is free; enables Save once there's text too. */
+            fun validate(): Boolean {
+                val key = keyField.text.firstOrNull()
+                val taken = key != null && key != current && shortcutText(key) != null
+                keyLayout.error = if (taken) getString(R.string.shortcut_key_taken, key) else null
+                save.isEnabled = key != null && !taken && textField.text.isNotEmpty()
+                return key != null && !taken
+            }
+            keyField.doAfterTextChanged {
+                // A new shortcut's free key typed: on to its text.
+                if (validate() && current == null) textField.requestFocus()
+            }
+            textField.doAfterTextChanged { validate() }
+            validate()
+            (if (current == null) keyField else textField).apply {
+                requestFocus()
+                setSelection(text.length)
+            }
+            dialog.window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE)
+        }
+
+        /** Deletes the shortcut for [key], with an undo. */
+        private fun deleteShortcut(key: Char) {
+            val text = shortcutText(key) ?: return
+            prefs.edit { remove(Prefs.shortcut(key)) }
+            showShortcuts()
+            Snackbar.make(requireView(), getString(R.string.shortcut_deleted, key), Snackbar.LENGTH_LONG)
+                .setAction(R.string.undo) {
+                    prefs.edit { putString(Prefs.shortcut(key), text) }
+                    showShortcuts()
+                }
+                .show()
         }
 
         /** Rows without an icon don't reserve space for one, so their titles line up with the edge. */
@@ -185,10 +277,10 @@ class SettingsActivity : AppCompatActivity(), PreferenceFragmentCompat.OnPrefere
                 if (prefs.getBoolean(Prefs.AUTOCORRECT, Prefs.AUTOCORRECT_DEFAULT)) R.string.summary_typing_on else R.string.summary_typing_off, hold,
             )
             findPreference<Preference>("gestures")?.setSummary(R.string.summary_gestures)
-            val shortcuts = Prefs.SHORTCUT_KEYS.count { !prefs.getString(Prefs.shortcut(it), null).isNullOrEmpty() }
+            val shortcuts = Prefs.SHORTCUT_KEYS.filter { shortcutText(it) != null }
             findPreference<Preference>("shortcuts")?.summary =
-                if (shortcuts == 0) getString(R.string.summary_shortcuts_none)
-                else resources.getQuantityString(R.plurals.summary_shortcuts, shortcuts, shortcuts)
+                if (shortcuts.isEmpty()) getString(R.string.summary_shortcuts_none)
+                else shortcuts.map { getString(R.string.pref_shortcut_title, it) }.joinToString(" · ")
             findPreference<Preference>("gifs")?.setSummary(
                 when {
                     !prefs.getBoolean(Prefs.SHOW_GIFS, Prefs.SHOW_GIFS_DEFAULT) -> R.string.summary_gifs_hidden

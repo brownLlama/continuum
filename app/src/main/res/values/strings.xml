@@ -89,13 +89,19 @@
     <!-- Shortcuts -->
     <string name="screen_shortcuts">Text shortcuts</string>
     <string name="summary_shortcuts_none">Type ##e to insert text you save here</string>
-    <plurals name="summary_shortcuts">
-        <item quantity="one">%1$d shortcut</item>
-        <item quantity="other">%1$d shortcuts</item>
-    </plurals>
-    <string name="pref_shortcuts_intro">Type ## and then a letter or digit to insert its text, e.g. ##e for your email. Backspace right after puts back what you typed. Upper and lower case are the same shortcut. Not used in password fields.</string>
+    <string name="pref_shortcuts_intro">Type ## and a letter or digit to insert its text, e.g. ##e for your email. A backspace right after puts back what you typed. Not used in password fields.</string>
     <string name="pref_shortcut_title">##%1$c</string>
-    <string name="pref_shortcut_unset">Not set</string>
+    <string name="shortcut_add">Add shortcut</string>
+    <string name="shortcut_new">New shortcut</string>
+    <string name="shortcut_edit">Edit shortcut</string>
+    <string name="shortcut_key_hint">Letter or digit</string>
+    <string name="shortcut_key_helper">a–z or 0–9, case doesn\'t matter</string>
+    <string name="shortcut_key_taken">##%1$c is already used</string>
+    <string name="shortcut_text_hint">Text it types</string>
+    <string name="shortcut_save">Save</string>
+    <string name="shortcut_delete">Delete</string>
+    <string name="shortcut_deleted">##%1$c deleted</string>
+    <string name="undo">Undo</string>
 
     <!-- Guide -->
     <string name="guide_cat_0">Basics</string>
