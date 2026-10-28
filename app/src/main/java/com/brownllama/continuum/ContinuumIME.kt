@@ -124,10 +124,8 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
     /** Usually [DEFAULT_SLOT]; 0 while a reopened word leads the bar. */
     private var defaultSlot = DEFAULT_SLOT
     private var shift = Shift.OFF
-    /** Shift is on only because of auto-capitalisation (sentence start), not a tap on shift. */
-    private var shiftAuto = false
-    /** The current word's first letter was capitalised automatically. */
-    private var wordAutoCap = false
+    /** The current word starts a sentence (so a capital first letter is not part of its spelling). */
+    private var wordSentenceStart = false
     private var lastShiftTap = 0L
     /** Key of the previous word, for next-word predictions; null at the start of a sentence. */
     private var prevWord: String? = null
@@ -149,7 +147,7 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
      * typed is learned together with it ("zazzy's", key "zazzys"), replacing what was learned for
      * [prefix] on its own; [absorbed] records that this was undone already.
      */
-    private class Glue(val prefix: String, val prevBefore: String?, val autoCap: Boolean) {
+    private class Glue(val prefix: String, val prevBefore: String?, val sentenceStart: Boolean) {
         var absorbed = false
     }
     /** The composing text the decoder last showed (what the word looks like in the field). */
@@ -392,7 +390,7 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
         if (taps.isEmpty()) {
             lastCommit = null
             tapMode = mode
-            wordAutoCap = shift == Shift.ON && shiftAuto
+            wordSentenceStart = atSentenceStart()
             wordGlue = pendingGlue?.takeIf {
                 editor()?.getTextBeforeCursor(it.prefix.length, 0)?.toString() == it.prefix
             }
@@ -408,7 +406,7 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
         if (taps.isNotEmpty()) commitWord(spaced = false, choice = null)
         // "zazzy" + "'": the next word joins this one (see Glue).
         val joined = lastCommit?.takeIf { !it.spaced && text.length == 1 && text[0] in JOINERS }
-        pendingGlue = joined?.let { Glue(it.learned + text, it.prevBefore, wordAutoCap) }
+        pendingGlue = joined?.let { Glue(it.learned + text, it.prevBefore, wordSentenceStart) }
         if (queryEditor == null && text.length == 1 && text[0] in '0'..'9') {
             // Digits go as key presses, like other keyboards do: one-time-code boxes often move to
             // the next box on the key event and ignore text committed without one.
@@ -616,8 +614,9 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
             onText(word)
         } else {
             // A next-word prediction.
+            val sentenceStart = atSentenceStart()
             ic.commitText("$word ", 1)
-            learn(word, autoCap = shift == Shift.ON && shiftAuto, picked = true)
+            learn(word, sentenceStart, picked = true)
             lastCommit = null
             autoSpace = true
             updateAutoShift()
@@ -938,7 +937,7 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
         if (g != null) prevWord = g.prevBefore
         val learned = if (g != null) g.prefix + text else text
         val prevBefore = prevWord
-        learn(learned, autoCap = g?.autoCap ?: wordAutoCap, picked = choice != null)
+        learn(learned, g?.sentenceStart ?: wordSentenceStart, picked = choice != null)
         lastCommit = LastCommit(text, spaced, ArrayList(taps), tapMode, prevBefore, learned, g)
         wordGlue = null
         taps.clear()
@@ -956,10 +955,11 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
     }
 
     /**
-     * Records a committed word. A capital that only came from auto-capitalisation is not part of the
-     * user's spelling ("zorp" at the start of a message), unless the word is a proper noun anyway.
+     * Records a committed word, and how the user spells it. Only capitals that say something about
+     * the word change that spelling: a capital starting a sentence doesn't ("Zorp is…" stays "zorp"),
+     * nor do all caps for emphasis ("NEVER"), unless the word is spelled that way ("NASA") or new.
      */
-    private fun learn(word: String, autoCap: Boolean, picked: Boolean = false) {
+    private fun learn(word: String, sentenceStart: Boolean, picked: Boolean = false) {
         // An emoji (or anything without letters) is not learned, and the word before it no longer counts.
         val key = Dictionary.keyOf(word) ?: run { prevWord = null; return }
         // Fields that ask for no learning (incognito) only track the previous word, for predictions.
@@ -969,11 +969,13 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
         }
         user.unblock(word)
         val dictForm = dict?.takeIf { it.contains(key) }?.displayFor(key)
+        // null keeps the spelling learned before (or the dictionary's).
         val form = when {
-            !autoCap || word.isEmpty() || !word[0].isUpperCase() -> word
-            word.drop(1).any { it.isUpperCase() } -> word
-            dictForm?.firstOrNull()?.isUpperCase() == true -> word
-            else -> word.replaceFirstChar { it.lowercaseChar() }
+            word.none { it.isUpperCase() } -> word
+            word.count { it.isLetter() } > 1 && word.none { it.isLowerCase() } ->
+                word.takeIf { it == dictForm || dictForm == null && user.count(key) == 0 }
+            sentenceStart && word.drop(1).none { it.isUpperCase() } -> null
+            else -> word
         }
         user.learn(prevWord, key, form)
         // Picking a new word from the bar confirms it, as typing it a second time would.
@@ -1088,9 +1090,8 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
 
     // ---- shift ----------------------------------------------------------------------------
 
-    private fun setShift(s: Shift, auto: Boolean = false) {
+    private fun setShift(s: Shift) {
         shift = s
-        shiftAuto = auto && s == Shift.ON
         view?.shift = s
     }
 
@@ -1101,12 +1102,17 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
             if (taps.isEmpty() && shift == Shift.ON && !autoCaps) setShift(Shift.OFF)
             return
         }
-        val before = editor()?.getTextBeforeCursor(3, 0)?.toString() ?: return
+        val ic = editor() ?: return
+        setShift(if (atSentenceStart(ic)) Shift.ON else Shift.OFF)
+    }
+
+    /** The cursor is at the start of the field, a line, or a sentence ("Done. |"). */
+    private fun atSentenceStart(ic: InputConnection? = editor()): Boolean {
+        val before = ic?.getTextBeforeCursor(3, 0)?.toString() ?: return false
         val trimmed = before.trimEnd(' ')
-        val start = trimmed.isEmpty() && before.length < 3 ||
+        return trimmed.isEmpty() && before.length < 3 ||
             trimmed.isNotEmpty() && trimmed.last() in SENTENCE_END && before.endsWith(" ") ||
             before.endsWith("\n")
-        setShift(if (start) Shift.ON else Shift.OFF, auto = true)
     }
 
     /** The field's enter action (drawn on the enter key and run by [onEnter]), or NONE for a newline. */
