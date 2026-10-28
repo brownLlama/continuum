@@ -13,11 +13,11 @@ import kotlin.math.max
  * the theme's colours and scale with the keys. Each is centred on (cx, cy) and sized by [s], about
  * half its width. [KeyboardView] decides where they go and in which colour.
  */
-class KeyIcons(private val density: Float) {
+class KeyIcons(private val density: Float, fonts: KeyFonts) {
 
-    private val regular: Typeface = Typeface.create("sans-serif", Typeface.NORMAL)
-    private val medium: Typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
-    private val bold: Typeface = Typeface.create("sans-serif", Typeface.BOLD)
+    private val regular = fonts.regular
+    private val medium = fonts.medium
+    private val bold = fonts.bold
 
     private val text = Paint(Paint.ANTI_ALIAS_FLAG).apply { textAlign = Paint.Align.CENTER }
     private val fill = Paint(Paint.ANTI_ALIAS_FLAG)

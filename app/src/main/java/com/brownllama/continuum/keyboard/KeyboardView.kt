@@ -1328,9 +1328,12 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
     // ---- drawing --------------------------------------------------------------------------
     // Paints, paths and rects are reused across frames; every draw function sets what it needs.
 
-    private val regular: Typeface = Typeface.create("sans-serif", Typeface.NORMAL)
-    private val medium: Typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
-    private val bold: Typeface = Typeface.create("sans-serif", Typeface.BOLD)
+    private val fonts = KeyFonts(context)
+    private val regular = fonts.regular
+    private val medium = fonts.medium
+    private val bold = fonts.bold
+    /** Emoji are drawn with the system font, which has them. */
+    private val emojiFace: Typeface = Typeface.DEFAULT
 
     /** The bar and the keys share one surface. */
     private val barFill get() = theme.background
@@ -1341,7 +1344,7 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
     private val stripColor get() = ColorUtils.blendARGB(theme.dim, theme.background, 0.35f)
     /** The hairlines between suggestions: just visible on the bar in every theme. */
     private val dividerColor get() = ColorUtils.blendARGB(theme.background, theme.text, if (theme.isLight) 0.2f else 0.16f)
-    private val icons = KeyIcons(density)
+    private val icons = KeyIcons(density, fonts)
 
     // ---- motion (off when the system's animations are off, or offscreen as in tests)
 
@@ -2006,7 +2009,7 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
             val cy = emojiRect.top + (row + 0.5f) * emojiRowH - emojiScroll
             for (col in 0 until EMOJI_COLUMNS) {
                 val e = list.getOrNull(base + col) ?: break
-                drawText(c, e, (col + 0.5f) * emojiCellW, cy, emojiCellW * 0.46f, t.text, regular)
+                drawText(c, e, (col + 0.5f) * emojiCellW, cy, emojiCellW * 0.46f, t.text, emojiFace)
             }
         }
     }
