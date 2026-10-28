@@ -28,6 +28,7 @@ import android.widget.OverScroller
 import androidx.core.graphics.ColorUtils
 import androidx.core.graphics.withClip
 import androidx.core.graphics.withSave
+import androidx.core.graphics.withTranslation
 import com.brownllama.continuum.Prefs
 import com.brownllama.continuum.R
 import com.brownllama.continuum.prediction.Mode
@@ -513,6 +514,20 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
     private val gifFrame = Runnable { gifFramePending = false; invalidate() }
     /** When [onDraw] last ran, for [invalidateDrawable]. */
     private var lastDrawAt = 0L
+
+    /**
+     * Drops the GIF images to give memory back, unless the GIF panel is showing. Opening the panel
+     * again searches anew ([showPanel]).
+     */
+    fun releaseGifs() {
+        if (panel == Panel.GIF) return
+        stopGifs()
+        for (t in gifTiles) t.image?.callback = null
+        gifTiles.clear()
+        gifScroll = 0f
+        gifMessage = null
+        gifMoreRequested = false
+    }
 
     /** Pauses every GIF (they animate only while visible, see [drawGifGrid]). */
     private fun stopGifs() {
@@ -1667,16 +1682,32 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
                 it.remove()
                 continue
             }
-            val alpha = GLOW_ALPHA * fadeIn * (1f - fadeOut)
-            val colors = IntArray(GLOW_STOPS.size) { i ->
-                ColorUtils.setAlphaComponent(theme.text, (alpha * GLOW_STOPS[i]).roundToInt())
-            }
-            fill.shader = LinearGradient(g.x - half, 0f, g.x + half, 0f, colors, GLOW_POSITIONS, Shader.TileMode.CLAMP)
-            c.drawRect(g.x - half, top, g.x + half, bottom, fill)
+            fill.shader = glowShader(half)
+            fill.alpha = (GLOW_ALPHA * fadeIn * (1f - fadeOut)).roundToInt()
+            c.withTranslation(g.x, 0f) { c.drawRect(-half, top, half, bottom, fill) }
             fill.shader = null
+            fill.alpha = 255
         }
         if (glows.isNotEmpty() && animating) postInvalidateOnAnimation()
     }
+
+    /**
+     * The glow's bell curve in the theme's text colour, centred on x = 0 (drawn translated to each
+     * finger; the paint's alpha fades it). Built once per colour and width rather than every frame.
+     */
+    private fun glowShader(half: Float): Shader {
+        val color = theme.text
+        glowCache?.takeIf { glowColor == color && glowHalf == half }?.let { return it }
+        val colors = IntArray(GLOW_STOPS.size) { i -> ColorUtils.setAlphaComponent(color, (255 * GLOW_STOPS[i]).roundToInt()) }
+        return LinearGradient(-half, 0f, half, 0f, colors, GLOW_POSITIONS, Shader.TileMode.CLAMP).also {
+            glowCache = it
+            glowColor = color
+            glowHalf = half
+        }
+    }
+    private var glowCache: Shader? = null
+    private var glowColor = 0
+    private var glowHalf = 0f
 
     /** Mini mode's symbol strip and staggered letter row (drawn directly, they aren't [Key]s). */
     private fun drawMiniLetters(c: Canvas) {

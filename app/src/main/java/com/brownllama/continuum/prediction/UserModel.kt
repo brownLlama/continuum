@@ -1,6 +1,9 @@
 package com.brownllama.continuum.prediction
 
 import java.io.File
+import java.util.concurrent.Executors
+import java.util.concurrent.Future
+import java.util.concurrent.TimeUnit
 
 /**
  * Words and word pairs the user has typed, persisted as a small TSV file.
@@ -22,6 +25,8 @@ class UserModel(private val file: File, private val today: () -> Int = { (System
     /** Day (since 1970) each word was last typed. */
     private val lastUsed = HashMap<String, Int>()
     private var dirty = 0
+    /** The last write handed to [WRITER], so [flush] can wait for it. */
+    private var pending: Future<*>? = null
 
     init {
         load()
@@ -106,14 +111,32 @@ class UserModel(private val file: File, private val today: () -> Int = { (System
         return m.entries.sortedByDescending { it.value }.take(limit).map { it.key }
     }
 
+    /**
+     * The [limit] words typed most often, most first. One pass with a short sorted list rather than
+     * sorting every word: this runs after each committed word.
+     */
+    fun mostUsed(limit: Int): List<String> {
+        if (limit <= 0) return emptyList()
+        val top = ArrayList<Map.Entry<String, Int>>(limit + 1)
+        for (e in unigrams.entries) {
+            if (top.size == limit && e.value <= top[limit - 1].value) continue
+            var i = top.size
+            while (i > 0 && top[i - 1].value < e.value) i--
+            top.add(i, e)
+            if (top.size > limit) top.removeAt(limit)
+        }
+        return top.map { it.key }
+    }
+
     fun clear() {
         unigrams.clear()
         bigrams.clear()
         blocked.clear()
         forms.clear()
         lastUsed.clear()
-        file.delete()
         dirty = 0
+        // After any write still queued, so that can't bring the words back.
+        pending = WRITER.submit { file.delete() }
     }
 
     /**
@@ -168,24 +191,47 @@ class UserModel(private val file: File, private val today: () -> Int = { (System
         empty.forEach(bigrams::remove)
     }
 
-    @Synchronized
+    /**
+     * Saves in the background: the tables are copied here (a few ms) and written to disk on
+     * [WRITER], so typing never waits for the file. Writes run in order, each via a temporary file.
+     */
     fun save() {
         if (dirty == 0) return
         dirty = 0
+        val words = HashMap(unigrams)
+        val pairs = HashMap<String, HashMap<String, Int>>(bigrams.size * 2)
+        for ((p, m) in bigrams) pairs[p] = HashMap(m)
+        val hidden = HashSet(blocked)
+        val spellings = HashMap(forms)
+        val used = HashMap(lastUsed)
+        val day = today()
+        pending = WRITER.submit { write(words, pairs, hidden, spellings, used, day) }
+    }
+
+    /** Saves and waits for the write to finish (when the keyboard service is going away). */
+    fun flush() {
+        save()
+        runCatching { pending?.get(FLUSH_TIMEOUT_S, TimeUnit.SECONDS) }
+    }
+
+    private fun write(
+        words: Map<String, Int>, pairs: Map<String, Map<String, Int>>, hidden: Set<String>,
+        spellings: Map<String, String>, used: Map<String, Int>, day: Int,
+    ) {
         runCatching {
             val tmp = File(file.path + ".tmp")
             tmp.bufferedWriter().use { w ->
-                for ((k, c) in unigrams) {
+                for ((k, c) in words) {
                     w.append("u\t").append(k).append('\t').append(c.toString()).append('\t')
-                        .append((lastUsed[k] ?: today()).toString()).append('\n')
+                        .append((used[k] ?: day).toString()).append('\n')
                 }
-                for ((p, m) in bigrams) for ((k, c) in m) {
+                for ((p, m) in pairs) for ((k, c) in m) {
                     w.append("b\t").append(p).append('\t').append(k).append('\t').append(c.toString()).append('\n')
                 }
-                for (d in blocked) w.append("x\t").append(d).append('\n')
-                for ((k, f) in forms) w.append("f\t").append(k).append('\t').append(f).append('\n')
+                for (d in hidden) w.append("x\t").append(d).append('\n')
+                for ((k, f) in spellings) w.append("f\t").append(k).append('\t').append(f).append('\n')
             }
-            tmp.renameTo(file)
+            if (!tmp.renameTo(file)) tmp.delete()
         }
     }
 
@@ -217,6 +263,9 @@ class UserModel(private val file: File, private val today: () -> Int = { (System
 
     companion object {
         private const val DAY_MS = 24L * 60 * 60 * 1000
+        private const val FLUSH_TIMEOUT_S = 2L
+        /** One background thread for every save, so writes never overlap or run out of order. */
+        private val WRITER = Executors.newSingleThreadExecutor { r -> Thread(r, "user-model").apply { isDaemon = true } }
         /** Uses after which a word is the user's own rather than a candidate (see [isConfirmed]). */
         const val CONFIRMED_COUNT = 2
         /** Caps, as in AOSP's keyboard; pruning starts once a table is [COMPACT_AT] times over. */

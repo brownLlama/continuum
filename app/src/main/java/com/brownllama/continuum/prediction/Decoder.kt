@@ -361,8 +361,7 @@ class Decoder(private val dict: Dictionary, private val user: UserModel) {
         for (k in user.following(prev, limit)) out += user.formOf(k) ?: dict.displayFor(k)
         val model = if (sentenceStart || prev == null) dict.startWords else dict.nextFor(prev)
         val defaults = if (sentenceStart || prev == null) START_WORDS else FOLLOW_WORDS
-        val frequent = user.unigrams.entries.sortedByDescending { it.value }.take(limit)
-            .map { user.formOf(it.key) ?: dict.displayFor(it.key) }
+        val frequent = user.mostUsed(limit).map { user.formOf(it) ?: dict.displayFor(it) }
         for (d in model + defaults + frequent) if (out.size < limit && out.none { it.equals(d, ignoreCase = true) }) out += d
         out.removeAll { user.isBlocked(it) }
         return out

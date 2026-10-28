@@ -17,7 +17,9 @@ import com.brownllama.continuum.keyboard.KeyboardView
 import java.io.File
 import java.util.Locale
 import java.util.UUID
-import java.util.concurrent.Executors
+import java.util.concurrent.LinkedBlockingQueue
+import java.util.concurrent.ThreadPoolExecutor
+import java.util.concurrent.TimeUnit
 
 /**
  * Runs the GIF panel for the IME: fetches pages from KLIPY, downloads and decodes previews into
@@ -26,7 +28,10 @@ import java.util.concurrent.Executors
  */
 class GifFeed(private val context: Context, private val prefs: SharedPreferences) {
     var view: KeyboardView? = null
-    private val io = Executors.newFixedThreadPool(3)
+    /** Up to three downloads at once; idle threads end after a while, so nothing runs between searches. */
+    private val io = ThreadPoolExecutor(3, 3, IDLE_S, TimeUnit.SECONDS, LinkedBlockingQueue()).apply {
+        allowCoreThreadTimeOut(true)
+    }
     private val main = Handler(Looper.getMainLooper())
     private val dir = File(context.cacheDir, "gifs").apply { mkdirs() }
 
@@ -40,7 +45,7 @@ class GifFeed(private val context: Context, private val prefs: SharedPreferences
 
     init {
         // Keep the cache small: previews and sent GIFs are only needed for a while.
-        io.execute {
+        background {
             val old = System.currentTimeMillis() - CACHE_MS
             dir.listFiles()?.forEach { if (it.lastModified() < old) it.delete() }
         }
@@ -80,13 +85,13 @@ class GifFeed(private val context: Context, private val prefs: SharedPreferences
 
     /** Loads the next page, if there is one and none is loading. */
     fun more() {
-        if (loading || !hasNext) return
+        if (loading || !hasNext || page >= MAX_PAGES) return
         val client = client() ?: return
         loading = true
         val gen = generation
         val q = query
         val next = page + 1
-        io.execute {
+        background {
             val result = runCatching { if (q.isEmpty()) client.trending(next) else client.search(q, next) }
             main.post {
                 if (gen != generation) return@post
@@ -111,12 +116,12 @@ class GifFeed(private val context: Context, private val prefs: SharedPreferences
     fun gif(index: Int): Gif? = gifs.getOrNull(index)
 
     private fun loadPreview(gif: Gif, tile: KeyboardView.GifTile, gen: Int) {
-        io.execute {
+        background {
             val image = runCatching {
                 val file = File(dir, "${safe(gif.slug)}_p.gif")
                 if (!file.exists()) KlipyClient.download(gif.previewUrl, file)
                 decode(file)
-            }.getOrNull() ?: return@execute
+            }.getOrNull() ?: return@background
             main.post { if (gen == generation) view?.setGifImage(tile, image) }
         }
     }
@@ -124,7 +129,7 @@ class GifFeed(private val context: Context, private val prefs: SharedPreferences
     /** Downloads the GIF to send (cached), then calls [done] on the main thread with the file or null. */
     fun fetchForSending(gif: Gif, done: (File?) -> Unit) {
         val client = client()
-        io.execute {
+        background {
             val file = File(dir, "${safe(gif.slug)}.gif")
             val ok = runCatching { if (!file.exists()) KlipyClient.download(gif.sendUrl, file) }.isSuccess
             client?.shared(gif.slug)
@@ -160,11 +165,33 @@ class GifFeed(private val context: Context, private val prefs: SharedPreferences
         return sample
     }
 
-    fun shutdown() = io.shutdownNow()
+    /**
+     * Forgets the loaded GIFs (the view drops their images too), to give memory back. The next time
+     * the panel opens it searches again; previews are still cached on disk for a day.
+     */
+    fun release() {
+        generation++
+        loading = false
+        hasNext = false
+        gifs.clear()
+    }
+
+    /** Runs [task] on [io], unless the keyboard has shut down (then the task is dropped). */
+    private fun background(task: () -> Unit) {
+        if (!io.isShutdown) runCatching { io.execute(task) }
+    }
+
+    fun shutdown() {
+        io.shutdownNow()
+        main.removeCallbacksAndMessages(null)
+    }
 
     companion object {
         const val AUTHORITY_SUFFIX = ".gifs"
         private const val CACHE_MS = 24 * 60 * 60 * 1000L
+        private const val IDLE_S = 30L
+        /** Infinite scroll stops after this many pages (150 GIFs), so the panel's memory stays bounded. */
+        private const val MAX_PAGES = 5
         /** Previews are decoded at no more than about 1 megapixel (KLIPY's are far smaller). */
         private const val MAX_PIXELS = 1_000_000L
     }

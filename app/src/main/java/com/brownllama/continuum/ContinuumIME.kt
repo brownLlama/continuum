@@ -192,7 +192,8 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
         getSystemService(ClipboardManager::class.java)?.addPrimaryClipChangedListener(clipListener)
         appThemes = AppThemes(this)
         gifs = GifFeed(this, prefs)
-        Executors.newSingleThreadExecutor().execute {
+        val loader = Executors.newSingleThreadExecutor()
+        loader.execute {
             val d = Dictionary.load(this)
             main.post {
                 dict = d
@@ -207,14 +208,28 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
                 view?.emojiGroups = groups
             }
         }
+        // The thread finishes loading, then ends instead of idling for the life of the service.
+        loader.shutdown()
     }
 
     override fun onDestroy() {
         prefs.unregisterOnSharedPreferenceChangeListener(this)
         getSystemService(ClipboardManager::class.java)?.removePrimaryClipChangedListener(clipListener)
         gifs.shutdown()
-        user.save()
+        main.removeCallbacksAndMessages(null)
+        user.flush()
         super.onDestroy()
+    }
+
+    /** Android is short of memory: drop the GIF previews (unless they're on screen). */
+    @Suppress("DEPRECATION") // TRIM_MEMORY_RUNNING_LOW: still sent on the Android versions that have it.
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        if (level < TRIM_MEMORY_RUNNING_LOW) return
+        val v = view
+        if (v != null && v.panel == KeyboardView.Panel.GIF) return
+        v?.releaseGifs()
+        gifs.release()
     }
 
     override fun onCreateInputView(): View {
@@ -248,11 +263,13 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
      * Report only the keyboard below it, so apps lay out above the real keyboard and touches on
      * the transparent part reach the app.
      */
+    private val windowLocation = IntArray(2)
+
     override fun onComputeInsets(outInsets: Insets) {
         super.onComputeInsets(outInsets)
         val v = view ?: return
         if (!isInputViewShown || v.height == 0) return
-        val loc = IntArray(2)
+        val loc = windowLocation
         v.getLocationInWindow(loc)
         val kbTop = loc[1] + v.overlayH.roundToInt()
         outInsets.contentTopInsets = kbTop
