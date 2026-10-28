@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Theme and layout. -->
+<!-- Theme, layout and the llama. -->
 <PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
     <ListPreference
@@ -16,4 +16,9 @@
         app:key="layout"
         app:title="@string/pref_layout"
         app:useSimpleSummaryProvider="true" />
+    <SwitchPreferenceCompat
+        app:defaultValue="true"
+        app:key="llama"
+        app:summary="@string/pref_llama_summary"
+        app:title="@string/pref_llama" />
 </PreferenceScreen>

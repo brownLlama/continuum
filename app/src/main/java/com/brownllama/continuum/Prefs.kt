@@ -27,6 +27,9 @@ object Prefs {
     const val BOTTOM_SPACE_DEFAULT = 15
     /** Hide the system's keyboard-switch / hide-keyboard buttons under the keys (Android 16+). */
     const val HIDE_SYSTEM_BUTTONS = "hide_system_buttons"
+    /** Now and then a llama walks across the keys (see keyboard/Llama.kt). */
+    const val LLAMA = "llama"
+    const val LLAMA_DEFAULT = true
     const val AUTOCORRECT = "autocorrect"
     const val AUTOCORRECT_DEFAULT = false
     const val AUTOCAPS = "autocaps"
@@ -51,7 +54,7 @@ object Prefs {
      */
     val RESETTABLE = listOf(
         THEME, LAYOUT, MINI_HEIGHT, FULL_HEIGHT, BAR_HEIGHT, BOTTOM_SPACE, HIDE_SYSTEM_BUTTONS,
-        AUTOCORRECT, AUTOCAPS, HOLD_MS, SWIPE_MIN, SWIPE_LONG, SWIPE_SPEED, SWIPE_STRAIGHTNESS, SHOW_GIFS,
+        AUTOCORRECT, AUTOCAPS, LLAMA, HOLD_MS, SWIPE_MIN, SWIPE_LONG, SWIPE_SPEED, SWIPE_STRAIGHTNESS, SHOW_GIFS,
         "haptics", "previews",
     )
 

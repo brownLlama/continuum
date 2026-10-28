@@ -313,6 +313,7 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
         v.swipeSpeed = prefs.getInt(Prefs.SWIPE_SPEED, Prefs.SWIPE_SPEED_DEFAULT) / 100f
         v.swipeStraightness = prefs.getInt(Prefs.SWIPE_STRAIGHTNESS, Prefs.SWIPE_STRAIGHTNESS_DEFAULT) / 100f
         v.holdMs = prefs.getInt(Prefs.HOLD_MS, Prefs.HOLD_MS_DEFAULT).toLong()
+        v.llamaVisits = prefs.getBoolean(Prefs.LLAMA, Prefs.LLAMA_DEFAULT)
     }
 
     // ---- editor lifecycle -----------------------------------------------------------------
@@ -427,6 +428,9 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
         if (shift == Shift.ON) setShift(Shift.OFF)
         redecode()
     }
+
+    /** Not mid-word, not in password or number fields, not while searching GIFs. */
+    override fun llamaMayVisit() = taps.isEmpty() && predict && queryEditor == null
 
     override fun onText(text: String) {
         val ic = editor() ?: return

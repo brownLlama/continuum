@@ -34,6 +34,8 @@
     <!-- Appearance -->
     <string name="pref_theme">Theme</string>
     <string name="pref_layout">Layout</string>
+    <string name="pref_llama">Llama visits</string>
+    <string name="pref_llama_summary">Now and then a little llama walks across the keys while you\'re not typing. It leaves as soon as you touch the keyboard.</string>
 
     <!-- Size & position -->
     <string name="cat_height">Height</string>
