@@ -277,10 +277,7 @@ class SettingsActivity : AppCompatActivity(), PreferenceFragmentCompat.OnPrefere
                 if (prefs.getBoolean(Prefs.AUTOCORRECT, Prefs.AUTOCORRECT_DEFAULT)) R.string.summary_typing_on else R.string.summary_typing_off, hold,
             )
             findPreference<Preference>("gestures")?.setSummary(R.string.summary_gestures)
-            val shortcuts = Prefs.SHORTCUT_KEYS.filter { shortcutText(it) != null }
-            findPreference<Preference>("shortcuts")?.summary =
-                if (shortcuts.isEmpty()) getString(R.string.summary_shortcuts_none)
-                else shortcuts.map { getString(R.string.pref_shortcut_title, it) }.joinToString(" · ")
+            findPreference<Preference>("shortcuts")?.setSummary(R.string.summary_shortcuts)
             findPreference<Preference>("gifs")?.setSummary(
                 when {
                     !prefs.getBoolean(Prefs.SHOW_GIFS, Prefs.SHOW_GIFS_DEFAULT) -> R.string.summary_gifs_hidden

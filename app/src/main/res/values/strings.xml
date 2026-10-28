@@ -88,7 +88,7 @@
 
     <!-- Shortcuts -->
     <string name="screen_shortcuts">Text shortcuts</string>
-    <string name="summary_shortcuts_none">Type ##e to insert text you save here</string>
+    <string name="summary_shortcuts">Type ## and a letter or digit to insert saved text</string>
     <string name="pref_shortcuts_intro">Type ## and a letter or digit to insert its text, e.g. ##e for your email. A backspace right after puts back what you typed. Not used in password fields.</string>
     <string name="pref_shortcut_title">##%1$c</string>
     <string name="shortcut_add">Add shortcut</string>
