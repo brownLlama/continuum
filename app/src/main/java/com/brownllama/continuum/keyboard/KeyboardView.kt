@@ -199,6 +199,9 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
     /** State of full mode's bar switch. */
     var autocorrectOn = true
         set(value) { field = value; invalidate() }
+    /** The field takes an email address: full mode's "," key becomes "@". */
+    var emailField = false
+        set(value) { if (field != value) { field = value; relayout() } }
     /** The editor's action (EditorInfo.IME_ACTION_*), drawn on the enter key; NONE = plain enter arrow. */
     var enterAction = EditorInfo.IME_ACTION_NONE
         set(value) { field = value; invalidate() }
@@ -324,10 +327,12 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
     /**
      * One touchable key. [hint] is shown small in the corner and typed on long-press; several
      * characters (",!?") open a popup to pick one. [value] is the group index for [Kind.EMOJI_TAB].
+     * [face] is where the key is drawn; it's smaller than [rect] for keys whose touch area is
+     * stretched to the keyboard's edge (full mode's first and last home-row letters).
      */
     private class Key(
         val kind: Kind, val rect: RectF, val label: String = "", val hint: String? = null,
-        val value: Int = 0, val style: Style = Style.PLAIN,
+        val value: Int = 0, val style: Style = Style.PLAIN, val face: RectF = rect,
     )
 
     // ---- layout (recomputed by relayout) ----------------------------------------------------
@@ -492,9 +497,22 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
     override fun verifyDrawable(who: Drawable): Boolean =
         super.verifyDrawable(who) || showsGifs && gifTiles.any { it.image === who }
 
+    /**
+     * Each GIF frame redraws the whole view. While the search keyboard is up that competes with
+     * typing, so frames are then drawn at most every [GIF_TYPING_FRAME_MS].
+     */
     override fun invalidateDrawable(drawable: Drawable) {
-        if (verifyDrawable(drawable)) invalidate() else super.invalidateDrawable(drawable)
+        if (!verifyDrawable(drawable)) return super.invalidateDrawable(drawable)
+        if (!gifSearching) return invalidate()
+        if (gifFramePending) return
+        gifFramePending = true
+        val wait = GIF_TYPING_FRAME_MS - (SystemClock.uptimeMillis() - lastDrawAt)
+        if (wait <= 0) postOnAnimation(gifFrame) else postDelayed(gifFrame, wait)
     }
+    private var gifFramePending = false
+    private val gifFrame = Runnable { gifFramePending = false; invalidate() }
+    /** When [onDraw] last ran, for [invalidateDrawable]. */
+    private var lastDrawAt = 0L
 
     /** Pauses every GIF (they animate only while visible, see [drawGifGrid]). */
     private fun stopGifs() {
@@ -600,17 +618,22 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
         }
     }
 
-    private fun letterKey(c: Char, r: RectF) = Key(Kind.LETTER, r, c.toString(), layout.fullHints[c])
+    private fun letterKey(c: Char, r: RectF, face: RectF = r) = Key(Kind.LETTER, r, c.toString(), layout.fullHints[c], face = face)
 
-    /** Full mode letters: 10 key widths per row; the home row is offset by half a key, like a real keyboard. */
+    /**
+     * Full mode letters: 10 key widths per row; the home row is offset by half a key, like a real
+     * keyboard. Its outer keys also take the half key left over at each edge, but are drawn one key
+     * wide, so their letters line up with the rest of the row.
+     */
     private fun layoutFull(w: Float, top: Float) {
         val kw = w / 10f
         val rh = fullRowH
         layout.top.forEachIndexed { i, c -> keys += letterKey(c, RectF(i * kw, top, (i + 1) * kw, top + rh)) }
         layout.mid.forEachIndexed { i, c ->
-            val l = if (i == 0) 0f else (i + 0.5f) * kw
-            val r = if (i == layout.mid.lastIndex) w else (i + 1.5f) * kw
-            keys += letterKey(c, RectF(l, top + rh, r, top + 2 * rh))
+            val face = RectF((i + 0.5f) * kw, top + rh, (i + 1.5f) * kw, top + 2 * rh)
+            val l = if (i == 0) 0f else face.left
+            val r = if (i == layout.mid.lastIndex) w else face.right
+            keys += letterKey(c, RectF(l, face.top, r, face.bottom), face)
         }
         val y2 = top + 2 * rh
         keys += Key(Kind.SHIFT, RectF(0f, y2, 1.5f * kw, y2 + rh))
@@ -644,7 +667,7 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
         val kw = w / 10f
         val y1 = y + fullRowH
         keys += Key(first, RectF(0f, y, 1.5f * kw, y1), firstLabel)
-        keys += Key(Kind.TEXT, RectF(1.5f * kw, y, 2.5f * kw, y1), ",", Layouts.EMOJI_SLOT)
+        keys += Key(Kind.TEXT, RectF(1.5f * kw, y, 2.5f * kw, y1), if (emailField) "@" else ",", Layouts.EMOJI_SLOT)
         keys += Key(Kind.SPACE, RectF(2.5f * kw, y, 7.5f * kw, y1))
         keys += Key(Kind.TEXT, RectF(7.5f * kw, y, 8.5f * kw, y1), ".", PERIOD_ALTS)
         keys += Key(Kind.ENTER, RectF(8.5f * kw, y, w, y1))
@@ -1371,6 +1394,7 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
     private val iconColor get() = if (theme.accentIcons) theme.accent else theme.text
 
     override fun onDraw(canvas: Canvas) {
+        lastDrawAt = SystemClock.uptimeMillis()
         val header = gifHeaderH
         canvas.translate(0f, overlayH + header)
         fill.color = theme.background
@@ -1427,7 +1451,7 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
     /** Draws one key: its pressed background, then its label or icon. */
     private fun drawKey(c: Canvas, k: Key, inBar: Boolean) {
         val t = theme
-        val r = k.rect
+        val r = k.face
         val cx = r.centerX()
         val cy = r.centerY()
         val icon = min(r.height(), dpu(40f) * scale) * 0.34f
@@ -1509,7 +1533,7 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
     /** Label of a [Kind.TEXT] key, sized by its [Style]. */
     private fun drawTextKey(c: Canvas, k: Key) {
         val t = theme
-        val r = k.rect
+        val r = k.face
         val cx = r.centerX()
         val cy = r.centerY()
         when {
@@ -1713,12 +1737,12 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
             }
             val label = if (p.longPressed && hint != null) hint
             else if (k.kind == Kind.LETTER) upper(k.label) else k.label
-            val w = max(k.rect.width() * 1.25f, dpu(44f))
-            val h = max(k.rect.height() * 1.15f, dpu(48f))
-            val left = (k.rect.centerX() - w / 2).coerceIn(0f, width - w)
-            val bottom = k.rect.top + k.rect.height() * 0.15f
+            val w = max(k.face.width() * 1.25f, dpu(44f))
+            val h = max(k.face.height() * 1.15f, dpu(48f))
+            val left = (k.face.centerX() - w / 2).coerceIn(0f, width - w)
+            val bottom = k.face.top + k.face.height() * 0.15f
             val top = max(-overlayH, bottom - h)
-            popIn(c, if (p.longPressed) p.longPressAt else p.downAt, k.rect.centerX(), bottom) {
+            popIn(c, if (p.longPressed) p.longPressAt else p.downAt, k.face.centerX(), bottom) {
                 fill.color = t.zoom
                 tmp.set(left, top, left + w, top + h)
                 shadowOn()
@@ -2035,9 +2059,10 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
             text.color = t.text
             c.drawText(q, x0, baseline, text)
             if (gifSearching) {
-                val cx = x0 + text.measureText(q) + dpu(2f)
+                // Right against the last letter: a gap here reads as a space that isn't there.
+                val cx = x0 + text.measureText(q)
                 fill.color = t.accent
-                c.drawRect(cx, my - h * 0.25f, cx + dpu(2f), my + h * 0.25f, fill)
+                c.drawRect(cx, my - h * 0.25f, cx + dpu(1.5f), my + h * 0.25f, fill)
             }
         }
         text.textAlign = Paint.Align.CENTER
@@ -2050,6 +2075,8 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
         private const val MIN_SLOT_FRACTION = 1f / 6
         private const val EMOJI_COLUMNS = 8
         private const val GIF_COLUMNS = 3
+        /** Slowest GIF frame interval while typing a search (see [invalidateDrawable]). */
+        private const val GIF_TYPING_FRAME_MS = 80L
         private const val CLIP_COLUMNS = 2
         /** Lines of text shown on a clip card before it's cut off. */
         private const val CLIP_LINES = 3

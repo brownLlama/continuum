@@ -110,6 +110,8 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
     private var autocorrect = true
     private var autoCaps = true
     private var capsAllowed = true
+    /** The field takes an email address (full mode then has "@" in place of ","). */
+    private var emailField = false
 
     // ---- the word being typed -------------------------------------------------------------
 
@@ -223,6 +225,8 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
         gifs.view = v
         v.emojiGroups = emojiGroups
         v.frequentEmoji = emojiHistory.top(FREQUENT_EMOJI)
+        v.shift = shift
+        v.emailField = emailField
         applyPrefs()
         return v
     }
@@ -311,6 +315,7 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
         val password = cls == InputType.TYPE_CLASS_TEXT && variation in PASSWORD_VARIATIONS ||
             cls == InputType.TYPE_CLASS_NUMBER && variation == InputType.TYPE_NUMBER_VARIATION_PASSWORD
         val address = cls == InputType.TYPE_CLASS_TEXT && variation in ADDRESS_VARIATIONS
+        emailField = cls == InputType.TYPE_CLASS_TEXT && variation in EMAIL_VARIATIONS
         val numeric = cls == InputType.TYPE_CLASS_NUMBER || cls == InputType.TYPE_CLASS_PHONE ||
             cls == InputType.TYPE_CLASS_DATETIME
 
@@ -327,8 +332,10 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
             v.mode = mode
             if (numeric) v.showPanel(KeyboardView.Panel.SYMBOLS)
             v.enterAction = enterAction(info)
+            v.emailField = emailField
         }
-        shift = Shift.OFF
+        // Caps lock stays on in the next field (it's still shown on shift); anything else starts over.
+        if (shift != Shift.LOCK) setShift(Shift.OFF)
         updateAutoShift()
         showPredictions()
     }
@@ -402,18 +409,22 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
         // "zazzy" + "'": the next word joins this one (see Glue).
         val joined = lastCommit?.takeIf { !it.spaced && text.length == 1 && text[0] in JOINERS }
         pendingGlue = joined?.let { Glue(it.learned + text, it.prevBefore, wordAutoCap) }
-        ic.beginBatchEdit()
-        if (text.length == 1 && text[0] in ATTACHING_PUNCTUATION && autoSpace) {
+        if (queryEditor == null && text.length == 1 && text[0] in '0'..'9') {
+            // Digits go as key presses, like other keyboards do: one-time-code boxes often move to
+            // the next box on the key event and ignore text committed without one.
+            sendDownUpKeyEvents(KeyEvent.KEYCODE_0 + (text[0] - '0'))
+            autoSpace = false
+        } else if (text.length == 1 && text[0] in ATTACHING_PUNCTUATION && autoSpace) {
             // "word |" + "." → "word. |"
-            val before = ic.getTextBeforeCursor(1, 0)
-            if (before == " ") ic.deleteSurroundingText(1, 0)
+            ic.beginBatchEdit()
+            if (ic.getTextBeforeCursor(1, 0) == " ") ic.deleteSurroundingText(1, 0)
             ic.commitText("$text ", 1)
+            ic.endBatchEdit()
             autoSpace = true
         } else {
             ic.commitText(text, 1)
             autoSpace = false
         }
-        ic.endBatchEdit()
         lastCommit = null
         if (text.length == 1 && text[0] in SENTENCE_END) prevWord = null
         updateAutoShift()
@@ -735,6 +746,7 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
             override fun getEditable(): Editable = query
         }
         if (shift != Shift.LOCK) setShift(Shift.OFF)
+        view?.emailField = false
         showPredictions()
     }
 
@@ -752,6 +764,7 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
             prevWord = it.prevWord
         }
         fieldState = null
+        view?.emailField = emailField
         resetWordState()
         updateAutoShift()
         showPredictions()
@@ -1131,6 +1144,10 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
             InputType.TYPE_TEXT_VARIATION_PASSWORD,
             InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD,
             InputType.TYPE_TEXT_VARIATION_WEB_PASSWORD,
+        )
+        private val EMAIL_VARIATIONS = setOf(
+            InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS,
+            InputType.TYPE_TEXT_VARIATION_WEB_EMAIL_ADDRESS,
         )
         private val ADDRESS_VARIATIONS = setOf(
             InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS,
