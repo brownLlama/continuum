@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Text shortcuts: "##" + a letter or digit types saved text. ScreenFragment adds one row per key. -->
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+    <Preference
+        app:selectable="false"
+        app:summary="@string/pref_shortcuts_intro" />
+    <PreferenceCategory app:key="shortcut_list" />
+</PreferenceScreen>

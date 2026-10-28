@@ -46,7 +46,7 @@ object Prefs {
     const val HOLD_MS_DEFAULT = 110
     /**
      * Every setting "Reset to defaults" (main menu) clears, so the code's defaults apply again.
-     * Not the KLIPY key, the learned words or the remembered mode. "haptics" and "previews" were
+     * Not the KLIPY key, the text shortcuts, the learned words or the remembered mode. "haptics" and "previews" were
      * switches once (now always off / always on) and are cleared so old values don't linger.
      */
     val RESETTABLE = listOf(
@@ -64,4 +64,9 @@ object Prefs {
     /** GIF search: the user's free KLIPY app key and the anonymous id KLIPY asks for. */
     const val KLIPY_KEY = "klipy_key"
     const val GIF_CUSTOMER_ID = "gif_customer_id"
+
+    /** Text shortcuts: [SHORTCUT_TRIGGER] then one of [SHORTCUT_KEYS] types the text saved under [shortcut]. */
+    const val SHORTCUT_TRIGGER = "##"
+    const val SHORTCUT_KEYS = "abcdefghijklmnopqrstuvwxyz0123456789"
+    fun shortcut(key: Char) = "shortcut_${key.lowercaseChar()}"
 }

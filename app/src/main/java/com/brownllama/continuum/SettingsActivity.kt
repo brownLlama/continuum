@@ -24,7 +24,8 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder
 /**
  * The app's launcher screen. On top: a setup card (only until Continuum is the current keyboard)
  * and a field to try the keyboard. Below: a short menu (res/xml/prefs_root.xml) whose rows open
- * one page each (Appearance, Size & position, Typing, Gestures, GIFs, Guide) and Reset to defaults.
+ * one page each (Appearance, Size & position, Typing, Gestures, Text shortcuts, GIFs, Guide) and
+ * Reset to defaults.
  *
  * The keyboard service reads the same SharedPreferences and updates live as they change.
  */
@@ -112,6 +113,7 @@ class SettingsActivity : AppCompatActivity(), PreferenceFragmentCompat.OnPrefere
                         requireContext().packageManager.getPackageInfo(requireContext().packageName, 0).versionName
                     }.getOrNull()
                 }
+                "shortcuts" -> addShortcutRows()
                 "gifs" -> findPreference<EditTextPreference>(Prefs.KLIPY_KEY)?.apply {
                     // Show whether a key is set, not the key itself.
                     summaryProvider = Preference.SummaryProvider<EditTextPreference> {
@@ -133,6 +135,24 @@ class SettingsActivity : AppCompatActivity(), PreferenceFragmentCompat.OnPrefere
         override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
             super.onViewCreated(view, savedInstanceState)
             setDivider(null) // sections are separated by their headings, not lines
+        }
+
+        /** One row per shortcut key (##a … ##9), showing its text or "Not set"; an empty text removes it. */
+        private fun addShortcutRows() {
+            val list = findPreference<PreferenceGroup>("shortcut_list") ?: return
+            for (key in Prefs.SHORTCUT_KEYS) {
+                list.addPreference(
+                    EditTextPreference(requireContext()).apply {
+                        this.key = Prefs.shortcut(key)
+                        title = getString(R.string.pref_shortcut_title, key)
+                        dialogTitle = title
+                        isIconSpaceReserved = false
+                        summaryProvider = Preference.SummaryProvider<EditTextPreference> {
+                            it.text?.takeIf(String::isNotEmpty) ?: getString(R.string.pref_shortcut_unset)
+                        }
+                    },
+                )
+            }
         }
 
         /** Rows without an icon don't reserve space for one, so their titles line up with the edge. */
@@ -165,6 +185,10 @@ class SettingsActivity : AppCompatActivity(), PreferenceFragmentCompat.OnPrefere
                 if (prefs.getBoolean(Prefs.AUTOCORRECT, Prefs.AUTOCORRECT_DEFAULT)) R.string.summary_typing_on else R.string.summary_typing_off, hold,
             )
             findPreference<Preference>("gestures")?.setSummary(R.string.summary_gestures)
+            val shortcuts = Prefs.SHORTCUT_KEYS.count { !prefs.getString(Prefs.shortcut(it), null).isNullOrEmpty() }
+            findPreference<Preference>("shortcuts")?.summary =
+                if (shortcuts == 0) getString(R.string.summary_shortcuts_none)
+                else resources.getQuantityString(R.plurals.summary_shortcuts, shortcuts, shortcuts)
             findPreference<Preference>("gifs")?.setSummary(
                 when {
                     !prefs.getBoolean(Prefs.SHOW_GIFS, Prefs.SHOW_GIFS_DEFAULT) -> R.string.summary_gifs_hidden
@@ -213,6 +237,7 @@ class SettingsActivity : AppCompatActivity(), PreferenceFragmentCompat.OnPrefere
                 "size" to R.xml.prefs_size,
                 "typing" to R.xml.prefs_typing,
                 "gestures" to R.xml.prefs_gestures,
+                "shortcuts" to R.xml.prefs_shortcuts,
                 "gifs" to R.xml.prefs_gifs,
                 "guide" to R.xml.prefs_guide,
             )

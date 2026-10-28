@@ -86,6 +86,17 @@
     <string name="pref_gifs_privacy_title">Privacy</string>
     <string name="pref_gifs_privacy">Only GIF searches and the GIFs you pick are sent to KLIPY, with an anonymous ID. Nothing you type in apps is sent.</string>
 
+    <!-- Shortcuts -->
+    <string name="screen_shortcuts">Text shortcuts</string>
+    <string name="summary_shortcuts_none">Type ##e to insert text you save here</string>
+    <plurals name="summary_shortcuts">
+        <item quantity="one">%1$d shortcut</item>
+        <item quantity="other">%1$d shortcuts</item>
+    </plurals>
+    <string name="pref_shortcuts_intro">Type ## and then a letter or digit to insert its text, e.g. ##e for your email. Backspace right after puts back what you typed. Upper and lower case are the same shortcut. Not used in password fields.</string>
+    <string name="pref_shortcut_title">##%1$c</string>
+    <string name="pref_shortcut_unset">Not set</string>
+
     <!-- Guide -->
     <string name="guide_cat_0">Basics</string>
     <string name="guide_tap_title">Tap roughly</string>

@@ -24,6 +24,11 @@
         app:title="@string/screen_gestures" />
     <Preference
         app:fragment="com.brownllama.continuum.SettingsActivity$ScreenFragment"
+        app:icon="@drawable/ic_shortcuts"
+        app:key="shortcuts"
+        app:title="@string/screen_shortcuts" />
+    <Preference
+        app:fragment="com.brownllama.continuum.SettingsActivity$ScreenFragment"
         app:icon="@drawable/ic_gif"
         app:key="gifs"
         app:title="@string/screen_gifs" />

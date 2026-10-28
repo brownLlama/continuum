@@ -68,6 +68,7 @@ import kotlin.math.roundToInt
  * - Fields that ask not to be learned from (incognito tabs, IME_FLAG_NO_PERSONALIZED_LEARNING)
  *   still get suggestions, but nothing typed there is learned or unlearned ([learning] off).
  * - A word typed right after "word'" or "word-" is learned together with it ("zazzy's", see [Glue]).
+ * - "##" then a letter or digit with a text shortcut saved for it types that text ([expandShortcut]).
  * - GIFs come from KLIPY through [GifFeed] and are inserted as rich content ([sendGif]). While the
  *   GIF search is open, the same typing (mini or full, suggestions and all) edits the query
  *   instead of the app's field ([editor], [onGifSearchOpen]).
@@ -150,6 +151,10 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
     private class Glue(val prefix: String, val prevBefore: String?, val sentenceStart: Boolean) {
         var absorbed = false
     }
+    /** The shortcut just expanded: [typed] ("##e") became [text]; a backspace right after undoes it. */
+    private class Expansion(val typed: String, val text: String)
+    private var lastExpansion: Expansion? = null
+
     /** The composing text the decoder last showed (what the word looks like in the field). */
     private var composingText = ""
     /**
@@ -322,6 +327,7 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
         taps.clear()
         result = null
         lastCommit = null
+        lastExpansion = null
         autoSpace = false
         prevWord = null
 
@@ -397,6 +403,8 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
     override fun onLetterTap(tap: Tap) {
         val upper = shift != Shift.OFF
         val t = tap.copy(upper = upper)
+        lastExpansion = null
+        if (taps.isEmpty() && expandShortcut('a' + nearestLetter(t))) return
         if (!predict) {
             val code = nearestLetter(t)
             val ch = ('a' + code).let { if (upper) it.uppercaseChar() else it }
@@ -422,6 +430,8 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
 
     override fun onText(text: String) {
         val ic = editor() ?: return
+        lastExpansion = null
+        if (taps.isEmpty() && text.length == 1 && expandShortcut(text[0])) return
         if (taps.isNotEmpty()) commitWord(spaced = false, choice = null)
         // "zazzy" + "'": the next word joins this one (see Glue).
         val joined = lastCommit?.takeIf { !it.spaced && text.length == 1 && text[0] in JOINERS }
@@ -464,6 +474,7 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
             }
             return
         }
+        if (undoExpansion(ic)) return
         if (reopenLastCommit(ic)) return
         lastCommit = null
         autoSpace = false
@@ -493,6 +504,46 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
         autoSpace = false
         redecode(forceText = last.text)
         ic.endBatchEdit()
+        return true
+    }
+
+    /**
+     * "##" right before the cursor and a shortcut saved for [key] (a letter or digit, either case):
+     * replaces the "##" and the key with the shortcut's text. Not in password and number fields.
+     */
+    private fun expandShortcut(key: Char): Boolean {
+        if (!predict || key !in Prefs.SHORTCUT_KEYS) return false
+        val text = prefs.getString(Prefs.shortcut(key), null)
+        if (text.isNullOrEmpty()) return false
+        val ic = editor() ?: return false
+        val trigger = Prefs.SHORTCUT_TRIGGER
+        if (ic.getTextBeforeCursor(trigger.length, 0)?.toString() != trigger) return false
+        ic.beginBatchEdit()
+        ic.deleteSurroundingText(trigger.length, 0)
+        ic.commitText(text, 1)
+        ic.endBatchEdit()
+        lastExpansion = Expansion(trigger + key, text)
+        lastCommit = null
+        pendingGlue = null
+        deletedSlots = null
+        autoSpace = false
+        if (shift == Shift.ON) setShift(Shift.OFF)
+        updateAutoShift()
+        showPredictions()
+        return true
+    }
+
+    /** Backspace right after [expandShortcut]: puts back the "##e" that was typed. */
+    private fun undoExpansion(ic: InputConnection): Boolean {
+        val last = lastExpansion ?: return false
+        lastExpansion = null
+        if (ic.getTextBeforeCursor(last.text.length, 0)?.toString() != last.text) return false
+        ic.beginBatchEdit()
+        ic.deleteSurroundingText(last.text.length, 0)
+        ic.commitText(last.typed, 1)
+        ic.endBatchEdit()
+        updateAutoShift()
+        showPredictions()
         return true
     }
 
@@ -532,6 +583,7 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
     /** Commits the word being typed, or types a space; a second space after a word makes a full stop. */
     override fun onSpace() {
         val ic = editor() ?: return
+        lastExpansion = null
         pendingGlue = null
         if (taps.isNotEmpty()) {
             commitWord(spaced = true, choice = null)
@@ -578,6 +630,7 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
     /** Runs the field's action (search, send, go…) if it has one, otherwise types a newline. */
     override fun onEnter() {
         val ic = editor() ?: return
+        lastExpansion = null
         if (taps.isNotEmpty()) commitWord(spaced = false, choice = null)
         if (queryEditor != null) {
             // Searching GIFs: show the results in the full grid.
@@ -617,6 +670,7 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
         val word = slots.getOrNull(slot).orEmpty()
         if (word.isEmpty()) return
         val ic = editor() ?: return
+        lastExpansion = null
         val replaced = if (replacePeriod) ". " else " "
         if (punctuationBar && taps.isEmpty() && ic.getTextBeforeCursor(2, 0)?.toString()?.endsWith(replaced) == true) {
             // Swap the double-space "." (or add to the punctuation picked before): "word. " → "word? ".
