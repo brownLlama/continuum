@@ -358,7 +358,9 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
     override fun onFinishInputView(finishingInput: Boolean) {
         super.onFinishInputView(finishingInput)
         view?.closeGifSearch()
-        finishComposing()
+        // The app may already have finished the composing text itself (it does on the back gesture);
+        // committing the word again would then insert it a second time, so keep what's in the field.
+        finishComposing(keepShown = true)
         user.save()
     }
 
@@ -943,12 +945,16 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
         return words.first()
     }
 
-    /** Commits [choice], or the default suggestion, in place of the composing text, and learns it. */
-    private fun commitWord(spaced: Boolean, choice: String?) {
+    /**
+     * Commits [choice], or the default suggestion, in place of the composing text, and learns it.
+     * [keepShown] instead leaves the composing text in the field as it is, without retyping it.
+     */
+    private fun commitWord(spaced: Boolean, choice: String?, keepShown: Boolean = false) {
         val ic = editor() ?: return
-        val text = choice ?: slots.getOrNull(defaultSlot)?.takeIf { it.isNotEmpty() }
-            ?: applyCase(result?.literal ?: "", keepDisplay = false)
-        ic.commitText(text + if (spaced) " " else "", 1)
+        val text = if (keepShown && composingText.isNotEmpty()) composingText
+            else choice ?: slots.getOrNull(defaultSlot)?.takeIf { it.isNotEmpty() }
+                ?: applyCase(result?.literal ?: "", keepDisplay = false)
+        if (keepShown) ic.finishComposingText() else ic.commitText(text + if (spaced) " " else "", 1)
         // A joined word replaces what was learned for its first part: "zazzy" + "'s" → "zazzy's".
         val g = wordGlue?.takeIf { Dictionary.keyOf(text) != null }
         if (g != null && !g.absorbed) {
@@ -969,9 +975,9 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
     }
 
     /** Commits a word in progress as it stands (when the keyboard closes or switches mode). */
-    private fun finishComposing() {
+    private fun finishComposing(keepShown: Boolean = false) {
         if (taps.isEmpty()) return
-        commitWord(spaced = false, choice = null)
+        commitWord(spaced = false, choice = null, keepShown = keepShown)
         lastCommit = null
     }
 
