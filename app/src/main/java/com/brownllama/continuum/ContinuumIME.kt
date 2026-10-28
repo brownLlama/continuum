@@ -34,6 +34,7 @@ import com.brownllama.continuum.clipboard.ClipboardHistory
 import com.brownllama.continuum.gif.Gif
 import com.brownllama.continuum.gif.GifFeed
 import com.brownllama.continuum.gif.KlipyClient
+import com.brownllama.continuum.keyboard.AnimalFrequency
 import com.brownllama.continuum.keyboard.Emoji
 import com.brownllama.continuum.keyboard.EmojiGroup
 import com.brownllama.continuum.keyboard.EmojiHistory
@@ -314,6 +315,7 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
         v.swipeSpeed = prefs.getInt(Prefs.SWIPE_SPEED, Prefs.SWIPE_SPEED_DEFAULT) / 100f
         v.swipeStraightness = prefs.getInt(Prefs.SWIPE_STRAIGHTNESS, Prefs.SWIPE_STRAIGHTNESS_DEFAULT) / 100f
         v.holdMs = prefs.getInt(Prefs.HOLD_MS, Prefs.HOLD_MS_DEFAULT).toLong()
+        v.animalFrequency = AnimalFrequency.named(prefs.getString(Prefs.ANIMAL_FREQUENCY, null))
         v.animals = if (!prefs.getBoolean(Prefs.ANIMALS, Prefs.ANIMALS_DEFAULT)) emptyList() else {
             prefs.getStringSet(Prefs.ANIMAL_KINDS, null)?.mapNotNull(Species::named) ?: Species.ALL
         }
@@ -1150,6 +1152,12 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
     override fun onWindowShown() {
         super.onWindowShown()
         showSystemButtons(!prefs.getBoolean(Prefs.HIDE_SYSTEM_BUTTONS, true))
+        view?.keyboardShown()
+    }
+
+    override fun onWindowHidden() {
+        super.onWindowHidden()
+        view?.keyboardHidden()
     }
 
     /**

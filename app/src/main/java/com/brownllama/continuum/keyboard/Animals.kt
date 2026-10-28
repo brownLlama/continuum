@@ -265,6 +265,20 @@ internal class Species(
 }
 
 /**
+ * Setting "How often" for the visiting animals: [gapMs] from one visit to when the next is due
+ * (null: once each time the keyboard opens), and how soon after the keyboard opens a due one comes.
+ */
+internal enum class AnimalFrequency(val key: String, val gapMs: LongRange?, val openMs: LongRange) {
+    ALWAYS("always", null, 1_000L..2_000L),
+    SOMETIMES("sometimes", 3 * 60_000L..6 * 60_000L, 2_000L..6_000L),
+    RARELY("rarely", 45 * 60_000L..75 * 60_000L, 2_000L..6_000L);
+
+    companion object {
+        fun named(key: String?) = entries.firstOrNull { it.key == key } ?: ALWAYS
+    }
+}
+
+/**
  * The animal walking across the keys now and then (setting "Animal visits"), [px] screen pixels per
  * sprite pixel, drawn see-through over the keys. It only draws: touches go to the keys underneath,
  * so it keeps walking while you type.

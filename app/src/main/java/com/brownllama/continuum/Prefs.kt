@@ -32,6 +32,8 @@ object Prefs {
     const val ANIMALS_DEFAULT = true
     /** Species keys (Species.key); every one by default. */
     const val ANIMAL_KINDS = "animal_kinds"
+    /** AnimalFrequency.key: "always" (the default), "sometimes" or "rarely". */
+    const val ANIMAL_FREQUENCY = "animal_frequency"
     const val AUTOCORRECT = "autocorrect"
     const val AUTOCORRECT_DEFAULT = false
     const val AUTOCAPS = "autocaps"
@@ -57,7 +59,7 @@ object Prefs {
      */
     val RESETTABLE = listOf(
         THEME, LAYOUT, MINI_HEIGHT, FULL_HEIGHT, BAR_HEIGHT, BOTTOM_SPACE, HIDE_SYSTEM_BUTTONS,
-        AUTOCORRECT, AUTOCAPS, ANIMALS, ANIMAL_KINDS, HOLD_MS, SWIPE_MIN, SWIPE_LONG, SWIPE_SPEED, SWIPE_STRAIGHTNESS, SHOW_GIFS,
+        AUTOCORRECT, AUTOCAPS, ANIMALS, ANIMAL_KINDS, ANIMAL_FREQUENCY, HOLD_MS, SWIPE_MIN, SWIPE_LONG, SWIPE_SPEED, SWIPE_STRAIGHTNESS, SHOW_GIFS,
         "haptics", "previews", "llama",
     )
 

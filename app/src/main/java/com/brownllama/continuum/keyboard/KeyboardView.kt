@@ -211,6 +211,25 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
             field = value
             if (value.isNotEmpty()) scheduleAnimal() else endAnimal(cancel = true)
         }
+    /** Setting "How often". */
+    internal var animalFrequency = AnimalFrequency.ALWAYS
+        set(value) {
+            if (field == value) return
+            field = value
+            nextAnimalAt = 0L
+            scheduleAnimal()
+        }
+
+    /**
+     * The keyboard opened ([ContinuumIME.onWindowShown], and the window turning visible): a due
+     * visit comes in a moment, and with "Every time" one is always due.
+     */
+    fun keyboardShown() {
+        if (animalFrequency.gapMs == null) nextAnimalAt = 0L
+        scheduleAnimal(randomBetween(animalFrequency.openMs))
+    }
+
+    fun keyboardHidden() = endAnimal(cancel = true)
     /** The editor's action (EditorInfo.IME_ACTION_*), drawn on the enter key; NONE = plain enter arrow. */
     var enterAction = EditorInfo.IME_ACTION_NONE
         set(value) { field = value; invalidate() }
@@ -1355,6 +1374,8 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
     private fun maybeStartAnimal() {
         if (animals.isEmpty() || !animating || animal.visiting) return
         val now = SystemClock.uptimeMillis()
+        // "Every time" and this opening's visit is over: nothing to wait for until the keyboard opens again.
+        if (nextAnimalAt == Long.MAX_VALUE) return
         if (now < nextAnimalAt) return scheduleAnimal(max(ANIMAL_IDLE_MS, nextAnimalAt - now))
         val idle = pointers.isEmpty() && zoom == null && !gifSearching && panel == Panel.LETTERS &&
             now - lastTouchAt >= ANIMAL_IDLE_MS && listener.animalMayVisit()
@@ -1366,7 +1387,8 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
             barH + fullRowH * (1 + kotlin.random.Random.nextInt(4)) - dp(3f)
         }
         animal.start(animals.random(), width.toFloat(), feet, now)
-        nextAnimalAt = now + randomBetween(ANIMAL_EVERY_MS)
+        // "Every time": the next one comes when the keyboard opens again.
+        nextAnimalAt = animalFrequency.gapMs?.let { now + randomBetween(it) } ?: Long.MAX_VALUE
         invalidate()
     }
 
@@ -1381,8 +1403,7 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
 
     override fun onWindowVisibilityChanged(visibility: Int) {
         super.onWindowVisibilityChanged(visibility)
-        // Keyboard sessions are short, so a due visit comes a few seconds after it opens.
-        if (visibility == VISIBLE) scheduleAnimal(randomBetween(ANIMAL_OPEN_MS)) else endAnimal(cancel = true)
+        if (visibility == VISIBLE) keyboardShown() else keyboardHidden()
     }
 
     override fun onDetachedFromWindow() {
@@ -2178,9 +2199,6 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
     companion object {
         /** When the next animal visit is due (uptime ms; 0: the first time the keyboard opens). Kept while the app runs. */
         private var nextAnimalAt = 0L
-        /** Time from one visit to when the next is due, and from the keyboard opening to a due visit (ms). */
-        private val ANIMAL_EVERY_MS = 3 * 60_000L..6 * 60_000L
-        private val ANIMAL_OPEN_MS = 2_000L..6_000L
         /** The pause in typing a visit starts in. */
         private const val ANIMAL_IDLE_MS = 1_500L
         /** The strip always has at least this many slots, so a lone word still sits where it would among three. */

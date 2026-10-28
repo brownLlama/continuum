@@ -28,4 +28,12 @@
         app:entryValues="@array/animal_values"
         app:key="animal_kinds"
         app:title="@string/pref_animal_kinds" />
+    <ListPreference
+        app:defaultValue="always"
+        app:dependency="animals"
+        app:entries="@array/animal_frequency_names"
+        app:entryValues="@array/animal_frequency_values"
+        app:key="animal_frequency"
+        app:title="@string/pref_animal_frequency"
+        app:useSimpleSummaryProvider="true" />
 </PreferenceScreen>

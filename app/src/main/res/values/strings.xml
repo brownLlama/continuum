@@ -38,6 +38,7 @@
     <string name="pref_animals_summary">Now and then a little animal walks across the keys. Your taps go through it to the keys.</string>
     <string name="pref_animal_kinds">Animals</string>
     <string name="pref_animal_kinds_none">None picked, so none visit</string>
+    <string name="pref_animal_frequency">How often</string>
 
     <!-- Size & position -->
     <string name="cat_height">Height</string>
@@ -194,6 +195,17 @@
         <item>turtle</item>
         <item>sheep</item>
         <item>snow_leopard</item>
+    </string-array>
+    <!-- Values are AnimalFrequency.key. -->
+    <string-array name="animal_frequency_names">
+        <item>Every time the keyboard opens</item>
+        <item>Now and then (every few minutes)</item>
+        <item>Rarely (about once an hour)</item>
+    </string-array>
+    <string-array name="animal_frequency_values" translatable="false">
+        <item>always</item>
+        <item>sometimes</item>
+        <item>rarely</item>
     </string-array>
     <string-array name="theme_names">
         <item>Chameleon (each app\'s colour)</item>
