@@ -274,30 +274,66 @@ class Dictionary private constructor(
         const val MISSPELLINGS_ASSET = "misspellings.txt"
         const val EMOJI_ASSET = "emoji_keywords.tsv"
 
-        /** Contractions for the open list, which splits them; rough corpus counts. */
+        /**
+         * Contractions for the open list, which drops their apostrophes; rough corpus counts. Each is
+         * typed by its letters ("ill" → "I'll"), so every apostrophe word needs a row here.
+         */
         private val CONTRACTIONS = mapOf(
-            "im" to ("I'm" to 1_800_000), "dont" to ("don't" to 1_500_000),
-            "thats" to ("that's" to 700_000), "cant" to ("can't" to 600_000),
-            "youre" to ("you're" to 600_000), "didnt" to ("didn't" to 600_000),
-            "lets" to ("let's" to 400_000), "hes" to ("he's" to 400_000),
-            "whats" to ("what's" to 400_000), "ive" to ("I've" to 300_000),
-            "theres" to ("there's" to 250_000), "doesnt" to ("doesn't" to 250_000),
+            // be
+            "im" to ("I'm" to 1_800_000), "youre" to ("you're" to 600_000),
+            "hes" to ("he's" to 400_000), "shes" to ("she's" to 200_000),
+            "its" to ("it's" to 2_000_000), "were" to ("we're" to 400_000),
+            "theyre" to ("they're" to 200_000), "thats" to ("that's" to 700_000),
+            "whats" to ("what's" to 400_000), "theres" to ("there's" to 250_000),
+            "heres" to ("here's" to 80_000), "wheres" to ("where's" to 60_000),
+            "whos" to ("who's" to 60_000), "hows" to ("how's" to 30_000),
+            "whens" to ("when's" to 5_000), "whys" to ("why's" to 3_000),
+            "whatre" to ("what're" to 10_000), "lets" to ("let's" to 400_000),
+            // will
+            "ill" to ("I'll" to 700_000), "youll" to ("you'll" to 80_000),
+            "hell" to ("he'll" to 50_000), "shell" to ("she'll" to 25_000),
+            "itll" to ("it'll" to 60_000), "well" to ("we'll" to 250_000),
+            "theyll" to ("they'll" to 30_000), "thatll" to ("that'll" to 40_000),
+            "wholl" to ("who'll" to 8_000), "whatll" to ("what'll" to 8_000),
+            "therell" to ("there'll" to 8_000),
+            // would / had
+            "id" to ("I'd" to 300_000), "youd" to ("you'd" to 40_000),
+            "hed" to ("he'd" to 60_000), "shed" to ("she'd" to 40_000),
+            "itd" to ("it'd" to 15_000), "wed" to ("we'd" to 40_000),
+            "theyd" to ("they'd" to 30_000), "thatd" to ("that'd" to 15_000),
+            "whod" to ("who'd" to 10_000), "whatd" to ("what'd" to 15_000),
+            "whered" to ("where'd" to 5_000), "howd" to ("how'd" to 8_000),
+            "thered" to ("there'd" to 5_000),
+            // have
+            "ive" to ("I've" to 300_000), "youve" to ("you've" to 80_000),
+            "weve" to ("we've" to 40_000), "theyve" to ("they've" to 30_000),
+            "whove" to ("who've" to 3_000), "couldve" to ("could've" to 15_000),
+            "wouldve" to ("would've" to 25_000), "shouldve" to ("should've" to 20_000),
+            "mightve" to ("might've" to 5_000), "mustve" to ("must've" to 15_000),
+            // not
+            "dont" to ("don't" to 1_500_000), "cant" to ("can't" to 600_000),
+            "didnt" to ("didn't" to 600_000), "doesnt" to ("doesn't" to 250_000),
             "wont" to ("won't" to 200_000), "isnt" to ("isn't" to 200_000),
-            "theyre" to ("they're" to 200_000), "shes" to ("she's" to 200_000),
             "wasnt" to ("wasn't" to 150_000), "havent" to ("haven't" to 150_000),
             "wouldnt" to ("wouldn't" to 120_000), "couldnt" to ("couldn't" to 100_000),
-            "arent" to ("aren't" to 100_000), "youve" to ("you've" to 80_000),
-            "youll" to ("you'll" to 80_000), "heres" to ("here's" to 80_000),
-            "wheres" to ("where's" to 60_000), "whos" to ("who's" to 60_000),
-            "shouldnt" to ("shouldn't" to 50_000), "werent" to ("weren't" to 40_000),
-            "hasnt" to ("hasn't" to 40_000), "hadnt" to ("hadn't" to 30_000),
-            "theyve" to ("they've" to 30_000), "weve" to ("we've" to 40_000),
-            "theyll" to ("they'll" to 30_000), "youd" to ("you'd" to 40_000),
+            "arent" to ("aren't" to 100_000), "shouldnt" to ("shouldn't" to 50_000),
+            "werent" to ("weren't" to 40_000), "hasnt" to ("hasn't" to 40_000),
+            "hadnt" to ("hadn't" to 30_000), "mustnt" to ("mustn't" to 8_000),
+            "neednt" to ("needn't" to 3_000), "shant" to ("shan't" to 3_000),
             "aint" to ("ain't" to 30_000),
+            // other
+            "yall" to ("y'all" to 15_000), "oclock" to ("o'clock" to 40_000),
+            "maam" to ("ma'am" to 60_000),
         )
 
+        /**
+         * Contraction keys that are also words in their own right ("its", "ill", "well"): those get
+         * the contraction as a second entry with the same key, and both are offered.
+         */
+        private val ALSO_WORDS = setOf("its", "ill", "id", "were", "well", "hell", "shell", "shed", "wed", "lets")
+
         private val DISPLAY_OVERRIDES: Map<String, String> =
-            CONTRACTIONS.mapValues { it.value.first } + mapOf("i" to "I")
+            CONTRACTIONS.filterKeys { it !in ALSO_WORDS }.mapValues { it.value.first } + mapOf("i" to "I")
 
         /**
          * Prefers the local word list when it is present (see the class comment). The parsed
@@ -413,11 +449,14 @@ class Dictionary private constructor(
                     counts[line.substring(0, sp)] = line.substring(sp + 1).trim().toLongOrNull() ?: continue
                 }
             }
-            for ((key, v) in CONTRACTIONS) counts[key] = maxOf(counts[key] ?: 0L, v.second.toLong())
+            for ((key, v) in CONTRACTIONS) {
+                if (key !in ALSO_WORDS) counts[key] = maxOf(counts[key] ?: 0L, v.second.toLong())
+            }
             val b = Builder()
             b.misspellings = misspellings
             b.emoji = emoji
             for ((key, count) in counts) b.add(DISPLAY_OVERRIDES[key] ?: key, count.toDouble(), null)
+            for (key in ALSO_WORDS) CONTRACTIONS[key]?.let { (form, count) -> b.add(form, count.toDouble(), null) }
             return b.build()
         }
 
