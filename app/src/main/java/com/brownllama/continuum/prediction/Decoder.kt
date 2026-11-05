@@ -96,10 +96,11 @@ class Decoder(private val dict: Dictionary, private val user: UserModel) {
         val expected = prev?.let { dict.nextFor(it) }.orEmpty()
 
         // 1. Dictionary candidates the user has typed get their boost (only these few are looked at).
+        val spelled = spelledKeys(boosted, boostedComp)
         for (list in listOf(boosted, boostedComp)) for (i in list.indices) {
             val c = list[i]
             val count = user.count(c.key)
-            if (count == 0) continue
+            if (count == 0 || !isUsersForm(c, spelled)) continue
             val extra = c.key.length - n
             val di = dict.indexOf(c.key)
             // A word the user typed is at least as likely as a new word, however rare in the corpus.
@@ -215,9 +216,11 @@ class Decoder(private val dict: Dictionary, private val user: UserModel) {
             }
         }
         val out = ArrayList<Candidate>()
-        for (c in found.toCandidates(dict)) {
+        val candidates = found.toCandidates(dict)
+        val spelled = spelledKeys(candidates)
+        for (c in candidates) {
             val count = user.count(c.key)
-            if (count == 0) { out += c.edit(); continue }
+            if (count == 0 || !isUsersForm(c, spelled)) { out += c.edit(); continue }
             val lift = maxOf(0f, NEW_WORD_LOG_FREQ - dict.logFreq[dict.indexOf(c.key)])
             var b = c.plus(userBoost(count, user.bigramCount(prev, c.key)) + lift)
             val form = user.formOf(c.key)
@@ -249,6 +252,25 @@ class Decoder(private val dict: Dictionary, private val user: UserModel) {
         if (expected.isNotEmpty()) for (i in out.indices) if (out[i].display in expected) out[i] = out[i].plus(NEXT_WORD_BONUS)
         out.sortByDescending { it.score }
         return out.take(limit)
+    }
+
+    /** Keys where one of the candidates is spelled the way the user writes the word ([UserModel.formOf]). */
+    private fun spelledKeys(vararg lists: List<Candidate>): Set<String> {
+        val out = HashSet<String>()
+        for (list in lists) for (c in list) {
+            val form = user.formOf(c.key) ?: continue
+            if (c.display.equals(form, ignoreCase = true)) out += c.key
+        }
+        return out
+    }
+
+    /**
+     * Whether the user's history counts for [c]: the user's counts are per key, so when a key has
+     * several spellings only the one the user writes gets them ("I'll", not "ill").
+     */
+    private fun isUsersForm(c: Candidate, spelled: Set<String>): Boolean {
+        if (c.key !in spelled) return true
+        return c.display.equals(user.formOf(c.key) ?: return true, ignoreCase = true)
     }
 
     /** The least a [len]-letter word can cost in edits against [n] taps. */
