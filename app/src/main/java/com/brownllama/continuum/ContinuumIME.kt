@@ -1,5 +1,6 @@
 package com.brownllama.continuum
 
+import android.content.ClipData
 import android.content.ClipDescription
 import android.content.ClipboardManager
 import android.content.Context
@@ -48,6 +49,9 @@ import com.brownllama.continuum.prediction.Dictionary
 import com.brownllama.continuum.prediction.Mode
 import com.brownllama.continuum.prediction.Tap
 import com.brownllama.continuum.prediction.UserModel
+import com.brownllama.continuum.sticker.AddStickerActivity
+import com.brownllama.continuum.sticker.Sticker
+import com.brownllama.continuum.sticker.StickerStore
 import com.brownllama.continuum.theme.AppThemes
 import com.brownllama.continuum.theme.KeyboardTheme
 import java.io.File
@@ -91,6 +95,9 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
     private var dict: Dictionary? = null
     private lateinit var emojiHistory: EmojiHistory
     private lateinit var clipboard: ClipboardHistory
+    private lateinit var stickerStore: StickerStore
+    /** The stickers the panel shows, in its order (see [loadStickers]). */
+    private var stickers: List<Sticker> = emptyList()
     private val clipListener = ClipboardManager.OnPrimaryClipChangedListener { captureClip() }
     private var emojiGroups: List<EmojiGroup> = emptyList()
     /** Every emoji in [emojiGroups], i.e. the ones the font can draw. */
@@ -196,6 +203,7 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
         user = UserModel(File(filesDir, "user_model.tsv"))
         emojiHistory = EmojiHistory(File(filesDir, "emoji_usage.tsv"))
         clipboard = ClipboardHistory(File(filesDir, "clipboard.tsv"))
+        stickerStore = StickerStore(this)
         getSystemService(ClipboardManager::class.java)?.addPrimaryClipChangedListener(clipListener)
         appThemes = AppThemes(this)
         gifs = GifFeed(this, prefs)
@@ -223,6 +231,7 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
         prefs.unregisterOnSharedPreferenceChangeListener(this)
         getSystemService(ClipboardManager::class.java)?.removePrimaryClipChangedListener(clipListener)
         gifs.shutdown()
+        stickerStore.shutdown()
         main.removeCallbacksAndMessages(null)
         user.flush()
         super.onDestroy()
@@ -791,6 +800,83 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
         view?.setClips(clipboard.texts())
     }
 
+    // ---- stickers ---------------------------------------------------------------------------
+
+    override fun onStickersOpen() = loadStickers()
+
+    /** Lists the stickers and hands the panel their thumbnails once they're decoded. */
+    private fun loadStickers() {
+        val list = stickerStore.list()
+        stickers = list
+        val px = (resources.displayMetrics.widthPixels / STICKER_THUMBS_ACROSS).coerceIn(64, StickerStore.SIZE)
+        stickerStore.thumbnails(list, px) { images ->
+            if (stickers === list) view?.setStickers(images, list.map { !it.builtIn })
+        }
+    }
+
+    override fun onStickerPicked(index: Int) {
+        stickers.getOrNull(index)?.let(::sendSticker)
+    }
+
+    override fun onStickerRemove(index: Int) {
+        val s = stickers.getOrNull(index) ?: return
+        stickerStore.remove(s) {
+            Toast.makeText(this, R.string.sticker_removed, Toast.LENGTH_SHORT).show()
+            if (view?.panel == KeyboardView.Panel.STICKERS) loadStickers()
+        }
+    }
+
+    /** Opens the photo picker (through [AddStickerActivity]); the new sticker shows when the keyboard comes back. */
+    override fun onStickerAdd() {
+        finishComposing()
+        val intent = Intent(this, AddStickerActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_HISTORY)
+        runCatching { startActivity(intent) }
+    }
+
+    /**
+     * Sends a sticker the way messaging apps expect images from a keyboard: a content URI (our
+     * FileProvider) through [InputConnection.commitContent], as WebP where the app takes it (WhatsApp
+     * then shows it as a sticker) or else PNG. Apps that take no images get Android's share sheet,
+     * so the sticker can still be sent from there.
+     */
+    private fun sendSticker(s: Sticker) {
+        finishComposing()
+        val info = currentInputEditorInfo
+        val types = info?.contentMimeTypes.orEmpty()
+        fun accepts(mime: String) = types.any { ClipDescription.compareMimeTypes(mime, it) }
+        val webp = accepts("image/webp")
+        val inline = webp || accepts("image/png")
+        stickerStore.forSending(s, webp = webp || !inline) { file ->
+            if (file == null) {
+                Toast.makeText(this, R.string.sticker_send_failed, Toast.LENGTH_SHORT).show()
+                return@forSending
+            }
+            val mime = if (file.name.endsWith(".webp")) "image/webp" else "image/png"
+            val uri = FileProvider.getUriForFile(this, packageName + GifFeed.AUTHORITY_SUFFIX, file)
+            val ic = inputConnection()
+            val sent = inline && ic != null && currentInputEditorInfo === info &&
+                ic.commitContent(
+                    InputContentInfo(uri, ClipDescription(s.name, arrayOf(mime)), null),
+                    InputConnection.INPUT_CONTENT_GRANT_READ_URI_PERMISSION, null,
+                )
+            if (!sent) shareSticker(uri, mime)
+        }
+    }
+
+    /** The app can't take the sticker inline: offer Android's share sheet for it instead. */
+    private fun shareSticker(uri: android.net.Uri, mime: String) {
+        val send = Intent(Intent.ACTION_SEND)
+            .setType(mime)
+            .putExtra(Intent.EXTRA_STREAM, uri)
+            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        send.clipData = ClipData.newRawUri("", uri)
+        val chooser = Intent.createChooser(send, getString(R.string.sticker_share_title))
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        val ok = runCatching { startActivity(chooser) }.isSuccess
+        Toast.makeText(this, if (ok) R.string.sticker_shared else R.string.sticker_send_failed, Toast.LENGTH_SHORT).show()
+    }
+
     override fun onPickInputMethod() {
         (getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager).showInputMethodPicker()
     }
@@ -1153,6 +1239,8 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
         super.onWindowShown()
         showSystemButtons(!prefs.getBoolean(Prefs.HIDE_SYSTEM_BUTTONS, true))
         view?.keyboardShown()
+        // Back from adding a sticker: show the new one.
+        if (view?.panel == KeyboardView.Panel.STICKERS) loadStickers()
     }
 
     override fun onWindowHidden() {
@@ -1227,6 +1315,8 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
         private const val MAX_SUGGESTIONS = 12
         /** Four rows of the emoji panel's "frequently used" section. */
         private const val FREQUENT_EMOJI = 32
+        /** Sticker thumbnails are decoded about a quarter of the screen width across (the panel has 4 columns). */
+        private const val STICKER_THUMBS_ACROSS = 4
         /** Two shift taps within this time turn on caps lock. */
         private const val DOUBLE_TAP_MS = 350L
         /** Full-mode autocorrect keeps a real typed word unless a correction scores this much better (log). */
