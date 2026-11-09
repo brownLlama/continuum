@@ -1,5 +1,7 @@
 # Publishes a signed APK as a GitHub release whenever a version tag is pushed:
 #   git tag v1.0.0 && git push origin v1.0.0
+# or from the Actions tab (Run workflow, version "1.0.0"): that releases the branch it runs on and
+# creates the tag itself.
 #
 # Needs four repository secrets (Settings → Secrets and variables → Actions):
 #   SIGNING_KEYSTORE_BASE64  the release keystore, base64-encoded
@@ -12,6 +14,12 @@ name: Release
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release, without the v (e.g. 0.1.0)"
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -19,6 +27,9 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-latest
+    env:
+      # The tag being released: the pushed tag, or v + the version typed in when run by hand.
+      TAG: ${{ github.event_name == 'workflow_dispatch' && format('v{0}', inputs.version) || github.ref_name }}
     steps:
       - uses: actions/checkout@v4
 
@@ -46,7 +57,7 @@ jobs:
           SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
           SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
+          VERSION="${TAG#v}"
           ./gradlew assembleRelease -PversionName="$VERSION" -PversionCode="${{ github.run_number }}"
           mkdir -p dist
           cp app/build/outputs/apk/release/app-release.apk "dist/Continuum-$VERSION.apk"
@@ -61,6 +72,8 @@ jobs:
 
       - uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ env.TAG }}
+          target_commitish: ${{ github.sha }}
           files: dist/*
           generate_release_notes: true
           # Re-running a tag replaces its APKs instead of failing on the existing files.

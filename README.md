@@ -122,7 +122,7 @@ Swipe up to get a normal keyboard drawn the same way: flat keys, one font, line 
 
 How sensitive swipes are (shortest swipe, flick speed, long swipe, straightness) is adjustable, with an explanation for each slider.
 
-### 😀 Emoji, 📋 clipboard and GIFs
+### 😀 Emoji, 🧸 stickers, 📋 clipboard and GIFs
 
 <p>
 <img src="docs/screenshots/mini_emoji.png" width="49%" alt="Emoji panel">
@@ -130,6 +130,7 @@ How sensitive swipes are (shortest swipe, flick speed, long swipe, straightness)
 </p>
 
 - **Emoji panel:** every Unicode emoji, your most-used first, with tabs to jump between groups. Open it from the zoom (☺) or by holding the comma.
+- **Stickers:** five plush friends, drawn as stickers: Lolo the llama, Bell and Curly the sheep, Sunny the leopard and Snow the dog, in 28 moods. Tap the sticker tab in the emoji panel, then tap one to send it. Messengers that take images from keyboards (WhatsApp, Messenger, Telegram, Signal…) get it right in the chat; other apps open the share sheet. Tap **+** to turn your own photos into stickers (no storage permission: Android's photo picker hands over just the one image) and hold one of yours to delete it.
 - **Clipboard:** your last 30 copies (kept for 7 days) as cards. Tap to paste, hold to delete. Anything copied from a password or private field is skipped.
 - **GIF search** with [KLIPY](https://partner.klipy.com): search, tap and the GIF is sent as a real animated GIF (apps that can't take GIFs get the link). It needs your own free KLIPY key, entered in the app. Don't want GIFs? Turn off **Show GIFs** and the GIF and clipboard tabs disappear from the emoji panel (mini mode still opens the clipboard from its symbol row).
 
@@ -208,7 +209,7 @@ The word list is the top 45,000 English words from [hermitdave/FrequencyWords](h
 Two GitHub Actions workflows live in `.github/workflows/`:
 
 - **Build** (`build.yml`) builds the app on every push and pull request. The debug APK is attached to each run as an artifact.
-- **Release** (`release.yml`) runs when a version tag is pushed. It builds a signed release APK, attaches it (plus checksums) to a new GitHub release with generated release notes, and that release becomes the download link above.
+- **Release** (`release.yml`) runs when a version tag is pushed, or from the Actions tab (**Run workflow**, with a version such as `0.1.0`), which creates the tag itself. It builds a signed release APK, attaches it (plus checksums) to a new GitHub release with generated release notes, and that release becomes the download link above.
 
 ```sh
 git tag v1.0.0
