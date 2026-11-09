@@ -272,6 +272,47 @@ class KeyIcons(private val density: Float, fonts: KeyFonts) {
         c.drawLine(cx - s * 0.4f, cy + s * 0.4f, cx + s * 0.15f, cy + s * 0.4f, stroke)
     }
 
+    /** A sticker: a rounded square with its bottom-right corner peeled up, with a little smile. */
+    fun sticker(c: Canvas, cx: Float, cy: Float, s: Float, color: Int) {
+        stroke.color = color
+        stroke.strokeWidth = max(dpu(1.2f), s * 0.14f)
+        val l = cx - s * 0.9f
+        val t = cy - s * 0.9f
+        val r = cx + s * 0.9f
+        val b = cy + s * 0.9f
+        val k = s * 0.75f // size of the peeled corner
+        val rad = s * 0.25f
+        path.reset()
+        path.moveTo(r, b - k)
+        path.lineTo(r, t + rad)
+        path.quadTo(r, t, r - rad, t)
+        path.lineTo(l + rad, t)
+        path.quadTo(l, t, l, t + rad)
+        path.lineTo(l, b - rad)
+        path.quadTo(l, b, l + rad, b)
+        path.lineTo(r - k, b)
+        path.close()
+        c.drawPath(path, stroke)
+        path.reset()
+        path.moveTo(r - k, b)
+        path.quadTo(r - k, b - k, r, b - k)
+        c.drawPath(path, stroke)
+        c.drawCircle(cx - s * 0.32f, cy - s * 0.2f, s * 0.09f, stroke)
+        c.drawCircle(cx + s * 0.22f, cy - s * 0.2f, s * 0.09f, stroke)
+        path.reset()
+        path.moveTo(cx - s * 0.4f, cy + s * 0.18f)
+        path.quadTo(cx - s * 0.1f, cy + s * 0.45f, cx + s * 0.22f, cy + s * 0.18f)
+        c.drawPath(path, stroke)
+    }
+
+    /** A plus, about 2 × [s] across: adds something. */
+    fun plus(c: Canvas, cx: Float, cy: Float, s: Float, color: Int) {
+        stroke.color = color
+        stroke.strokeWidth = iconStroke
+        c.drawLine(cx - s * 0.8f, cy, cx + s * 0.8f, cy, stroke)
+        c.drawLine(cx, cy - s * 0.8f, cx, cy + s * 0.8f, stroke)
+    }
+
     /** A bin, about 2 × [s] across: clears the clipboard. */
     fun trash(c: Canvas, cx: Float, cy: Float, s: Float, color: Int) {
         stroke.color = color

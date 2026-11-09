@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- GIFs downloaded for sending live in cacheDir/gifs (see GifFeed). -->
+<!-- Files handed to the app being typed in: GIFs downloaded for sending (cacheDir/gifs, see GifFeed)
+     and stickers ready to send (cacheDir/stickers, see StickerStore). -->
 <paths>
     <cache-path name="gifs" path="gifs/" />
+    <cache-path name="stickers" path="stickers/" />
 </paths>

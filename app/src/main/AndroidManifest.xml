@@ -39,7 +39,15 @@
             </intent-filter>
         </activity>
 
-        <!-- Hands GIFs to the app being typed in (InputConnection.commitContent). -->
+        <!-- The sticker panel's +: shows the photo picker and closes, without a screen of its own. -->
+        <activity
+            android:name=".sticker.AddStickerActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
+        <!-- Hands GIFs and stickers to the app being typed in (InputConnection.commitContent). -->
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.gifs"
