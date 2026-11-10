@@ -59,6 +59,10 @@
             app:title="@string/guide_full_title" />
         <Preference
             app:selectable="false"
+            app:summary="@string/guide_german"
+            app:title="@string/guide_german_title" />
+        <Preference
+            app:selectable="false"
             app:summary="@string/guide_numbers"
             app:title="@string/guide_numbers_title" />
         <Preference

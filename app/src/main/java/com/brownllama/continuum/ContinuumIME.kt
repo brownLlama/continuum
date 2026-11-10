@@ -450,6 +450,26 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
         val ic = editor() ?: return
         lastExpansion = null
         if (taps.isEmpty() && text.length == 1 && expandShortcut(text[0])) return
+        val german = text.length == 1 && text[0] in GERMAN_LETTERS
+        if (german) {
+            // A German letter inside a word ("Gr" + "ü"): the letters so far stay exactly as shown,
+            // and the rest of the word is typed as is after it (see Glue), not corrected apart.
+            val before = pendingGlue?.takeIf { taps.isEmpty() && ic.getTextBeforeCursor(it.prefix.length, 0)?.toString() == it.prefix }
+            if (taps.isNotEmpty()) commitWord(spaced = false, choice = null, keepShown = true)
+            val last = lastCommit?.takeIf { !it.spaced }
+            pendingGlue = when {
+                last != null -> Glue(last.learned + text, last.prevBefore, wordSentenceStart)
+                before != null -> Glue(before.prefix + text, before.prevBefore, before.sentenceStart)
+                else -> Glue(text, prevWord, atSentenceStart())
+            }
+            ic.commitText(text, 1)
+            autoSpace = false
+            lastCommit = null
+            if (shift == Shift.ON) setShift(Shift.OFF)
+            updateAutoShift()
+            showPredictions()
+            return
+        }
         if (taps.isNotEmpty()) commitWord(spaced = false, choice = null)
         // "zazzy" + "'": the next word joins this one (see Glue).
         val joined = lastCommit?.takeIf { !it.spaced && text.length == 1 && text[0] in JOINERS }
@@ -1137,7 +1157,8 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
      */
     private fun learn(word: String, sentenceStart: Boolean, picked: Boolean = false) {
         // An emoji (or anything without letters) is not learned, and the word before it no longer counts.
-        val key = Dictionary.keyOf(word) ?: run { prevWord = null; return }
+        // Nor is a German word: its key would drop the ä / ö / ü / ß and match English words.
+        val key = Dictionary.keyOf(word)?.takeIf { word.none { it in GERMAN_LETTERS } } ?: run { prevWord = null; return }
         // Fields that ask for no learning (incognito) only track the previous word, for predictions.
         if (!learning) {
             prevWord = key
@@ -1329,6 +1350,8 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
         private const val SENTENCE_END = ".!?"
         /** Characters that join two parts into one word ("zazzy's", "self-aware"). */
         private const val JOINERS = "'’-"
+        /** Typed from a longer hold on a, o, u or s; they join the word around them (see onText). */
+        private const val GERMAN_LETTERS = "äöüÄÖÜß"
         /** Shown after a double-space period, "." highlighted; the bar scrolls to the rest. */
         private val PUNCTUATION_BAR = listOf("!", ".", "?", ",", ";", ":", "/")
 

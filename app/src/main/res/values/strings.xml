@@ -83,7 +83,7 @@
     <string name="summary_gifs_on">Search powered by KLIPY</string>
     <string name="summary_gifs_off">Add a free KLIPY key to search GIFs</string>
     <string name="pref_show_gifs">Show GIFs</string>
-    <string name="pref_show_gifs_summary">The GIF and clipboard tabs in the emoji panel. Turn off if you don\'t use GIFs or have no KLIPY key. The clipboard then opens only from mini mode\'s symbol row.</string>
+    <string name="pref_show_gifs_summary">The GIF tab in the emoji panel. Turn off if you don\'t use GIFs or have no KLIPY key.</string>
     <string name="summary_gifs_hidden">Hidden from the keyboard</string>
     <string name="pref_klipy_key">KLIPY API key</string>
     <string name="pref_klipy_key_set">Key added</string>
@@ -137,6 +137,8 @@
     <string name="guide_cat_3">Full keyboard</string>
     <string name="guide_full_title">Keys and hints</string>
     <string name="guide_full">A normal keyboard in the same style. The small character on each key is typed by holding it. Hold the full stop for , ! ?</string>
+    <string name="guide_german_title">German letters</string>
+    <string name="guide_german">Keep holding a, o, u or s for ä, ö, ü or ß. In the full keyboard, hold the key: its small character pops up, and holding on adds the German letter; lift to type it, or slide back to the small character. In mini mode, zoom in, rest on the letter and it turns into its German form. With shift on you get Ä, Ö and Ü.</string>
     <string name="guide_numbers_title">Numbers and symbols</string>
     <string name="guide_numbers">123 opens two pages of numbers and symbols. In mini mode, swipe down for the number row; hold on it to zoom in, like the letters.</string>
     <string name="guide_fields_title">Passwords and numbers</string>
@@ -145,7 +147,7 @@
     <string name="guide_emoji_title">Emoji</string>
     <string name="guide_emoji">In mini mode, hold the row, slide up and onto ☺. In the full keyboard, hold the comma. Tabs at the top jump between groups; your most used emoji come first.</string>
     <string name="guide_clipboard_title">Clipboard</string>
-    <string name="guide_clipboard">In mini mode, hold the row, slide up and onto the clipboard at the far left. It\'s also a tab in the emoji panel, unless Show GIFs (Settings → GIFs) is off. Tap a clip to paste it, hold to delete it, or tap the bin to clear all. Continuum keeps up to 30 clips for 7 days and skips anything copied from password or private fields.</string>
+    <string name="guide_clipboard">In mini mode, hold the row, slide up and onto the clipboard at the far left. Tap a clip to paste it, hold to delete it, or tap the bin to clear all. Continuum keeps up to 30 clips for 7 days and skips anything copied from password or private fields.</string>
     <string name="guide_sticker_title">Stickers</string>
     <string name="guide_sticker">In the emoji panel, tap the sticker tab. Tap a sticker to send it: Lolo the llama, Bell and Curly the sheep, Sunny the leopard and Snow the dog, or your own. Tap + to make a sticker from one of your photos; hold one of yours to delete it. Apps that don\'t take stickers in the chat open the share sheet instead.</string>
     <string name="guide_gif_title">GIFs</string>

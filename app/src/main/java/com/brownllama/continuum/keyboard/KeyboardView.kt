@@ -154,7 +154,7 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
 
     var mode = Mode.MINI
         set(value) {
-            if (field != value) markPanelChange()
+            if (field != value) markPanelChange(MODE_FADE_MS, dpu(MODE_SLIDE_DP))
             field = value
             glows.clear()
             if (panel == Panel.GIF) stopGifs()
@@ -362,7 +362,6 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
         GIF_BACK, // GIF panel → emoji panel
         GIF_SEARCH, // the search field in the GIF panel's bar
         GIF_CANCEL, // the search header's ⌄: hide the keyboard, back to the GIF grid
-        CLIP_TAB, // emoji panel → clipboard panel
         CLIP_CLEAR, // the clipboard panel's bin: delete every clip
         STICKER_TAB, // emoji panel → sticker panel
         STICKER_BACK, // sticker panel → emoji panel
@@ -770,7 +769,7 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
      */
     private fun layoutEmoji(w: Float, top: Float) {
         emojiSections = listOf(EmojiGroup(Emoji.FREQUENT, frequentShown)) + emojiGroups
-        val extra = if (showGifs) 4 else 2 // sticker, clipboard, GIF and ⌫ tabs, or sticker and ⌫
+        val extra = if (showGifs) 3 else 2 // sticker, GIF and ⌫ tabs, or sticker and ⌫ (the clipboard is on mini mode's strip)
         val tabW = w / (emojiSections.size + extra)
         emojiSections.indices.forEach { i ->
             barKeys += Key(Kind.EMOJI_TAB, RectF(i * tabW, 0f, (i + 1) * tabW, top), value = i)
@@ -778,7 +777,6 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
         val stickerRight = w - (extra - 1) * tabW
         barKeys += Key(Kind.STICKER_TAB, RectF(stickerRight - tabW, 0f, stickerRight, top))
         if (showGifs) {
-            barKeys += Key(Kind.CLIP_TAB, RectF(w - 3 * tabW, 0f, w - 2 * tabW, top))
             barKeys += Key(Kind.GIF_TAB, RectF(w - 2 * tabW, 0f, w - tabW, top))
         }
         barKeys += Key(Kind.BACKSPACE, RectF(w - tabW, 0f, w, top))
@@ -952,6 +950,10 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
         var vx = 0f
         var vy = 0f
         val longPress = Runnable { onLongPress(this) }
+        /** Holding on after the long press: a letter's German form joins the popup (see [GERMAN]). */
+        val longerPress = Runnable { onLongerPress(this) }
+        /** The long-press popup's characters once [longerPress] added the German letter, else null (the key's hint). */
+        var options: String? = null
         /** Backspace auto-repeat while held. */
         var repeat: Runnable? = null
 
@@ -996,7 +998,27 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
      */
     private class Zoom(var start: Int, var slot: Int, var row: Int, val numbers: Boolean, var digit: Int = 0) {
         val openedAt = SystemClock.uptimeMillis()
+        /** Held on a letter that has a German form ("ß" for s): lifting types that instead. */
+        var german: String? = null
     }
+
+    /** Shows the German form of the zoom's letter once the finger rests on it for [holdMs] more. */
+    private val zoomGerman = Runnable {
+        val z = zoom ?: return@Runnable
+        if (z.numbers || z.row != 1) return@Runnable
+        val g = GERMAN[layout.miniOrder[z.slot]] ?: return@Runnable
+        z.german = germanCase(g)
+        invalidate()
+    }
+
+    private fun restartZoomGerman() {
+        timer.removeCallbacks(zoomGerman)
+        val z = zoom ?: return
+        if (!z.numbers && z.row == 1 && layout.miniOrder[z.slot] in GERMAN) timer.postDelayed(zoomGerman, holdMs)
+    }
+
+    /** [g] in the current case: Ä Ö Ü with shift; ß has no everyday capital, so it stays ß. */
+    private fun germanCase(g: String) = if (g == "ß") g else upper(g)
 
     private var zoom: Zoom? = null
 
@@ -1154,14 +1176,30 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
         } else if (p.longPressed && k?.kind == Kind.SHIFT) {
             val a = shiftMenuChoice(k, p)
             p.alt = a
-        } else if (p.longPressed && k?.hint != null && k.hint.length > 1) {
-            val (left, cellW) = altPopup(k)
-            val a = ((x - left) / cellW).toInt().coerceIn(0, k.hint.length - 1)
+        } else if (p.longPressed && k != null && (p.options ?: k.hint).orEmpty().length > 1) {
+            val opts = p.options ?: k.hint!!
+            val (left, cellW) = altPopup(k, opts)
+            val a = ((x - left) / cellW).toInt().coerceIn(0, opts.length - 1)
             p.alt = a
         } else if (!p.moved && hypot(x - p.downX, y - p.downY) > slop) {
             p.moved = true
             if (!p.longPressed) timer.removeCallbacks(p.longPress)
         }
+        invalidate()
+    }
+
+    /**
+     * Still holding a letter after its long press: its German form ("ß" for s) joins the popup,
+     * selected, after the hint ("#"). Sliding back picks the hint instead.
+     */
+    private fun onLongerPress(p: Pointer) {
+        val k = p.key ?: return
+        if (pointers[p.id] !== p || !p.longPressed || p.consumed || p.options != null) return
+        val g = GERMAN[k.label.firstOrNull() ?: return] ?: return
+        val opts = (k.hint ?: "") + germanCase(g)
+        p.options = opts
+        p.alt = opts.lastIndex
+        p.longPressAt = SystemClock.uptimeMillis()
         invalidate()
     }
 
@@ -1203,6 +1241,7 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
                     p.longPressed = true
                     p.longPressAt = SystemClock.uptimeMillis()
                     p.alt = 0
+                    if (p.key.kind == Kind.LETTER && p.key.label.firstOrNull() in GERMAN) timer.postDelayed(p.longerPress, holdMs)
                 } else if (zoomsInNumbers(p.key)) {
                     startZoom(p)
                 }
@@ -1299,6 +1338,7 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
         val hint = k.hint
         when (k.kind) {
             Kind.LETTER -> when {
+                p.longPressed && p.options != null -> listener.onText(p.options!![p.alt.coerceIn(0, p.options!!.lastIndex)].toString())
                 p.longPressed && hint != null -> listener.onText(hint)
                 else -> listener.onLetterTap(Tap(p.downX / (width / 10f), (p.downY - barH) / fullRowH))
             }
@@ -1336,7 +1376,6 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
             Kind.GIF_BACK -> showPanel(Panel.EMOJI)
             Kind.GIF_SEARCH -> openGifSearch()
             Kind.GIF_CANCEL -> closeGifSearch()
-            Kind.CLIP_TAB -> showPanel(Panel.CLIPBOARD)
             Kind.CLIP_CLEAR -> if (clips.isNotEmpty()) listener.onClipClear()
             Kind.STICKER_TAB -> showPanel(Panel.STICKERS)
             Kind.STICKER_BACK -> showPanel(Panel.EMOJI)
@@ -1375,8 +1414,8 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
     }
 
     /** Left edge and cell width of the long-press popup for a multi-character hint. */
-    private fun altPopup(k: Key): Pair<Float, Float> {
-        val n = k.hint!!.length
+    private fun altPopup(k: Key, options: String = k.hint!!): Pair<Float, Float> {
+        val n = options.length
         val cellW = max(k.rect.width(), dpu(40f))
         val left = (k.rect.centerX() - n * cellW / 2).coerceIn(0f, width - n * cellW)
         return left to cellW
@@ -1398,6 +1437,7 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
         val numbers = mode == Mode.MINI && panel != Panel.LETTERS
         zoom = Zoom((slot - 2).coerceIn(0, 21), slot, if (p.downY < letterRect.top) 0 else 1, numbers, digitAt(p.downX))
         p.zooming = true
+        restartZoomGerman()
     }
 
     /** The finger picks the slot under it; the magnified window scrolls when it reaches an edge. */
@@ -1412,6 +1452,8 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
             z.slot = slot
             z.row = row
             z.digit = digit
+            z.german = null
+            restartZoomGerman()
         }
     }
 
@@ -1419,7 +1461,11 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
     private fun commitZoom() {
         val z = zoom ?: return
         zoom = null
-        if (z.numbers) {
+        timer.removeCallbacks(zoomGerman)
+        val german = z.german
+        if (german != null && z.row == 1) {
+            listener.onText(german)
+        } else if (z.numbers) {
             text(if (z.row == 0) Layouts.MINI_NUMBER_STRIP[z.slot] else Layouts.MINI_NUMBER_ROW[z.digit])
         } else if (z.row == 0) {
             text(Layouts.MINI_STRIP[z.slot])
@@ -1526,9 +1572,14 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
 
     /** When the shown panel or mode last changed; the new content fades in from then. */
     private var panelChangedAt = 0L
+    /** How long that fade lasts, and how far (px) the new content rises into place meanwhile. */
+    private var fadeMs = FADE_MS
+    private var fadeSlide = 0f
 
-    private fun markPanelChange() {
+    private fun markPanelChange(ms: Long = FADE_MS, slide: Float = 0f) {
         panelChangedAt = SystemClock.uptimeMillis()
+        fadeMs = ms
+        fadeSlide = slide
         endAnimal()
     }
 
@@ -1594,10 +1645,13 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
         canvas.translate(0f, overlayH + header)
         fill.color = theme.background
         canvas.drawRect(0f, -header, width.toFloat(), height - overlayH - header, fill)
-        // After a switch (letters / numbers / emoji / GIF / mini / full) the new content fades in.
-        val fade = progress(panelChangedAt, FADE_MS)
+        // After a switch (letters / numbers / emoji / GIF) the new content fades in; after a switch
+        // between mini and full mode it also rises a little into place, easing out.
+        val fade = progress(panelChangedAt, fadeMs)
         if (fade >= 1f) return drawContent(canvas)
-        val save = canvas.saveLayerAlpha(null, (255 * fade).toInt())
+        val eased = 1f - (1f - fade) * (1f - fade)
+        val save = canvas.saveLayerAlpha(null, (255 * eased).toInt())
+        canvas.translate(0f, (1f - eased) * fadeSlide)
         drawContent(canvas)
         canvas.restoreToCount(save)
     }
@@ -1725,7 +1779,6 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
             Kind.GIF_BACK -> icons.smiley(c, cx, cy, min(r.width(), r.height()) * 0.22f, t.dim)
             Kind.GIF_SEARCH -> drawGifSearchField(c, r)
             Kind.GIF_CANCEL -> icons.chevronDown(c, cx, cy, min(r.width(), r.height()) * 0.16f, t.dim)
-            Kind.CLIP_TAB -> icons.clipboard(c, cx, cy, min(r.width(), r.height()) * 0.2f, t.dim)
             Kind.CLIP_CLEAR -> icons.trash(c, cx, cy, min(r.width(), r.height()) * 0.2f, if (clips.isEmpty()) hintColor else t.dim)
             Kind.STICKER_TAB -> icons.sticker(c, cx, cy, min(r.width(), r.height()) * 0.2f, t.dim)
             Kind.STICKER_BACK -> icons.smiley(c, cx, cy, min(r.width(), r.height()) * 0.22f, t.dim)
@@ -1931,10 +1984,10 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
             }
             if (p.consumed || p.zooming || k.rect.top < barH) continue
             if (k.kind != Kind.LETTER && k.kind != Kind.TEXT) continue
-            val hint = k.hint
+            val hint = p.options ?: k.hint
             if (p.longPressed && hint != null && hint.length > 1) {
-                // Pick-one popup (e.g. ",!?" on the period key).
-                val (left, cellW) = altPopup(k)
+                // Pick-one popup (e.g. ",!?" on the period key, or "#ß" held on s).
+                val (left, cellW) = altPopup(k, hint)
                 val h = k.rect.height()
                 val top = max(-overlayH, k.rect.top - h * 1.05f)
                 popIn(c, p.longPressAt, k.rect.centerX(), top + h) {
@@ -2058,7 +2111,11 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
             if (isIconSlot(sym)) drawSlotIcon(c, sym, cx, top + zoomSymH / 2, zoomSymH * 0.22f, symColor)
             else drawText(c, sym, cx, top + zoomSymH / 2, zoomSymH * 0.62f, symColor, regular)
             val letSel = z.row == 1 && if (z.numbers) digitStart + i == z.digit else s == z.slot
-            val big = if (z.numbers) digits[digitStart + i] else upper(layout.miniOrder[s].toString())
+            val big = when {
+                z.numbers -> digits[digitStart + i]
+                letSel && z.german != null -> z.german!!
+                else -> upper(layout.miniOrder[s].toString())
+            }
             drawText(c, big, cx, mid + zoomLetH * 0.48f, zoomLetH * 0.66f, if (letSel) t.onZoomSelect else t.text, regular)
         }
     }
@@ -2364,6 +2421,11 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
         }
         /** How long new content takes to fade in after a panel or mode switch. */
         private const val FADE_MS = 160L
+        /** Switching between mini and full mode: a slightly longer fade, rising this far into place. */
+        private const val MODE_FADE_MS = 260L
+        private const val MODE_SLIDE_DP = 10f
+        /** Letters with a German form, offered when a held letter is held a little longer. */
+        private val GERMAN = mapOf('a' to "ä", 'o' to "ö", 'u' to "ü", 's' to "ß")
         /** Backspace: hold this long before it repeats, then repeat this often. */
         private const val REPEAT_DELAY_MS = 400L
         private const val REPEAT_MS = 55L

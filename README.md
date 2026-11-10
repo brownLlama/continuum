@@ -97,6 +97,7 @@ All 26 letters in **one staggered row** (QWERTZ by default: `Q A Y W S X …`, o
 Swipe up to get a normal keyboard drawn the same way: flat keys, one font, line icons.
 
 - **Hold any key** for the small character in its corner (numbers on the top row, symbols on the rest).
+- **German letters:** keep holding a, o, u or s and ä, ö, ü or ß joins the popup (in mini mode, rest on the letter in the zoom).
 - **Two pages** of numbers and symbols behind `123`, with a keypad-style number layout.
 - An **autocorrect switch** in the suggestion bar. On, typos like *teh* become *the*. Off, every letter is typed exactly as tapped, which is handy for names and new words.
 
@@ -131,8 +132,8 @@ How sensitive swipes are (shortest swipe, flick speed, long swipe, straightness)
 
 - **Emoji panel:** every Unicode emoji, your most-used first, with tabs to jump between groups. Open it from the zoom (☺) or by holding the comma.
 - **Stickers:** five plush friends, drawn as stickers: Lolo the llama, Bell and Curly the sheep, Sunny the leopard and Snow the dog, in 33 stickers, drawn in the flat, expressive style of LINE stickers. Tap the sticker tab in the emoji panel, then tap one to send it. Messengers that take images from keyboards (WhatsApp, Messenger, Telegram, Signal…) get it right in the chat; other apps open the share sheet. Tap **+** to turn your own photos into stickers (no storage permission: Android's photo picker hands over just the one image) and hold one of yours to delete it.
-- **Clipboard:** your last 30 copies (kept for 7 days) as cards. Tap to paste, hold to delete. Anything copied from a password or private field is skipped.
-- **GIF search** with [KLIPY](https://partner.klipy.com): search, tap and the GIF is sent as a real animated GIF (apps that can't take GIFs get the link). It needs your own free KLIPY key, entered in the app. Don't want GIFs? Turn off **Show GIFs** and the GIF and clipboard tabs disappear from the emoji panel (mini mode still opens the clipboard from its symbol row).
+- **Clipboard:** your last 30 copies (kept for 7 days) as cards, opened from mini mode's symbol row. Tap to paste, hold to delete. Anything copied from a password or private field is skipped.
+- **GIF search** with [KLIPY](https://partner.klipy.com): search, tap and the GIF is sent as a real animated GIF (apps that can't take GIFs get the link). It needs your own free KLIPY key, entered in the app. Don't want GIFs? Turn off **Show GIFs** and the GIF tab disappears from the emoji panel.
 
 ### 🎨 Themes
 
@@ -155,7 +156,7 @@ How sensitive swipes are (shortest swipe, flick speed, long swipe, straightness)
 - **Size & position:** separate heights for the mini keyboard, the full keyboard and the suggestion bar, plus the space under the keys. The keys always sit above Android's navigation bar or gesture handle. On Android 16+ you can hide Android's own keyboard buttons to get that space back.
 - **Typing:** autocorrect, auto-capitalisation, press-and-hold time, and *Forget learned words*.
 - **Gestures:** swipe sensitivity, each slider explained.
-- **GIFs:** show or hide the emoji panel's GIF and clipboard tabs, and your KLIPY key.
+- **GIFs:** show or hide the emoji panel's GIF tab, and your KLIPY key.
 - **Guide:** everything about using the keyboard, right in the app.
 - **Reset to defaults:** one tap puts every setting back (learned words and your KLIPY key are kept).
 
