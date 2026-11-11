@@ -2126,7 +2126,11 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
             if (isIconSlot(sym)) drawSlotIcon(c, sym, cx, top + zoomSymH / 2, zoomSymH * 0.22f, symColor)
             else drawText(c, sym, cx, top + zoomSymH / 2, zoomSymH * 0.62f, symColor, regular)
             val letSel = z.row == 1 && if (z.numbers) digitStart + i == z.digit else s == z.slot
-            val big = if (z.numbers) digits[digitStart + i] else upper(layout.miniOrder[s].toString())
+            val big = when {
+                z.numbers -> digits[digitStart + i]
+                letSel && z.german != null -> z.german!!
+                else -> upper(layout.miniOrder[s].toString())
+            }
             drawText(c, big, cx, mid + zoomLetH * 0.48f, zoomLetH * 0.66f, if (letSel) t.onZoomSelect else t.text, regular)
         }
     }
