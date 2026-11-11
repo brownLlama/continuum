@@ -138,7 +138,7 @@
     <string name="guide_full_title">Keys and hints</string>
     <string name="guide_full">A normal keyboard in the same style. The small character on each key is typed by holding it. Hold the full stop for , ! ?</string>
     <string name="guide_german_title">German letters</string>
-    <string name="guide_german">Keep holding a, o, u or s for ä, ö, ü or ß. In the full keyboard, hold the key: its small character pops up, and holding on adds the German letter; lift to type it, or slide back to the small character. In mini mode, zoom in, rest on the letter and it turns into its German form. With shift on you get Ä, Ö and Ü.</string>
+    <string name="guide_german">Keep holding a, o, u or s for ä, ö, ü or ß. In the full keyboard, hold the key: its small character pops up as always; hold on and the German letter shows up next to it. Slide onto it and lift to type it, or just lift for the small character. In mini mode, hold to zoom in as always and rest on the letter: its German form shows up above it, in the symbol row. Slide up onto it and lift to type it; lifting on the letter still types the plain letter. With shift on you get Ä, Ö and Ü.</string>
     <string name="guide_numbers_title">Numbers and symbols</string>
     <string name="guide_numbers">123 opens two pages of numbers and symbols. In mini mode, swipe down for the number row; hold on it to zoom in, like the letters.</string>
     <string name="guide_fields_title">Passwords and numbers</string>

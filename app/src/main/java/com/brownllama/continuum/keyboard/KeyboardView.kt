@@ -998,23 +998,31 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
      */
     private class Zoom(var start: Int, var slot: Int, var row: Int, val numbers: Boolean, var digit: Int = 0) {
         val openedAt = SystemClock.uptimeMillis()
-        /** Held on a letter that has a German form ("ß" for s): lifting types that instead. */
+        /**
+         * Rested on a letter that has a German form ("ß" for s): it's offered in the symbol cell above
+         * that letter ([germanSlot]); sliding up onto it and lifting types it. Lifting on the letter
+         * still types the letter.
+         */
         var german: String? = null
+        var germanSlot = -1
     }
 
-    /** Shows the German form of the zoom's letter once the finger rests on it for [holdMs] more. */
+    /** Offers the German form of the zoom's letter once the finger rests on it a while longer. */
     private val zoomGerman = Runnable {
         val z = zoom ?: return@Runnable
         if (z.numbers || z.row != 1) return@Runnable
         val g = GERMAN[layout.miniOrder[z.slot]] ?: return@Runnable
         z.german = germanCase(g)
+        z.germanSlot = z.slot
         invalidate()
     }
 
     private fun restartZoomGerman() {
         timer.removeCallbacks(zoomGerman)
         val z = zoom ?: return
-        if (!z.numbers && z.row == 1 && layout.miniOrder[z.slot] in GERMAN) timer.postDelayed(zoomGerman, holdMs)
+        if (!z.numbers && z.row == 1 && z.german == null && layout.miniOrder[z.slot] in GERMAN) {
+            timer.postDelayed(zoomGerman, holdMs * ZOOM_GERMAN_HOLDS)
+        }
     }
 
     /** [g] in the current case: Ä Ö Ü with shift; ß has no everyday capital, so it stays ß. */
@@ -1189,8 +1197,8 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
     }
 
     /**
-     * Still holding a letter after its long press: its German form ("ß" for s) joins the popup,
-     * selected, after the hint ("#"). Sliding back picks the hint instead.
+     * Still holding a letter after its long press: its German form ("ß" for s) joins the popup after
+     * the hint ("#"). The hint stays selected; slide onto the German letter to pick it.
      */
     private fun onLongerPress(p: Pointer) {
         val k = p.key ?: return
@@ -1198,7 +1206,7 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
         val g = GERMAN[k.label.firstOrNull() ?: return] ?: return
         val opts = (k.hint ?: "") + germanCase(g)
         p.options = opts
-        p.alt = opts.lastIndex
+        p.alt = 0
         p.longPressAt = SystemClock.uptimeMillis()
         invalidate()
     }
@@ -1449,10 +1457,12 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
         val row = if (p.y < letterRect.top) 0 else 1
         val digit = digitAt(p.x)
         if (slot != z.slot || row != z.row || z.numbers && row == 1 && digit != z.digit) {
+            // Sliding up from the letter to its offered German form keeps the offer; moving to
+            // another letter takes it back (and that letter may offer its own after a rest).
+            if (slot != z.germanSlot) z.german = null
             z.slot = slot
             z.row = row
             z.digit = digit
-            z.german = null
             restartZoomGerman()
         }
     }
@@ -1463,7 +1473,7 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
         zoom = null
         timer.removeCallbacks(zoomGerman)
         val german = z.german
-        if (german != null && z.row == 1) {
+        if (german != null && z.row == 0 && z.slot == z.germanSlot) {
             listener.onText(german)
         } else if (z.numbers) {
             text(if (z.row == 0) Layouts.MINI_NUMBER_STRIP[z.slot] else Layouts.MINI_NUMBER_ROW[z.digit])
@@ -2106,16 +2116,17 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
             val s = z.start + i
             val cx = left + (i + 0.5f) * cellW
             val symSel = z.row == 0 && s == z.slot
-            val sym = (if (z.numbers) Layouts.MINI_NUMBER_STRIP else Layouts.MINI_STRIP)[s]
-            val symColor = if (symSel) t.onZoomSelect else t.text
+            val offered = z.german != null && s == z.germanSlot
+            val sym = if (offered) z.german!! else (if (z.numbers) Layouts.MINI_NUMBER_STRIP else Layouts.MINI_STRIP)[s]
+            val symColor = when {
+                symSel -> t.onZoomSelect
+                offered -> t.accent
+                else -> t.text
+            }
             if (isIconSlot(sym)) drawSlotIcon(c, sym, cx, top + zoomSymH / 2, zoomSymH * 0.22f, symColor)
             else drawText(c, sym, cx, top + zoomSymH / 2, zoomSymH * 0.62f, symColor, regular)
             val letSel = z.row == 1 && if (z.numbers) digitStart + i == z.digit else s == z.slot
-            val big = when {
-                z.numbers -> digits[digitStart + i]
-                letSel && z.german != null -> z.german!!
-                else -> upper(layout.miniOrder[s].toString())
-            }
+            val big = if (z.numbers) digits[digitStart + i] else upper(layout.miniOrder[s].toString())
             drawText(c, big, cx, mid + zoomLetH * 0.48f, zoomLetH * 0.66f, if (letSel) t.onZoomSelect else t.text, regular)
         }
     }
@@ -2426,6 +2437,8 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
         private const val MODE_SLIDE_DP = 10f
         /** Letters with a German form, offered when a held letter is held a little longer. */
         private val GERMAN = mapOf('a' to "ä", 'o' to "ö", 'u' to "ü", 's' to "ß")
+        /** In the zoom, the German form is offered after resting on the letter this many hold times. */
+        private const val ZOOM_GERMAN_HOLDS = 2
         /** Backspace: hold this long before it repeats, then repeat this often. */
         private const val REPEAT_DELAY_MS = 400L
         private const val REPEAT_MS = 55L

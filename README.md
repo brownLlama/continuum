@@ -97,7 +97,7 @@ All 26 letters in **one staggered row** (QWERTZ by default: `Q A Y W S X …`, o
 Swipe up to get a normal keyboard drawn the same way: flat keys, one font, line icons.
 
 - **Hold any key** for the small character in its corner (numbers on the top row, symbols on the rest).
-- **German letters:** keep holding a, o, u or s and ä, ö, ü or ß joins the popup (in mini mode, rest on the letter in the zoom).
+- **German letters:** keep holding a, o, u or s and ä, ö, ü or ß shows up next to the key's small character; slide onto it to type it. In mini mode, rest on the letter in the zoom and its German form shows up above it, in the symbol row.
 - **Two pages** of numbers and symbols behind `123`, with a keypad-style number layout.
 - An **autocorrect switch** in the suggestion bar. On, typos like *teh* become *the*. Off, every letter is typed exactly as tapped, which is handy for names and new words.
 
