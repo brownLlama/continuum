@@ -1021,7 +1021,7 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
         timer.removeCallbacks(zoomGerman)
         val z = zoom ?: return
         if (!z.numbers && z.row == 1 && z.german == null && layout.miniOrder[z.slot] in GERMAN) {
-            timer.postDelayed(zoomGerman, holdMs * ZOOM_GERMAN_HOLDS)
+            timer.postDelayed(zoomGerman, GERMAN_WAIT_MS)
         }
     }
 
@@ -1249,7 +1249,7 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
                     p.longPressed = true
                     p.longPressAt = SystemClock.uptimeMillis()
                     p.alt = 0
-                    if (p.key.kind == Kind.LETTER && p.key.label.firstOrNull() in GERMAN) timer.postDelayed(p.longerPress, holdMs)
+                    if (p.key.kind == Kind.LETTER && p.key.label.firstOrNull() in GERMAN) timer.postDelayed(p.longerPress, GERMAN_WAIT_MS)
                 } else if (zoomsInNumbers(p.key)) {
                     startZoom(p)
                 }
@@ -2437,8 +2437,11 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
         private const val MODE_SLIDE_DP = 10f
         /** Letters with a German form, offered when a held letter is held a little longer. */
         private val GERMAN = mapOf('a' to "ä", 'o' to "ö", 'u' to "ü", 's' to "ß")
-        /** In the zoom, the German form is offered after resting on the letter this many hold times. */
-        private const val ZOOM_GERMAN_HOLDS = 2
+        /**
+         * How long to keep holding (after the zoom or the hint popup is up) before the German letter
+         * is offered: long enough to slide on to a number or symbol first without it getting in the way.
+         */
+        private const val GERMAN_WAIT_MS = 700L
         /** Backspace: hold this long before it repeats, then repeat this often. */
         private const val REPEAT_DELAY_MS = 400L
         private const val REPEAT_MS = 55L
