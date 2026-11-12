@@ -101,7 +101,10 @@ class StickerStore(private val context: Context) {
         if (s.builtIn) return
         io.execute {
             File(userDir, s.name).delete()
-            File(sendDir, s.name).delete()
+            // The copies made for sending (see forSending), in either format.
+            val base = s.name.substringBeforeLast('.')
+            File(sendDir, "$base.webp").delete()
+            File(sendDir, "$base.png").delete()
             main.post { done() }
         }
     }
