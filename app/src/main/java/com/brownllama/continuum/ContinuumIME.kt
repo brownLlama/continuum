@@ -324,6 +324,8 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
         v.swipeSpeed = prefs.getInt(Prefs.SWIPE_SPEED, Prefs.SWIPE_SPEED_DEFAULT) / 100f
         v.swipeStraightness = prefs.getInt(Prefs.SWIPE_STRAIGHTNESS, Prefs.SWIPE_STRAIGHTNESS_DEFAULT) / 100f
         v.holdMs = prefs.getInt(Prefs.HOLD_MS, Prefs.HOLD_MS_DEFAULT).toLong()
+        v.vibration = if (!prefs.getBoolean(Prefs.VIBRATE, Prefs.VIBRATE_DEFAULT)) 0 else
+            prefs.getInt(Prefs.VIBRATE_STRENGTH, Prefs.VIBRATE_STRENGTH_DEFAULT)
         v.animalFrequency = AnimalFrequency.named(prefs.getString(Prefs.ANIMAL_FREQUENCY, null))
         v.animals = if (!prefs.getBoolean(Prefs.ANIMALS, Prefs.ANIMALS_DEFAULT)) emptyList() else {
             prefs.getStringSet(Prefs.ANIMAL_KINDS, null)?.mapNotNull(Species::named) ?: Species.ALL

@@ -3,6 +3,8 @@
 
     <!-- Only for GIF search (KLIPY); nothing typed elsewhere is sent anywhere. -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Only for the short tick on each key press (setting "Vibrate on keys"). -->
+    <uses-permission android:name="android.permission.VIBRATE" />
 
     <!-- Lets the per-app theme screen list installed apps. -->
     <queries>

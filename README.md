@@ -154,7 +154,7 @@ How sensitive swipes are (shortest swipe, flick speed, long swipe, straightness)
 
 - **Appearance:** theme and layout (QWERTZ or QWERTY).
 - **Size & position:** separate heights for the mini keyboard, the full keyboard and the suggestion bar, plus the space under the keys. The keys always sit above Android's navigation bar or gesture handle. On Android 16+ you can hide Android's own keyboard buttons to get that space back.
-- **Typing:** autocorrect, auto-capitalisation, press-and-hold time, and *Forget learned words*.
+- **Typing:** autocorrect, auto-capitalisation, press-and-hold time, key vibration (on or off, and its strength), and *Forget learned words*.
 - **Gestures:** swipe sensitivity, each slider explained.
 - **GIFs:** show or hide the emoji panel's GIF tab, and your KLIPY key.
 - **Guide:** everything about using the keyboard, right in the app.
@@ -172,7 +172,7 @@ A keyboard sees everything you type, so this matters:
 - **The only network use is GIF search.** When you search, the search words, an anonymous ID and your KLIPY key go to `api.klipy.com` over HTTPS. Nothing else is ever sent.
 - **No cloud backup:** learned words, settings and your KLIPY key are excluded from Android backup and device-to-device transfer.
 - **Password and number fields** are never predicted or learned from, and private (incognito) fields teach it nothing.
-- **Permissions:** only Internet, used for GIFs. No contacts, no storage, no location, no vibration.
+- **Permissions:** Internet, used only for GIFs, and vibration, used only for the tick on key presses (Settings → Typing → Vibrate on keys). No contacts, no storage, no location.
 - **HTTPS only:** plain-HTTP traffic and user-installed certificate authorities are refused.
 
 ## Build it yourself
