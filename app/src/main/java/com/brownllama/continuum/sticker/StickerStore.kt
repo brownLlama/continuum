@@ -22,8 +22,7 @@ import kotlin.math.roundToInt
 class Sticker(val name: String, val builtIn: Boolean)
 
 /**
- * The stickers: Continuum's own plush friends (Lolo the llama, Bell and Curly the sheep, Sunny the
- * leopard and Snow the dog; WebP assets under [ASSET_DIR]) and the ones the user added from their photos.
+ * The stickers: Continuum's own (Schibu the llama; WebP assets under [ASSET_DIR]) and the ones the user added from their photos.
  *
  * Added images are fitted into [SIZE] × [SIZE] on a transparent square, as messengers expect of
  * stickers, and kept as WebP in the app's private files (never backed up, see
