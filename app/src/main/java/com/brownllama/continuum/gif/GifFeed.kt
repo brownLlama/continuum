@@ -137,7 +137,7 @@ class GifFeed(private val context: Context, private val prefs: SharedPreferences
         }
     }
 
-    private fun safe(slug: String) = slug.replace(Regex("[^A-Za-z0-9_-]"), "_").take(80).ifEmpty { "gif" }
+    private fun safe(slug: String) = slug.replace(UNSAFE, "_").take(80).ifEmpty { "gif" }
 
     /**
      * An animated drawable (Android 9+), or the first frame on older versions. Oversized images are
@@ -188,6 +188,8 @@ class GifFeed(private val context: Context, private val prefs: SharedPreferences
 
     companion object {
         const val AUTHORITY_SUFFIX = ".gifs"
+        /** Characters not allowed in a cached file's name. */
+        private val UNSAFE = Regex("[^A-Za-z0-9_-]")
         private const val CACHE_MS = 24 * 60 * 60 * 1000L
         private const val IDLE_S = 30L
         /** Infinite scroll stops after this many pages (150 GIFs), so the panel's memory stays bounded. */

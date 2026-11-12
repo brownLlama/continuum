@@ -178,6 +178,9 @@
     <string name="gif_no_key">Add a free KLIPY key in Continuum → GIFs</string>
     <string name="gif_link_pasted">This app doesn\'t accept GIFs, so the link was pasted</string>
     <string name="gif_send_failed">Couldn\'t download that GIF</string>
+    <string name="forget_question">Remove “%1$s” from suggestions?</string>
+    <string name="forget_remove">Remove</string>
+    <string name="forget_cancel">Cancel</string>
     <string name="sticker_title">Stickers</string>
     <string name="sticker_added">Sticker added</string>
     <string name="sticker_add_failed">Couldn\'t make a sticker from that image</string>

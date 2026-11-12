@@ -52,7 +52,7 @@ import kotlin.math.roundToInt
  * - Full letters:  bar [autocorrect switch | suggestions | ✔], three letter rows with long-press
  *                  hints, then [123 | , | en (space) | . | enter].
  * - Full numbers:  the same bar over a 10-column symbol grid with a filled phone keypad.
- * - Emoji:         full-keyboard sized in either mode: group tabs (+ GIF, ⌫) in place of the bar,
+ * - Emoji:         full-keyboard sized in either mode: group tabs (+ stickers, GIF, ⌫) in place of the bar,
  *                  over one grid that scrolls through "frequently used" and every group; ✕ closes it.
  * - Clipboard:     same size: bar ["Clipboard" | bin] over cards of recently copied text; tap one
  *                  to paste it, hold one to delete it.
@@ -166,22 +166,22 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
     var panel = Panel.LETTERS
         private set
     var theme = KeyboardTheme.NORD_DARK
-        set(value) { field = value; invalidate() }
+        set(value) { if (field != value) { field = value; invalidate() } }
     /** Height multipliers from the settings sliders, one per mode. */
     var miniScale = 1f
-        set(value) { field = value; requestLayout(); relayout() }
+        set(value) { if (field != value) { field = value; requestLayout(); relayout() } }
     var fullScale = 1f
-        set(value) { field = value; requestLayout(); relayout() }
+        set(value) { if (field != value) { field = value; requestLayout(); relayout() } }
     private val scale get() = if (mode == Mode.MINI && !panel.big) miniScale else fullScale
     /** Suggestion bar height multiplier (settings slider), on top of the mode's scale. */
     var barScale = 1f
-        set(value) { field = value; requestLayout(); relayout() }
+        set(value) { if (field != value) { field = value; requestLayout(); relayout() } }
     /**
      * Space between the keys and whatever system bar is under them (settings slider). From Android 15
      * the IME window is edge-to-edge, so the bars' own height is added separately ([systemBottom]).
      */
     var bottomSpaceDp = Prefs.BOTTOM_SPACE_DEFAULT.toFloat()
-        set(value) { field = value; requestLayout() }
+        set(value) { if (field != value) { field = value; requestLayout() } }
     /**
      * Height in px of the system bars still showing under the keyboard: the gesture handle or
      * navigation buttons, and Android 16's keyboard buttons unless "Hide system buttons" hid them.
@@ -189,8 +189,8 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
      */
     private var systemBottom = 0
     var layout = KeyLayout.QWERTZ
-        set(value) { field = value; relayout() }
-    /** Whether the emoji panel has the clipboard and GIF tabs (setting "Show GIFs"). */
+        set(value) { if (field != value) { field = value; relayout() } }
+    /** Whether the emoji panel has the GIF tab (setting "Show GIFs"). */
     var showGifs = Prefs.SHOW_GIFS_DEFAULT
         set(value) {
             if (field == value) return
@@ -212,7 +212,7 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
         set(value) { field = value; invalidate() }
     /** State of full mode's bar switch. */
     var autocorrectOn = true
-        set(value) { field = value; invalidate() }
+        set(value) { if (field != value) { field = value; invalidate() } }
     /** The field takes an email address: full mode's "," key becomes "@". */
     var emailField = false
         set(value) { if (field != value) { field = value; relayout() } }
@@ -832,7 +832,7 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
     /** Index of the clip card under (x, y), or null. */
     private fun clipAt(x: Float, y: Float): Int? {
         if (!clipRect.contains(x, y)) return null
-        val r = RectF()
+        val r = hitRect
         return clips.indices.firstOrNull { clipCardRect(it, r); r.contains(x, y) }
     }
 
@@ -856,7 +856,7 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
     /** Index of the sticker under (x, y), or null. */
     private fun stickerAt(x: Float, y: Float): Int? {
         if (!stickerRect.contains(x, y)) return null
-        val r = RectF()
+        val r = hitRect
         return stickers.indices.firstOrNull { stickerCellRect(it, r); r.contains(x, y) }
     }
 
@@ -889,7 +889,7 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
     /** Index of the GIF tile under (x, y), or null. */
     private fun gifAt(x: Float, y: Float): Int? {
         if (!gifRect.contains(x, y)) return null
-        val r = RectF()
+        val r = hitRect
         return gifTiles.indices.firstOrNull { gifTileRect(it, r); r.contains(x, y) }
     }
 
@@ -1631,6 +1631,9 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
     }
     private val path = Path()
     private val tmp = RectF()
+    /** Scratch rects for hit tests (grid cells, the shift menu), so touches and frames allocate nothing. */
+    private val hitRect = RectF()
+    private val nearRect = RectF()
 
     /** Key labels follow shift. */
     private fun upper(s: String) = if (shift != Shift.OFF) s.uppercase() else s
@@ -1861,7 +1864,7 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
         text.textAlign = Paint.Align.LEFT
         text.typeface = regular
         var size = barH * 0.38f
-        val label = "Remove “$word” from suggestions?"
+        val label = resources.getString(R.string.forget_question, word)
         text.textSize = size
         val maxW = removeRect.left - dpu(16f)
         val lw = text.measureText(label)
@@ -1874,17 +1877,28 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
         fill.color = t.accent
         tmp.set(removeRect); tmp.inset(dpu(4f), barH * 0.16f)
         c.drawRoundRect(tmp, dpu(4f), dpu(4f), fill)
-        drawText(c, "Remove", tmp.centerX(), tmp.centerY(), barH * 0.36f, t.onAccent, bold)
-        drawText(c, "Cancel", cancelRect.centerX(), cancelRect.centerY(), barH * 0.36f, t.text, regular)
+        drawText(c, resources.getString(R.string.forget_remove), tmp.centerX(), tmp.centerY(), barH * 0.36f, t.onAccent, bold)
+        drawText(c, resources.getString(R.string.forget_cancel), cancelRect.centerX(), cancelRect.centerY(), barH * 0.36f, t.text, regular)
     }
 
     private fun drawFade(c: Canvas, l: Float, r: Float, toRight: Boolean) {
         val solid = barFill
-        val clear = ColorUtils.setAlphaComponent(solid, 0)
-        fill.shader = LinearGradient(l, 0f, r, 0f, if (toRight) clear else solid, if (toRight) solid else clear, Shader.TileMode.CLAMP)
+        val i = if (toRight) 1 else 0
+        val cached = fades[i]
+        fill.shader = if (cached != null && fadeL[i] == l && fadeR[i] == r && fadeColor[i] == solid) cached else {
+            val clear = ColorUtils.setAlphaComponent(solid, 0)
+            LinearGradient(l, 0f, r, 0f, if (toRight) clear else solid, if (toRight) solid else clear, Shader.TileMode.CLAMP)
+                .also { fades[i] = it; fadeL[i] = l; fadeR[i] = r; fadeColor[i] = solid }
+        }
         c.drawRect(l, 0f, r, barH, fill)
         fill.shader = null
     }
+
+    /** The bar's two edge fades (left, right), built once per position and colour rather than every frame. */
+    private val fades = arrayOfNulls<Shader>(2)
+    private val fadeL = FloatArray(2)
+    private val fadeR = FloatArray(2)
+    private val fadeColor = IntArray(2)
 
     /** One suggestion, shrunk only if it is wider than the whole bar; the default pick sits on a pill. */
     private fun drawSuggestion(c: Canvas, s: String, highlighted: Boolean, r: RectF) {
@@ -2145,9 +2159,9 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
 
     /** The menu cell the finger is over (or above / below), or -1 once it has slid away. */
     private fun shiftMenuChoice(k: Key, p: Pointer): Int {
-        val r = RectF()
+        val r = hitRect
         shiftMenuRect(k, r)
-        val near = RectF(r).apply { inset(-dpu(12f), -dpu(12f)); union(k.rect) }
+        val near = nearRect.apply { set(r); inset(-dpu(12f), -dpu(12f)); union(k.rect) }
         if (!near.contains(p.x, p.y)) return -1
         return ((p.x - r.left) / r.height()).toInt().coerceIn(0, SHIFT_MENU.lastIndex)
     }

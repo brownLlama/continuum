@@ -39,9 +39,6 @@ class AppThemes(private val context: Context) {
         color
     }
 
-    /** Whether the app's icon (or theme) has a colour of its own, rather than one made up for it. */
-    fun hasBrandColor(pkg: String): Boolean = brandColor(pkg)?.let { saturation(it) >= MIN_BRAND_SATURATION } == true
-
     fun brandColor(pkg: String): Int? = brandCache.getOrPut(pkg) {
         runCatching { iconColor(pkg) }.getOrNull() ?: runCatching { themeColor(pkg) }.getOrNull()
     }
