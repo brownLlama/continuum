@@ -60,10 +60,10 @@ jobs:
           VERSION="${TAG#v}"
           ./gradlew assembleRelease -PversionName="$VERSION" -PversionCode="${{ github.run_number }}"
           mkdir -p dist
-          cp app/build/outputs/apk/release/app-release.apk "dist/Continuum-$VERSION.apk"
-          # A fixed name too, so releases/latest/download/Continuum.apk always gets the newest.
+          # One fixed name in every release, so releases/latest/download/Continuum.apk always gets
+          # the newest; the release itself says which version it is.
           cp app/build/outputs/apk/release/app-release.apk dist/Continuum.apk
-          cd dist && sha256sum Continuum*.apk > SHA256SUMS.txt
+          cd dist && sha256sum Continuum.apk > SHA256SUMS.txt
 
       - name: Check the APK is signed
         run: |
