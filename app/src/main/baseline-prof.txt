@@ -1,0 +1,6 @@
+# Startup profile: Android compiles the code listed here ahead of time when the app is installed,
+# instead of interpreting it at first use, so the first keystrokes after an install or a restart
+# don't stutter. The keyboard's own code is small and all of it runs while typing, so it's all
+# listed. Applied by androidx.profileinstaller (see app/build.gradle.kts).
+HSPLcom/brownllama/continuum/**;->**(**)**
+Lcom/brownllama/continuum/**;

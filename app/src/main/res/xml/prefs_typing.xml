@@ -21,6 +21,24 @@
         app:summary="@string/pref_hold_ms_summary"
         app:title="@string/pref_hold_ms"
         app:updatesContinuously="true" />
+    <PreferenceCategory app:title="@string/cat_vibration">
+        <SwitchPreferenceCompat
+            app:defaultValue="true"
+            app:key="vibrate_keys"
+            app:summary="@string/pref_vibrate_summary"
+            app:title="@string/pref_vibrate" />
+        <SeekBarPreference
+            android:max="100"
+            app:defaultValue="55"
+            app:dependency="vibrate_keys"
+            app:key="vibrate_strength"
+            app:min="10"
+            app:seekBarIncrement="5"
+            app:showSeekBarValue="true"
+            app:summary="@string/pref_vibrate_strength_summary"
+            app:title="@string/pref_vibrate_strength"
+            app:updatesContinuously="true" />
+    </PreferenceCategory>
     <PreferenceCategory app:title="@string/cat_learned">
         <Preference
             app:icon="@drawable/ic_delete"

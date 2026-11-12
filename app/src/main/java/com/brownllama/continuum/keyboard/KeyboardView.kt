@@ -208,6 +208,11 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
     var swipeStraightness = Prefs.SWIPE_STRAIGHTNESS_DEFAULT / 100f
     /** How long a hold takes to open the zoom or a key's popup (settings slider). */
     var holdMs = Prefs.HOLD_MS_DEFAULT.toLong()
+    /** Settings "Vibrate on keys": 0 off, else the strength (1..100) of a tick on each key press. */
+    var vibration: Int
+        get() = keyVibration.strength
+        set(value) { keyVibration.strength = value }
+    private val keyVibration = KeyVibration(context)
     var shift = Shift.OFF
         set(value) { field = value; invalidate() }
     /** State of full mode's bar switch. */
@@ -1111,6 +1116,8 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
             else -> hitKey(keys, x, y)?.let { Pointer(id, x, y, Area.KEY, it) }
         } ?: return
         pointers[id] = p
+        // A tick for a key or the letter row; not for the emoji / GIF / sticker grids, which scroll.
+        if (p.area != Area.GRID) keyVibration.tap()
         if (p.area == Area.LETTERS || p.area == Area.STRIP) glows += Glow(p)
         if (p.key?.kind == Kind.BACKSPACE) {
             backspace()

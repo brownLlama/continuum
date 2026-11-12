@@ -51,6 +51,11 @@ object Prefs {
     /** Hold time before the zoom or a key's popup opens, in ms. */
     const val HOLD_MS = "hold_ms"
     const val HOLD_MS_DEFAULT = 110
+    /** A short vibration on each key press, and its strength (1..100). */
+    const val VIBRATE = "vibrate_keys"
+    const val VIBRATE_DEFAULT = true
+    const val VIBRATE_STRENGTH = "vibrate_strength"
+    const val VIBRATE_STRENGTH_DEFAULT = 55
     /**
      * Every setting "Reset to defaults" (main menu) clears, so the code's defaults apply again.
      * Not the KLIPY key, the text shortcuts, the learned words or the remembered mode. "haptics" and "previews" were
@@ -59,7 +64,7 @@ object Prefs {
      */
     val RESETTABLE = listOf(
         THEME, LAYOUT, MINI_HEIGHT, FULL_HEIGHT, BAR_HEIGHT, BOTTOM_SPACE, HIDE_SYSTEM_BUTTONS,
-        AUTOCORRECT, AUTOCAPS, ANIMALS, ANIMAL_KINDS, ANIMAL_FREQUENCY, HOLD_MS, SWIPE_MIN, SWIPE_LONG, SWIPE_SPEED, SWIPE_STRAIGHTNESS, SHOW_GIFS,
+        AUTOCORRECT, AUTOCAPS, ANIMALS, ANIMAL_KINDS, ANIMAL_FREQUENCY, HOLD_MS, VIBRATE, VIBRATE_STRENGTH, SWIPE_MIN, SWIPE_LONG, SWIPE_SPEED, SWIPE_STRAIGHTNESS, SHOW_GIFS,
         "haptics", "previews", "llama",
     )
 
