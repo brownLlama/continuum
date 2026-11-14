@@ -115,12 +115,15 @@ class Decoder(private val dict: Dictionary, private val user: UserModel) {
         // 2. The user's other words join only if they can still reach the top [limit]: the bound is
         // checked before any letters are scored, and scoring stops as soon as a word falls below it.
         // (Scores only ever rise while merging, so a word below the current floor stays out.)
+        val learned = user.unigrams
+        // Words since forgotten (or cleared) leave the cache too, so it can't outgrow the vocabulary.
+        if (userWords.size > learned.size + USER_WORD_SLACK) userWords.keys.retainAll(learned.keys)
         val inLists = HashSet<String>()
         for (c in boosted) inLists += c.key
         for (c in boostedComp) inLists += c.key
         val floors = arrayOf(Floor(limit, boosted), Floor(limit, boostedComp))
         val bonus = if (expected.isNotEmpty()) NEXT_WORD_BONUS else 0f
-        for ((key, count) in user.unigrams) {
+        for ((key, count) in learned) {
             if (key.length < n || key in inLists) continue
             val extra = key.length - n
             val floor = floors[if (extra == 0) 0 else 1]
@@ -487,6 +490,8 @@ class Decoder(private val dict: Dictionary, private val user: UserModel) {
 
     companion object {
         private const val MISS = Float.NEGATIVE_INFINITY
+        /** [userWords] is trimmed once it holds this many more words than the user's vocabulary. */
+        private const val USER_WORD_SLACK = 256
 
         /** Std-dev of a tap around a letter, in mini slots. ~1.4 slots ≈ "this letter or its neighbours". */
         private const val MINI_SIGMA = 1.4f

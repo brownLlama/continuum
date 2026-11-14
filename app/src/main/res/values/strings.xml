@@ -62,6 +62,10 @@
     <string name="pref_vibrate_summary">A short tick on each key press. Each tick is a few milliseconds, so it hardly uses any battery.</string>
     <string name="pref_vibrate_strength">Strength</string>
     <string name="pref_vibrate_strength_summary">How strong each tick is. Phones that can\'t set the strength make the tick longer or shorter instead.</string>
+    <string name="cat_clipboard">Clipboard</string>
+    <string name="pref_clipboard">Clipboard history</string>
+    <string name="pref_clipboard_summary">Keep copied text for the clipboard panel. It stays on the phone and is hidden while the phone is locked. Turning this off deletes what was kept.</string>
+    <string name="pref_clipboard_keep">Keep copies for</string>
     <string name="cat_learned">Learned words</string>
     <string name="pref_clear">Forget learned words</string>
     <string name="pref_clear_summary">Clear the words and phrases learned from your typing</string>
@@ -152,7 +156,7 @@
     <string name="guide_emoji_title">Emoji</string>
     <string name="guide_emoji">In mini mode, hold the row, slide up and onto ☺. In the full keyboard, hold the comma. Tabs at the top jump between groups; your most used emoji come first.</string>
     <string name="guide_clipboard_title">Clipboard</string>
-    <string name="guide_clipboard">In mini mode, hold the row, slide up and onto the clipboard at the far left. Tap a clip to paste it, hold to delete it, or tap the bin to clear all. Continuum keeps up to 30 clips for 7 days and skips anything copied from password or private fields.</string>
+    <string name="guide_clipboard">In mini mode, hold the row, slide up and onto the clipboard at the far left. Tap a clip to paste it, hold to delete it, or tap the bin to clear all. Continuum keeps up to 30 clips for 7 days (or less: Typing → Clipboard), skips anything copied from password or private fields, and shows none of it while the phone is locked.</string>
     <string name="guide_gif_title">GIFs</string>
     <string name="guide_gif">In the emoji panel, tap GIF. Tap the search field to type, enter to search, then tap a GIF to send it. Apps that don\'t take GIFs get the link instead. Needs a free KLIPY key (Settings → GIFs), where you can also hide the GIF tab.</string>
     <string name="guide_cat_5">Learning and privacy</string>
@@ -178,6 +182,8 @@
     <string name="gif_error">Couldn\'t reach KLIPY. Check your connection.</string>
     <string name="clip_title">Clipboard</string>
     <string name="clip_empty">Copied text shows up here. Hold a clip to delete it.</string>
+    <string name="clip_locked">Unlock your phone to see copied text</string>
+    <string name="clip_off">Clipboard history is off (Continuum → Typing)</string>
     <string name="gif_no_key">Add a free KLIPY key in Continuum → GIFs</string>
     <string name="gif_link_pasted">This app doesn\'t accept GIFs, so the link was pasted</string>
     <string name="gif_send_failed">Couldn\'t download that GIF</string>
@@ -196,6 +202,17 @@
     <string name="mode_locked">This field needs the full keyboard</string>
 
     <!-- Chameleon takes each app's colour; the rest are KeyboardTheme.PRESETS. -->
+    <!-- How long the clipboard history keeps a copy; the values are hours (Prefs.CLIPBOARD_KEEP). -->
+    <string-array name="clipboard_keep_names">
+        <item>1 hour</item>
+        <item>1 day</item>
+        <item>7 days</item>
+    </string-array>
+    <string-array name="clipboard_keep_values" translatable="false">
+        <item>1</item>
+        <item>24</item>
+        <item>168</item>
+    </string-array>
     <!-- Visiting animals: names in the order of Species.ALL, values are Species.key. -->
     <string-array name="animal_names">
         <item>Llama</item>

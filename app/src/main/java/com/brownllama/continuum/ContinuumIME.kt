@@ -1,5 +1,6 @@
 package com.brownllama.continuum
 
+import android.app.KeyguardManager
 import android.content.ClipData
 import android.content.ClipDescription
 import android.content.ClipboardManager
@@ -73,6 +74,11 @@ import kotlin.math.roundToInt
  *   URL fields predict as usual but don't auto-capitalise.
  * - Fields that ask not to be learned from (incognito tabs, IME_FLAG_NO_PERSONALIZED_LEARNING)
  *   still get suggestions, but nothing typed there is learned or unlearned ([learning] off).
+ *   The same goes for fields that ask for no suggestions (TYPE_TEXT_FLAG_NO_SUGGESTIONS: user
+ *   names, codes), where full mode also types exactly what was tapped ([exactField]).
+ * - Copied text is kept for the clipboard panel ([captureClip]), except what is copied while a
+ *   password, number or incognito field has focus ([privateField]), and never shown while the
+ *   phone is locked.
  * - A word typed right after "word'" or "word-" is learned together with it ("zazzy's", see [Glue]).
  * - "##" then a letter or digit with a text shortcut saved for it types that text ([expandShortcut]).
  * - GIFs come from KLIPY through [GifFeed] and are inserted as rich content ([sendGif]). While the
@@ -98,7 +104,7 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
     private lateinit var stickerStore: StickerStore
     /** The stickers the panel shows, in its order (see [loadStickers]). */
     private var stickers: List<Sticker> = emptyList()
-    private val clipListener = ClipboardManager.OnPrimaryClipChangedListener { captureClip() }
+    private val clipListener = ClipboardManager.OnPrimaryClipChangedListener { captureClip(fresh = true) }
     private var emojiGroups: List<EmojiGroup> = emptyList()
     /** Every emoji in [emojiGroups], i.e. the ones the font can draw. */
     private var drawableEmoji: Set<String> = emptySet()
@@ -114,8 +120,18 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
     private var mode = Mode.MINI
     /** Decode words and show suggestions. Off in passwords and numbers. */
     private var predict = true
-    /** Learn from what's typed. Off where the field asks for no personalised learning. */
+    /** Learn from what's typed. Off where the field asks for no personalised learning or no suggestions. */
     private var learning = true
+    /** The field asks for no suggestions (a user name, a code): full mode types what was tapped, uncorrected. */
+    private var exactField = false
+    /**
+     * The field that has focus is a password, number or incognito field. What is copied meanwhile
+     * stays out of the clipboard history for good (see [captureClip]). Set as soon as the field
+     * gets focus, keyboard showing or not, and cleared when it loses it.
+     */
+    private var privateField = false
+    /** Setting "Clipboard history": off keeps nothing and shows nothing. */
+    private var clipboardOn = Prefs.CLIPBOARD_DEFAULT
     /** Full mode's autocorrect switch; mini mode always uses the decoder's best word. */
     private var autocorrect = true
     private var autoCaps = true
@@ -206,9 +222,11 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
         super.onCreate()
         prefs = PreferenceManager.getDefaultSharedPreferences(this)
         prefs.registerOnSharedPreferenceChangeListener(this)
-        user = UserModel(File(filesDir, "user_model.tsv"))
-        emojiHistory = EmojiHistory(File(filesDir, "emoji_usage.tsv"))
-        clipboard = ClipboardHistory(File(filesDir, "clipboard.tsv"))
+        // The three files are read in the background; whoever needs one first waits for the rest of it.
+        user = UserModel(File(filesDir, "user_model.tsv"), background = true)
+        emojiHistory = EmojiHistory(File(filesDir, "emoji_usage.tsv"), DiskIo.executor)
+        clipboard = ClipboardHistory(File(filesDir, "clipboard.tsv"), io = DiskIo.executor)
+        applyClipboardPrefs()
         stickerStore = StickerStore(this)
         getSystemService(ClipboardManager::class.java)?.addPrimaryClipChangedListener(clipListener)
         appThemes = AppThemes(this)
@@ -271,6 +289,8 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
     internal val suggestionSlots: List<String> get() = slots
     internal val gifQuery: String get() = query.toString()
     internal fun learnedCount(word: String): Int = Dictionary.keyOf(word)?.let { user.count(it) } ?: 0
+    /** For tests: the clipboard history as kept, whether or not the panel may show it. */
+    internal val clipTexts: List<String> get() = clipboard.texts()
 
     /** The editor connection; a seam so tests can drive the service against a real text field. */
     internal open fun inputConnection(): InputConnection? = currentInputConnection
@@ -312,6 +332,7 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
         autocorrect = prefs.getBoolean(Prefs.AUTOCORRECT, Prefs.AUTOCORRECT_DEFAULT)
         autoCaps = prefs.getBoolean(Prefs.AUTOCAPS, Prefs.AUTOCAPS_DEFAULT)
         layout = KeyLayout.named(prefs.getString(Prefs.LAYOUT, Prefs.LAYOUT_DEFAULT))
+        applyClipboardPrefs()
         val v = view ?: return
         v.layout = layout
         v.showGifs = prefs.getBoolean(Prefs.SHOW_GIFS, Prefs.SHOW_GIFS_DEFAULT)
@@ -338,12 +359,45 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
         }
     }
 
+    /** The clipboard settings: with the history off, what was kept goes too. */
+    private fun applyClipboardPrefs() {
+        clipboardOn = prefs.getBoolean(Prefs.CLIPBOARD, Prefs.CLIPBOARD_DEFAULT)
+        clipboard.keepMs = (prefs.getString(Prefs.CLIPBOARD_KEEP, null)?.toLongOrNull() ?: Prefs.CLIPBOARD_KEEP_DEFAULT)
+            .coerceIn(1L, Prefs.CLIPBOARD_KEEP_DEFAULT) * HOUR_MS
+        if (!clipboardOn) clipboard.clear()
+    }
+
     // ---- editor lifecycle -----------------------------------------------------------------
+
+    /** A password field (text or numeric). */
+    private fun isPassword(info: EditorInfo): Boolean {
+        val cls = info.inputType and InputType.TYPE_MASK_CLASS
+        val variation = info.inputType and InputType.TYPE_MASK_VARIATION
+        return cls == InputType.TYPE_CLASS_TEXT && variation in PASSWORD_VARIATIONS ||
+            cls == InputType.TYPE_CLASS_NUMBER && variation == InputType.TYPE_NUMBER_VARIATION_PASSWORD
+    }
+
+    /** A number, phone number or date field. */
+    private fun isNumeric(info: EditorInfo): Boolean {
+        val cls = info.inputType and InputType.TYPE_MASK_CLASS
+        return cls == InputType.TYPE_CLASS_NUMBER || cls == InputType.TYPE_CLASS_PHONE || cls == InputType.TYPE_CLASS_DATETIME
+    }
+
+    /** A field whose content is private: a password, a number (codes, card numbers) or an incognito field. */
+    private fun isPrivate(info: EditorInfo): Boolean =
+        isPassword(info) || isNumeric(info) || (info.imeOptions and EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING) != 0
+
+    /** A field got focus (the keyboard may not be showing yet): note whether it is private. */
+    override fun onStartInput(attribute: EditorInfo?, restarting: Boolean) {
+        super.onStartInput(attribute, restarting)
+        privateField = attribute != null && isPrivate(attribute)
+    }
 
     /** The keyboard is shown for a (new) text field: reset the word and adapt to the field's type. */
     override fun onStartInputView(info: EditorInfo, restarting: Boolean) {
         super.onStartInputView(info, restarting)
         view?.closeGifSearch()
+        privateField = isPrivate(info)
         captureClip() // something may have been copied while the keyboard wasn't running
         currentPackage = info.packageName
         applyPrefs()
@@ -356,16 +410,16 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
 
         val cls = info.inputType and InputType.TYPE_MASK_CLASS
         val variation = info.inputType and InputType.TYPE_MASK_VARIATION
-        val password = cls == InputType.TYPE_CLASS_TEXT && variation in PASSWORD_VARIATIONS ||
-            cls == InputType.TYPE_CLASS_NUMBER && variation == InputType.TYPE_NUMBER_VARIATION_PASSWORD
+        val password = isPassword(info)
         val address = cls == InputType.TYPE_CLASS_TEXT && variation in ADDRESS_VARIATIONS
         emailField = cls == InputType.TYPE_CLASS_TEXT && variation in EMAIL_VARIATIONS
-        val numeric = cls == InputType.TYPE_CLASS_NUMBER || cls == InputType.TYPE_CLASS_PHONE ||
-            cls == InputType.TYPE_CLASS_DATETIME
+        val numeric = isNumeric(info)
 
         predict = !(password || numeric)
         capsAllowed = predict && !address
-        learning = predict && (info.imeOptions and EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING) == 0
+        exactField = predict && cls == InputType.TYPE_CLASS_TEXT &&
+            (info.inputType and InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS) != 0
+        learning = predict && !exactField && (info.imeOptions and EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING) == 0
         // Exact typing (passwords, numbers) needs real keys, so those fields always use full mode.
         mode = if (predict) prefMode else Mode.FULL
         pendingGlue = null
@@ -393,10 +447,12 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
         user.save()
     }
 
+    /** The field lost focus (or its app went away). */
     override fun onFinishInput() {
         super.onFinishInput()
         taps.clear()
         result = null
+        privateField = false
     }
 
     /** The cursor moved. If the user tapped elsewhere in the text, drop the word being typed. */
@@ -794,24 +850,50 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
 
     /**
      * Saves the system clipboard's text to the history. Skipped when the copying app marked it
-     * sensitive (passwords, one-time codes; Android 13+ password managers do) and while the field
-     * being typed in is a password, number or incognito field ([learning] off). Only plain text is
-     * kept: a clip that is a link to another app's content is never opened.
+     * sensitive (passwords, one-time codes; Android 13+ password managers do) and while a
+     * password, number or incognito field has focus ([privateField]). Only plain text is kept: a
+     * clip that is a link to another app's content is never opened.
+     *
+     * A clip stays on the system clipboard long after it was copied, and this is called again
+     * later (a new field, the panel opening). So a clip copied in a private field ([fresh]: the
+     * clipboard just changed) is set aside for good ([ClipboardHistory.skip]), not just for now.
      */
-    private fun captureClip() {
-        if (!learning) return
+    private fun captureClip(fresh: Boolean = false) {
+        if (!clipboardOn) return
         val clip = runCatching { getSystemService(ClipboardManager::class.java)?.primaryClip }.getOrNull() ?: return
         if (clip.description?.extras?.getBoolean(EXTRA_IS_SENSITIVE) == true) return
         val text = clip.takeIf { it.itemCount > 0 }?.getItemAt(0)?.text?.toString() ?: return
+        val time = clip.description?.timestamp ?: 0L
+        val hash = text.hashCode()
+        if (privateField) {
+            if (fresh) clipboard.skip(time, hash)
+            return
+        }
+        // Copied anew outside a private field, the same text is wanted; seen again, it is still the private clip.
+        if (!fresh && clipboard.isSkipped(time, hash)) return
         clipboard.add(text)
+    }
+
+    /** Why the clipboard panel has nothing to show (a string resource), or 0 if it may show the history. */
+    private fun clipboardBlocked(): Int = when {
+        !clipboardOn -> R.string.clip_off
+        // Copied text is as private as what's on the phone: none of it while the phone is locked.
+        runCatching { getSystemService(KeyguardManager::class.java)?.isDeviceLocked }.getOrNull() == true -> R.string.clip_locked
+        else -> 0
+    }
+
+    private fun showClips() {
+        val blocked = clipboardBlocked()
+        if (blocked != 0) view?.setClips(emptyList(), getString(blocked)) else view?.setClips(clipboard.texts())
     }
 
     override fun onClipboardOpen() {
         captureClip()
-        view?.setClips(clipboard.texts())
+        showClips()
     }
 
     override fun onClipPicked(index: Int) {
+        if (clipboardBlocked() != 0) return showClips()
         val text = clipboard.texts().getOrNull(index) ?: return
         val ic = editor() ?: return
         if (taps.isNotEmpty()) commitWord(spaced = false, choice = null)
@@ -823,13 +905,13 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
     }
 
     override fun onClipRemove(index: Int) {
-        clipboard.remove(index)
-        view?.setClips(clipboard.texts())
+        if (clipboardBlocked() == 0) clipboard.remove(index)
+        showClips()
     }
 
     override fun onClipClear() {
-        clipboard.clear()
-        view?.setClips(clipboard.texts())
+        if (clipboardBlocked() == 0) clipboard.clear()
+        showClips()
     }
 
     // ---- stickers ---------------------------------------------------------------------------
@@ -1116,7 +1198,9 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
 
     /** Full mode: the word space will commit. Keeps real words unless the alternative is far more likely. */
     private fun autocorrectPick(r: DecodeResult?, literalText: String, words: List<String>): String {
-        // The end of a joined word ("zazzy'" + "s") is typed as is.
+        // The end of a joined word ("zazzy'" + "s") is typed as is, and so is a field that asks for no
+        // suggestions (but not the GIF search opened from one).
+        if (exactField && queryEditor == null) return literalText
         if (!autocorrect || r == null || wordGlue != null || afterNumber != null || taps.any { it.exact >= 0 }) return literalText
         val best = r.words.firstOrNull() ?: return literalText
         if (best.key == r.literal) {
@@ -1281,9 +1365,12 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
         if (view?.panel == KeyboardView.Panel.STICKERS) loadStickers()
     }
 
+    /** The keyboard went away: stop the animals, and give back the memory of the GIFs it was showing. */
     override fun onWindowHidden() {
         super.onWindowHidden()
         view?.keyboardHidden()
+        view?.releaseGifs(force = true)
+        gifs.release()
     }
 
     /**
@@ -1395,6 +1482,7 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
         /** Full-mode autocorrect keeps a real typed word unless a correction scores this much better (log). */
         private const val KEEP_REAL_WORD_MARGIN = 5f
         private const val STALE_UPDATE_MS = 300L
+        private const val HOUR_MS = 60L * 60 * 1000
         /** GIF search: how long typing must pause before the results update. */
         private const val LIVE_SEARCH_MS = 600L
         /** Punctuation that sticks to the previous word, taking the space before it. */

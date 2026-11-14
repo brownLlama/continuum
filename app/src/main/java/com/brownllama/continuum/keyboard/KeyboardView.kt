@@ -495,9 +495,16 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
     private val clipLayouts = HashMap<String, StaticLayout>()
     private val clipPaint = TextPaint(Paint.ANTI_ALIAS_FLAG)
 
-    /** The copied texts to show, newest first. */
-    fun setClips(texts: List<String>) {
+    /** Shown in place of the cards when there are none; null: the usual "nothing copied yet" hint. */
+    private var clipMessage: String? = null
+
+    /**
+     * The copied texts to show, newest first. With none, [emptyMessage] says why (the phone is
+     * locked, the history is switched off) in place of the usual hint.
+     */
+    fun setClips(texts: List<String>, emptyMessage: String? = null) {
         clips = texts
+        clipMessage = emptyMessage
         clipLayouts.clear()
         clipScroll = clipScroll.coerceIn(0f, maxClipScroll)
         invalidate()
@@ -592,9 +599,14 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
 
     /**
      * Drops the GIF images to give memory back, unless the GIF panel is showing. Opening the panel
-     * again searches anew ([showPanel]).
+     * again searches anew ([showPanel]). With [force] (the keyboard is hidden, so nothing shows)
+     * they go in any case, and a GIF panel or search left open goes back to the letters.
      */
-    fun releaseGifs() {
+    fun releaseGifs(force: Boolean = false) {
+        if (force) {
+            closeGifSearch()
+            if (panel == Panel.GIF) showPanel(Panel.LETTERS)
+        }
         if (panel == Panel.GIF) return
         stopGifs()
         for (t in gifTiles) t.image?.callback = null
@@ -2223,7 +2235,15 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
         text.textAlign = Paint.Align.CENTER
         c.withClip(clipRect) {
             if (clips.isEmpty()) {
-                drawText(c, resources.getString(R.string.clip_empty), clipRect.centerX(), clipRect.centerY(), dp(14f), t.dim, regular)
+                val message = clipMessage ?: resources.getString(R.string.clip_empty)
+                // A longer message is shrunk to the panel's width.
+                var size = dp(14f)
+                text.typeface = regular
+                text.textSize = size
+                val room = clipRect.width() - 4 * pad
+                val w = text.measureText(message)
+                if (w > room && w > 0f) size *= room / w
+                drawText(c, message, clipRect.centerX(), clipRect.centerY(), size, t.dim, regular)
                 return@withClip
             }
             val pressed = pointers.values.firstOrNull { it.area == Area.GRID && !it.moved && !it.consumed }

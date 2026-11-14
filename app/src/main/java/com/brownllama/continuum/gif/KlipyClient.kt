@@ -4,6 +4,8 @@ import android.net.Uri
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.io.InputStream
+import java.io.OutputStream
 import java.net.HttpURLConnection
 import java.net.URL
 
@@ -81,13 +83,18 @@ class KlipyClient(
             }
         }
 
-        /** Saves [url] to [to] (via a temporary file, so a half download is never used). */
+        /**
+         * Saves [url] to [to], straight to disk (a GIF is never held in memory whole) and via a
+         * temporary file of its own, so a half download is never used and two downloads of the
+         * same GIF can't write into each other.
+         */
         fun download(url: String, to: File) {
             val c = open(url)
-            val tmp = File(to.path + ".part")
+            val tmp = File(to.path + "." + System.nanoTime() + PART)
             try {
                 if (c.responseCode !in 200..299) error("HTTP ${c.responseCode}")
-                tmp.writeBytes(readCapped(c, MAX_GIF_BYTES))
+                if (c.contentLengthLong > MAX_GIF_BYTES) error("response too large")
+                c.inputStream.use { input -> tmp.outputStream().use { copyCapped(input, it, MAX_GIF_BYTES) } }
                 if (!tmp.renameTo(to)) error("rename failed")
             } finally {
                 tmp.delete()
@@ -95,20 +102,28 @@ class KlipyClient(
             }
         }
 
+        /** What a download in progress is called: the file's name, a number, then this. */
+        const val PART = ".part"
+
         /** The response body, refusing anything larger than [max] bytes. */
         private fun readCapped(c: HttpURLConnection, max: Long): ByteArray {
             if (c.contentLengthLong > max) error("response too large")
             val out = ByteArrayOutputStream()
-            c.inputStream.use { input ->
-                val buf = ByteArray(16 * 1024)
-                while (true) {
-                    val n = input.read(buf)
-                    if (n < 0) break
-                    out.write(buf, 0, n)
-                    if (out.size() > max) error("response too large")
-                }
-            }
+            c.inputStream.use { copyCapped(it, out, max) }
             return out.toByteArray()
+        }
+
+        /** Copies [input] to [out], giving up (with an exception) once it is longer than [max] bytes. */
+        internal fun copyCapped(input: InputStream, out: OutputStream, max: Long) {
+            val buf = ByteArray(16 * 1024)
+            var total = 0L
+            while (true) {
+                val n = input.read(buf)
+                if (n < 0) break
+                total += n
+                if (total > max) error("response too large")
+                out.write(buf, 0, n)
+            }
         }
 
         /**

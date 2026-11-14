@@ -132,7 +132,7 @@ How sensitive swipes are (shortest swipe, flick speed, long swipe, straightness)
 </p>
 
 - **Emoji panel:** every Unicode emoji, your most-used first, with tabs to jump between groups. Open it from the zoom (☺) or by holding the comma.
-- **Clipboard:** your last 30 copies (kept for 7 days) as cards, opened from mini mode's symbol row. Tap to paste, hold to delete. Anything copied from a password or private field is skipped.
+- **Clipboard:** your last 30 copies (kept for 7 days, or 1 day or 1 hour if you prefer) as cards, opened from mini mode's symbol row. Tap to paste, hold to delete. Anything copied from a password or private field is skipped, nothing is shown while the phone is locked, and the history can be switched off (Settings → Typing).
 - **GIF search** with [KLIPY](https://partner.klipy.com): search, tap and the GIF is sent as a real animated GIF (apps that can't take GIFs get the link). It needs your own free KLIPY key, entered in the app. Don't want GIFs? Turn off **Show GIFs** and the GIF tab disappears from the emoji panel.
 
 ### 🎨 Themes
