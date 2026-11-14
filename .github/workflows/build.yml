@@ -1,5 +1,5 @@
-# Builds the app and runs its unit tests on every push to main and every pull request, so a broken
-# build shows up early. The debug APK is kept as a downloadable artifact for 14 days.
+# Builds the app and runs its unit tests and lint on every push to main and every pull request, so
+# a broken build shows up early. The debug APK is kept as a downloadable artifact for 14 days.
 #
 # Actions are pinned to a commit (the version it belongs to is in the comment), so a tag that is
 # moved later can't change what runs here.
@@ -29,6 +29,9 @@ jobs:
 
       - name: Run unit tests
         run: ./gradlew testDebugUnitTest
+
+      - name: Run lint
+        run: ./gradlew lintDebug
 
       - name: Build debug APK
         run: ./gradlew assembleDebug

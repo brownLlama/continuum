@@ -38,7 +38,11 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // R8 drops what the app doesn't use of its libraries (most of the APK's code) and
+            // unused resources. The app's own classes are left as written: see proguard-rules.pro.
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             if (signing("STORE_FILE") != null) signingConfig = signingConfigs.getByName("release")
         }
     }
