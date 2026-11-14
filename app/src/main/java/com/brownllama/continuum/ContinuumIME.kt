@@ -172,6 +172,12 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
      */
     private var deletedSlots: List<String>? = null
 
+    /**
+     * The current word follows a number directly ("16" + "th"): the ordinal ending that number takes
+     * ("st", "nd", "rd" or "th"), offered first and not autocorrected; null otherwise.
+     */
+    private var afterNumber: String? = null
+
     /** Set when a joiner is typed right after a word; [wordGlue] once the next word starts. */
     private var pendingGlue: Glue? = null
     private var wordGlue: Glue? = null
@@ -435,6 +441,7 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
             lastCommit = null
             tapMode = mode
             wordSentenceStart = atSentenceStart()
+            afterNumber = ordinalAfterCursor()
             wordGlue = pendingGlue?.takeIf {
                 editor()?.getTextBeforeCursor(it.prefix.length, 0)?.toString() == it.prefix
             }
@@ -536,6 +543,7 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
         prevWord = last.prevBefore
         ic.beginBatchEdit()
         ic.deleteSurroundingText(expected.length, 0)
+        afterNumber = ordinalAfterCursor()
         taps.clear()
         taps.addAll(last.taps)
         tapMode = last.mode
@@ -613,11 +621,13 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
         while (punct > start && !before[punct - 1].isLetterOrDigit()) punct--
         if (punct in (start + 1) until end) start = punct
         val n = before.length - start
+        val word = before.substring(start, end)
         if (n > 0) ic.deleteSurroundingText(n, 0) else deleteBefore(ic)
         lastCommit = null
         autoSpace = false
         updateAutoShift()
-        showPredictions()
+        deletedSlots = if (predict && n > 0) alternativesFor(word) else null
+        showDeletedWord()
     }
 
     /** Commits the word being typed, or types a space; a second space after a word makes a full stop. */
@@ -1040,7 +1050,9 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
             .sortedByDescending { it.score }
             .map { applyCase(it.display) }
 
-        val best = words.firstOrNull() ?: literalText
+        // Right after a number, its ordinal ending is what these letters most likely are ("16" + "th").
+        val ordinal = afterNumber?.let { applyCase(it) }
+        val best = if (ordinal != null && taps.size == ordinal.length) ordinal else words.firstOrNull() ?: literalText
         // Letters picked exactly with the zoom spell a word the dictionary may not know: when every
         // letter was picked that way, the spelling itself is the default (and gets learned).
         val allExact = taps.all { it.exact >= 0 }
@@ -1053,7 +1065,9 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
         composingText = composing
         lastEditTime = SystemClock.uptimeMillis()
 
-        val others = (listOf(best) + more).distinct().filter { it != composing }
+        // A number spelling of the best word ("someone" → "some1") is offered next to it.
+        val speak = TEXT_SPEAK[best.lowercase()]?.let { v -> if (best.first().isUpperCase()) v.replaceFirstChar { it.uppercaseChar() } else v }
+        val others = (listOfNotNull(best, ordinal, speak) + more).distinct().filter { it != composing }
         // The bar shows as many words as fit and scrolls sideways to the rest.
         var list = when {
             // Reopened by backspace: the word as it was, then what else the taps could be.
@@ -1103,7 +1117,7 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
     /** Full mode: the word space will commit. Keeps real words unless the alternative is far more likely. */
     private fun autocorrectPick(r: DecodeResult?, literalText: String, words: List<String>): String {
         // The end of a joined word ("zazzy'" + "s") is typed as is.
-        if (!autocorrect || r == null || wordGlue != null || taps.any { it.exact >= 0 }) return literalText
+        if (!autocorrect || r == null || wordGlue != null || afterNumber != null || taps.any { it.exact >= 0 }) return literalText
         val best = r.words.firstOrNull() ?: return literalText
         if (best.key == r.literal) {
             // The same letters with an apostrophe or hyphen ("dont" → "don't", "zazzys" → "zazzy's"),
@@ -1135,7 +1149,8 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
         if (g != null) prevWord = g.prevBefore
         val learned = if (g != null) g.prefix + text else text
         val prevBefore = prevWord
-        learn(learned, g?.sentenceStart ?: wordSentenceStart, picked = choice != null)
+        // An ordinal ending ("th" after "16") isn't a word of its own to learn.
+        if (afterNumber == null) learn(learned, g?.sentenceStart ?: wordSentenceStart, picked = choice != null)
         lastCommit = LastCommit(text, spaced, ArrayList(taps), tapMode, prevBefore, learned, g)
         wordGlue = null
         taps.clear()
@@ -1159,8 +1174,8 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
      */
     private fun learn(word: String, sentenceStart: Boolean, picked: Boolean = false) {
         // An emoji (or anything without letters) is not learned, and the word before it no longer counts.
-        // Nor is a German word: its key would drop the ä / ö / ü / ß and match English words.
-        val key = Dictionary.keyOf(word)?.takeIf { word.none { it in GERMAN_LETTERS } } ?: run { prevWord = null; return }
+        // Nor is a German word or one with digits ("some1"): its key would drop those and match other words.
+        val key = Dictionary.keyOf(word)?.takeIf { word.none { it in GERMAN_LETTERS || it.isDigit() } } ?: run { prevWord = null; return }
         // Fields that ask for no learning (incognito) only track the previous word, for predictions.
         if (!learning) {
             prevWord = key
@@ -1314,6 +1329,41 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
     }
 
     /** The cursor is at the start of the field, a line, or a sentence ("Done. |"). */
+    /** The ordinal ending for the number right before the cursor ("1" → "st", "12" → "th"), or null. */
+    private fun ordinalAfterCursor(): String? {
+        val before = editor()?.getTextBeforeCursor(8, 0)?.toString() ?: return null
+        val digits = before.takeLastWhile { it.isDigit() }
+        if (digits.isEmpty()) return null
+        val n = digits.takeLast(2).toInt()
+        return when {
+            n % 100 in 11..13 -> "th"
+            n % 10 == 1 -> "st"
+            n % 10 == 2 -> "nd"
+            n % 10 == 3 -> "rd"
+            else -> "th"
+        }
+    }
+
+    /**
+     * Swipe-deleting a finished word: its alternatives, as the decoder reads the word's own letters
+     * (the taps behind it are gone), so a slip like "your" for "some" can be picked again. The word
+     * itself comes first.
+     */
+    private fun alternativesFor(word: String): List<String>? {
+        val d = decoder ?: return null
+        val letters = word.lowercase().filter { it in 'a'..'z' }
+        if (letters.isEmpty() || letters.length > 20 || word.any { !it.isLetter() && it !in JOINERS }) return null
+        val synthetic = letters.map { c ->
+            val i = c - 'a'
+            if (mode == Mode.MINI) Tap(layout.miniSlot[i].toFloat(), 0f) else Tap(layout.fullX[i], layout.fullY[i])
+        }
+        val r = d.decode(synthetic, mode, layout, null)
+        val cap = word.first().isUpperCase()
+        val alts = (r.words + r.corrections + r.completions).sortedByDescending { it.score }
+            .map { c -> if (cap) c.display.replaceFirstChar { it.uppercaseChar() } else c.display }
+        return (listOf(word) + alts).distinct()
+    }
+
     private fun atSentenceStart(ic: InputConnection? = editor()): Boolean {
         val before = ic?.getTextBeforeCursor(3, 0)?.toString() ?: return false
         val trimmed = before.trimEnd(' ')
@@ -1352,6 +1402,12 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
         private const val SENTENCE_END = ".!?"
         /** Characters that join two parts into one word ("zazzy's", "self-aware"). */
         private const val JOINERS = "'’-"
+        /** Number spellings offered next to a word ("someone" → "some1"). */
+        private val TEXT_SPEAK = mapOf(
+            "someone" to "some1", "anyone" to "any1", "everyone" to "every1", "noone" to "no1",
+            "today" to "2day", "tonight" to "2nite", "tomorrow" to "2moro", "before" to "b4",
+            "forever" to "4ever", "great" to "gr8", "later" to "l8r", "wait" to "w8", "mate" to "m8",
+        )
         /** Typed from a longer hold on a, o, u or s; they join the word around them (see onText). */
         private const val GERMAN_LETTERS = "äöüÄÖÜß"
         /** Shown after a double-space period, "." highlighted; the bar scrolls to the rest. */

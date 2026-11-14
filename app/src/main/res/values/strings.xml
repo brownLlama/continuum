@@ -129,7 +129,7 @@
     <string name="guide_bar_title">Suggestion bar</string>
     <string name="guide_bar">Tap a word to use it. Drag the bar sideways for more. Hold a word to remove it from suggestions for good. When a word has an emoji, it appears right after the word; tapping it replaces the word.</string>
     <string name="guide_fix_title">Fix the last word</string>
-    <string name="guide_fix">Backspace right after a word reopens it, so you can pick a different suggestion. After you delete a whole word, the bar offers it again with its alternatives.</string>
+    <string name="guide_fix">Backspace right after a word reopens it, so you can pick a different suggestion. After you delete a whole word, or swipe left over any finished word, the bar offers it again with the words it could have been. Right after a number it offers the ending (16th, 1st, 2nd, 3rd), and words like someone or today also come as some1 or 2day.</string>
     <string name="guide_autocorrect_title">Autocorrect</string>
     <string name="guide_autocorrect">Mini mode always picks the most likely word. In the full keyboard, autocorrect (the switch at the left of the bar, or Typing → Autocorrect) fixes typos like \"teh\"; with it off, letters are typed exactly as tapped.</string>
     <string name="guide_cat_2">Gestures</string>
@@ -148,13 +148,11 @@
     <string name="guide_numbers">123 opens two pages of numbers and symbols. In mini mode, swipe down for the number row; hold on it to zoom in, like the letters.</string>
     <string name="guide_fields_title">Passwords and numbers</string>
     <string name="guide_fields">Password and number fields always open the full keyboard, type exactly what you tap, and never learn from what you type.</string>
-    <string name="guide_cat_4">Emoji, stickers, clipboard and GIFs</string>
+    <string name="guide_cat_4">Emoji, clipboard and GIFs</string>
     <string name="guide_emoji_title">Emoji</string>
     <string name="guide_emoji">In mini mode, hold the row, slide up and onto ☺. In the full keyboard, hold the comma. Tabs at the top jump between groups; your most used emoji come first.</string>
     <string name="guide_clipboard_title">Clipboard</string>
     <string name="guide_clipboard">In mini mode, hold the row, slide up and onto the clipboard at the far left. Tap a clip to paste it, hold to delete it, or tap the bin to clear all. Continuum keeps up to 30 clips for 7 days and skips anything copied from password or private fields.</string>
-    <string name="guide_sticker_title">Stickers</string>
-    <string name="guide_sticker">In the emoji panel, tap the sticker tab. Tap a sticker to send it: Schibu the llama, or your own. Tap + to make a sticker from one of your photos; hold one of yours to delete it. Apps that don\'t take stickers in the chat open the share sheet instead.</string>
     <string name="guide_gif_title">GIFs</string>
     <string name="guide_gif">In the emoji panel, tap GIF. Tap the search field to type, enter to search, then tap a GIF to send it. Apps that don\'t take GIFs get the link instead. Needs a free KLIPY key (Settings → GIFs), where you can also hide the GIF tab.</string>
     <string name="guide_cat_5">Learning and privacy</string>
