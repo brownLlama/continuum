@@ -774,13 +774,16 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
      */
     private fun layoutEmoji(w: Float, top: Float) {
         emojiSections = listOf(EmojiGroup(Emoji.FREQUENT, frequentShown)) + emojiGroups
-        val extra = if (showGifs) 3 else 2 // sticker, GIF and ⌫ tabs, or sticker and ⌫ (the clipboard is on mini mode's strip)
+        // GIF and ⌫ tabs (or just ⌫), plus the sticker tab while stickers are offered (the clipboard is on mini mode's strip).
+        val extra = (if (showGifs) 2 else 1) + (if (STICKERS) 1 else 0)
         val tabW = w / (emojiSections.size + extra)
         emojiSections.indices.forEach { i ->
             barKeys += Key(Kind.EMOJI_TAB, RectF(i * tabW, 0f, (i + 1) * tabW, top), value = i)
         }
-        val stickerRight = w - (extra - 1) * tabW
-        barKeys += Key(Kind.STICKER_TAB, RectF(stickerRight - tabW, 0f, stickerRight, top))
+        if (STICKERS) {
+            val stickerRight = w - (extra - 1) * tabW
+            barKeys += Key(Kind.STICKER_TAB, RectF(stickerRight - tabW, 0f, stickerRight, top))
+        }
         if (showGifs) {
             barKeys += Key(Kind.GIF_TAB, RectF(w - 2 * tabW, 0f, w - tabW, top))
         }
@@ -2416,6 +2419,8 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
         private const val GIF_TYPING_FRAME_MS = 80L
         private const val CLIP_COLUMNS = 2
         private const val STICKER_COLUMNS = 4
+        /** Whether the emoji panel offers the sticker tab. Off for now, until the built-in stickers are redrawn. */
+        private const val STICKERS = false
         /** Lines of text shown on a clip card before it's cut off. */
         private const val CLIP_LINES = 3
         private const val CLIP_PREVIEW_CHARS = 300

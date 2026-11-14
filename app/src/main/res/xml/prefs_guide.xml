@@ -77,10 +77,6 @@
             app:title="@string/guide_emoji_title" />
         <Preference
             app:selectable="false"
-            app:summary="@string/guide_sticker"
-            app:title="@string/guide_sticker_title" />
-        <Preference
-            app:selectable="false"
             app:summary="@string/guide_clipboard"
             app:title="@string/guide_clipboard_title" />
         <Preference
