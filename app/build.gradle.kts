@@ -57,6 +57,9 @@ dependencies {
     implementation("androidx.appcompat:appcompat:1.8.0")
     implementation("androidx.preference:preference-ktx:1.2.1")
     implementation("com.google.android.material:material:1.14.0")
+    // ExploreByTouchHelper, which describes the custom-drawn keyboard to screen readers. (The
+    // libraries above already bring this version in; it is named because the app uses it itself.)
+    implementation("androidx.customview:customview:1.2.0")
     // Installs the startup profile (src/main/baseline-prof.txt) on sideloaded installs too.
     implementation("androidx.profileinstaller:profileinstaller:1.4.1")
     testImplementation("junit:junit:4.13.2")

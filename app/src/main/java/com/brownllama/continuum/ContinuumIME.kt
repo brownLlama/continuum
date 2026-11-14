@@ -22,6 +22,7 @@ import android.view.KeyEvent
 import android.view.View
 import android.view.WindowInsets
 import android.view.WindowInsetsController
+import android.view.accessibility.AccessibilityManager
 import android.view.inputmethod.BaseInputConnection
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputConnection
@@ -71,7 +72,8 @@ import kotlin.math.roundToInt
  *   [UserModel] ([learn]). Backspace right after that reopens the word ([LastCommit]).
  * - With nothing being typed, the bar shows next-word predictions ([showPredictions]).
  * - Password and number fields are typed letter by letter in full mode ([predict] off). Email and
- *   URL fields predict as usual but don't auto-capitalise.
+ *   URL fields predict as usual but don't auto-capitalise. With a screen reader exploring by
+ *   touch, every field opens in full mode.
  * - Fields that ask not to be learned from (incognito tabs, IME_FLAG_NO_PERSONALIZED_LEARNING)
  *   still get suggestions, but nothing typed there is learned or unlearned ([learning] off).
  *   The same goes for fields that ask for no suggestions (TYPE_TEXT_FLAG_NO_SUGGESTIONS: user
@@ -421,7 +423,9 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
             (info.inputType and InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS) != 0
         learning = predict && !exactField && (info.imeOptions and EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING) == 0
         // Exact typing (passwords, numbers) needs real keys, so those fields always use full mode.
-        mode = if (predict) prefMode else Mode.FULL
+        // So does a screen reader's touch exploration: mini mode works by rough taps and swipes,
+        // which it can't offer, while every key of the full keyboard can be found and activated.
+        mode = if (predict && !touchExploring()) prefMode else Mode.FULL
         pendingGlue = null
         wordGlue = null
         deletedSlots = null
@@ -446,6 +450,10 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
         finishComposing(keepShown = true)
         user.save()
     }
+
+    /** Whether a screen reader (TalkBack) is exploring the screen by touch. */
+    private fun touchExploring(): Boolean =
+        getSystemService(AccessibilityManager::class.java)?.isTouchExplorationEnabled == true
 
     /** The field lost focus (or its app went away). */
     override fun onFinishInput() {

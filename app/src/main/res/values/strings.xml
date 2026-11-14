@@ -201,6 +201,32 @@
     <string name="autocorrect_off">Autocorrect off: words are typed and learned as written</string>
     <string name="mode_locked">This field needs the full keyboard</string>
 
+    <!-- What screen readers (TalkBack) call the keys that show an icon. -->
+    <string name="acc_shift">Shift</string>
+    <string name="acc_shift_on">Shift, on</string>
+    <string name="acc_caps_lock">Caps lock, on</string>
+    <string name="acc_delete">Delete</string>
+    <string name="acc_space">Space</string>
+    <string name="acc_enter">Enter</string>
+    <string name="acc_search">Search</string>
+    <string name="acc_send">Send</string>
+    <string name="acc_go">Go</string>
+    <string name="acc_next">Next</string>
+    <string name="acc_done">Done</string>
+    <string name="acc_symbols">Numbers and symbols</string>
+    <string name="acc_more_symbols">More symbols</string>
+    <string name="acc_letters">Letters</string>
+    <string name="acc_autocorrect_off">Autocorrect off</string>
+    <string name="acc_emoji">Emoji</string>
+    <string name="acc_emoji_group">Emoji: %1$s</string>
+    <string name="acc_close">Close</string>
+    <string name="acc_gifs">GIFs</string>
+    <string name="acc_gif">GIF %1$d</string>
+    <string name="acc_sticker">Sticker %1$d</string>
+    <string name="acc_close_search">Close search</string>
+    <string name="acc_clip_clear">Delete all copied text</string>
+    <string name="acc_sticker_add">Add a sticker</string>
+
     <!-- Chameleon takes each app's colour; the rest are KeyboardTheme.PRESETS. -->
     <!-- How long the clipboard history keeps a copy; the values are hours (Prefs.CLIPBOARD_KEEP). -->
     <string-array name="clipboard_keep_names">
