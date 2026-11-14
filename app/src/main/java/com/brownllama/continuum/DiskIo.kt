@@ -75,7 +75,7 @@ internal class Loading(io: Executor?, load: () -> Unit) {
             try {
                 latch.await()
                 break
-            } catch (_: InterruptedException) {
+            } catch (e: InterruptedException) {
                 interrupted = true
             }
         }
