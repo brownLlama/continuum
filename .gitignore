@@ -11,6 +11,9 @@ local.properties
 *.keystore
 keystore.properties
 
-# Development only, not needed to build the app (kept locally)
-app/src/test/
+# Development only, not needed to build the app (kept locally)...
+app/src/test/**
 tools/
+# ...except the tests in "fixes", which are part of the repository and run in CI.
+!app/src/test/**/
+!app/src/test/java/com/brownllama/continuum/fixes/**

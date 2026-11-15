@@ -1,5 +1,6 @@
 package com.brownllama.continuum
 
+import android.app.KeyguardManager
 import android.content.ClipData
 import android.content.ClipDescription
 import android.content.ClipboardManager
@@ -21,6 +22,7 @@ import android.view.KeyEvent
 import android.view.View
 import android.view.WindowInsets
 import android.view.WindowInsetsController
+import android.view.accessibility.AccessibilityManager
 import android.view.inputmethod.BaseInputConnection
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputConnection
@@ -48,6 +50,7 @@ import com.brownllama.continuum.prediction.Decoder
 import com.brownllama.continuum.prediction.Dictionary
 import com.brownllama.continuum.prediction.Mode
 import com.brownllama.continuum.prediction.Tap
+import com.brownllama.continuum.prediction.TextContext
 import com.brownllama.continuum.prediction.UserModel
 import com.brownllama.continuum.sticker.AddStickerActivity
 import com.brownllama.continuum.sticker.Sticker
@@ -69,10 +72,21 @@ import kotlin.math.roundToInt
  * - Space, punctuation or a suggestion commits the word ([commitWord]) and teaches it to the
  *   [UserModel] ([learn]). Backspace right after that reopens the word ([LastCommit]).
  * - With nothing being typed, the bar shows next-word predictions ([showPredictions]).
+ * - The word before the cursor ([prevWord]) is read from the field's text whenever a word starts
+ *   or the bar is filled ([refreshContext]), so it is right after the cursor moved or text was
+ *   deleted too.
+ * - Taps that read best as two words with the space missed ("thankyou") are offered, and where it
+ *   is clear typed, as those two words; they are learned one after the other ([learn]).
  * - Password and number fields are typed letter by letter in full mode ([predict] off). Email and
- *   URL fields predict as usual but don't auto-capitalise.
+ *   URL fields predict as usual but don't auto-capitalise. With a screen reader exploring by
+ *   touch, every field opens in full mode.
  * - Fields that ask not to be learned from (incognito tabs, IME_FLAG_NO_PERSONALIZED_LEARNING)
  *   still get suggestions, but nothing typed there is learned or unlearned ([learning] off).
+ *   The same goes for fields that ask for no suggestions (TYPE_TEXT_FLAG_NO_SUGGESTIONS: user
+ *   names, codes), where full mode also types exactly what was tapped ([exactField]).
+ * - Copied text is kept for the clipboard panel ([captureClip]), except what is copied while a
+ *   password, number or incognito field has focus ([privateField]), and never shown while the
+ *   phone is locked.
  * - A word typed right after "word'" or "word-" is learned together with it ("zazzy's", see [Glue]).
  * - "##" then a letter or digit with a text shortcut saved for it types that text ([expandShortcut]).
  * - GIFs come from KLIPY through [GifFeed] and are inserted as rich content ([sendGif]). While the
@@ -98,7 +112,7 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
     private lateinit var stickerStore: StickerStore
     /** The stickers the panel shows, in its order (see [loadStickers]). */
     private var stickers: List<Sticker> = emptyList()
-    private val clipListener = ClipboardManager.OnPrimaryClipChangedListener { captureClip() }
+    private val clipListener = ClipboardManager.OnPrimaryClipChangedListener { captureClip(fresh = true) }
     private var emojiGroups: List<EmojiGroup> = emptyList()
     /** Every emoji in [emojiGroups], i.e. the ones the font can draw. */
     private var drawableEmoji: Set<String> = emptySet()
@@ -114,8 +128,18 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
     private var mode = Mode.MINI
     /** Decode words and show suggestions. Off in passwords and numbers. */
     private var predict = true
-    /** Learn from what's typed. Off where the field asks for no personalised learning. */
+    /** Learn from what's typed. Off where the field asks for no personalised learning or no suggestions. */
     private var learning = true
+    /** The field asks for no suggestions (a user name, a code): full mode types what was tapped, uncorrected. */
+    private var exactField = false
+    /**
+     * The field that has focus is a password, number or incognito field. What is copied meanwhile
+     * stays out of the clipboard history for good (see [captureClip]). Set as soon as the field
+     * gets focus, keyboard showing or not, and cleared when it loses it.
+     */
+    private var privateField = false
+    /** Setting "Clipboard history": off keeps nothing and shows nothing. */
+    private var clipboardOn = Prefs.CLIPBOARD_DEFAULT
     /** Full mode's autocorrect switch; mini mode always uses the decoder's best word. */
     private var autocorrect = true
     private var autoCaps = true
@@ -137,10 +161,21 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
     /** The current word starts a sentence (so a capital first letter is not part of its spelling). */
     private var wordSentenceStart = false
     private var lastShiftTap = 0L
-    /** Key of the previous word, for next-word predictions; null at the start of a sentence. */
+    /**
+     * Key of the word before the cursor, for the decoder and next-word predictions; null at the
+     * start of a sentence. Read from the text ([refreshContext]) and, as words are committed,
+     * kept in step by [learn].
+     */
     private var prevWord: String? = null
     /** When we last set composing text; selection updates arriving sooner may be stale. */
     private var lastEditTime = 0L
+    /**
+     * Whether the field lets the keyboard read its text (see [refreshContext]): null until it has
+     * answered with some.
+     */
+    private var textReadable: Boolean? = null
+    /** The bar shows next-word predictions (not a word's alternatives, punctuation or a deleted word). */
+    private var predictionsShown = false
 
     /**
      * The last word committed by space/suggestion, so backspace can reopen it for correction. [text]
@@ -195,7 +230,9 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
     /** Edits [query]; set only while the search is open. */
     private var queryEditor: InputConnection? = null
     /** The app field's settings, put back when the search closes. */
-    private class FieldState(val predict: Boolean, val capsAllowed: Boolean, val learning: Boolean, val prevWord: String?)
+    private class FieldState(
+        val predict: Boolean, val capsAllowed: Boolean, val learning: Boolean, val prevWord: String?, val textReadable: Boolean?,
+    )
     private var fieldState: FieldState? = null
     /** Searches as you type, once typing pauses for [LIVE_SEARCH_MS]. */
     private val liveSearch = Runnable { if (queryEditor != null) gifs.search(query.toString(), live = true) }
@@ -206,9 +243,11 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
         super.onCreate()
         prefs = PreferenceManager.getDefaultSharedPreferences(this)
         prefs.registerOnSharedPreferenceChangeListener(this)
-        user = UserModel(File(filesDir, "user_model.tsv"))
-        emojiHistory = EmojiHistory(File(filesDir, "emoji_usage.tsv"))
-        clipboard = ClipboardHistory(File(filesDir, "clipboard.tsv"))
+        // The three files are read in the background; whoever needs one first waits for the rest of it.
+        user = UserModel(File(filesDir, "user_model.tsv"), background = true)
+        emojiHistory = EmojiHistory(File(filesDir, "emoji_usage.tsv"), DiskIo.executor)
+        clipboard = ClipboardHistory(File(filesDir, "clipboard.tsv"), io = DiskIo.executor)
+        applyClipboardPrefs()
         stickerStore = StickerStore(this)
         getSystemService(ClipboardManager::class.java)?.addPrimaryClipChangedListener(clipListener)
         appThemes = AppThemes(this)
@@ -271,6 +310,8 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
     internal val suggestionSlots: List<String> get() = slots
     internal val gifQuery: String get() = query.toString()
     internal fun learnedCount(word: String): Int = Dictionary.keyOf(word)?.let { user.count(it) } ?: 0
+    /** For tests: the clipboard history as kept, whether or not the panel may show it. */
+    internal val clipTexts: List<String> get() = clipboard.texts()
 
     /** The editor connection; a seam so tests can drive the service against a real text field. */
     internal open fun inputConnection(): InputConnection? = currentInputConnection
@@ -312,6 +353,7 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
         autocorrect = prefs.getBoolean(Prefs.AUTOCORRECT, Prefs.AUTOCORRECT_DEFAULT)
         autoCaps = prefs.getBoolean(Prefs.AUTOCAPS, Prefs.AUTOCAPS_DEFAULT)
         layout = KeyLayout.named(prefs.getString(Prefs.LAYOUT, Prefs.LAYOUT_DEFAULT))
+        applyClipboardPrefs()
         val v = view ?: return
         v.layout = layout
         v.showGifs = prefs.getBoolean(Prefs.SHOW_GIFS, Prefs.SHOW_GIFS_DEFAULT)
@@ -338,12 +380,45 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
         }
     }
 
+    /** The clipboard settings: with the history off, what was kept goes too. */
+    private fun applyClipboardPrefs() {
+        clipboardOn = prefs.getBoolean(Prefs.CLIPBOARD, Prefs.CLIPBOARD_DEFAULT)
+        clipboard.keepMs = (prefs.getString(Prefs.CLIPBOARD_KEEP, null)?.toLongOrNull() ?: Prefs.CLIPBOARD_KEEP_DEFAULT)
+            .coerceIn(1L, Prefs.CLIPBOARD_KEEP_DEFAULT) * HOUR_MS
+        if (!clipboardOn) clipboard.clear()
+    }
+
     // ---- editor lifecycle -----------------------------------------------------------------
+
+    /** A password field (text or numeric). */
+    private fun isPassword(info: EditorInfo): Boolean {
+        val cls = info.inputType and InputType.TYPE_MASK_CLASS
+        val variation = info.inputType and InputType.TYPE_MASK_VARIATION
+        return cls == InputType.TYPE_CLASS_TEXT && variation in PASSWORD_VARIATIONS ||
+            cls == InputType.TYPE_CLASS_NUMBER && variation == InputType.TYPE_NUMBER_VARIATION_PASSWORD
+    }
+
+    /** A number, phone number or date field. */
+    private fun isNumeric(info: EditorInfo): Boolean {
+        val cls = info.inputType and InputType.TYPE_MASK_CLASS
+        return cls == InputType.TYPE_CLASS_NUMBER || cls == InputType.TYPE_CLASS_PHONE || cls == InputType.TYPE_CLASS_DATETIME
+    }
+
+    /** A field whose content is private: a password, a number (codes, card numbers) or an incognito field. */
+    private fun isPrivate(info: EditorInfo): Boolean =
+        isPassword(info) || isNumeric(info) || (info.imeOptions and EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING) != 0
+
+    /** A field got focus (the keyboard may not be showing yet): note whether it is private. */
+    override fun onStartInput(attribute: EditorInfo?, restarting: Boolean) {
+        super.onStartInput(attribute, restarting)
+        privateField = attribute != null && isPrivate(attribute)
+    }
 
     /** The keyboard is shown for a (new) text field: reset the word and adapt to the field's type. */
     override fun onStartInputView(info: EditorInfo, restarting: Boolean) {
         super.onStartInputView(info, restarting)
         view?.closeGifSearch()
+        privateField = isPrivate(info)
         captureClip() // something may have been copied while the keyboard wasn't running
         currentPackage = info.packageName
         applyPrefs()
@@ -353,21 +428,24 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
         lastExpansion = null
         autoSpace = false
         prevWord = null
+        textReadable = null
 
         val cls = info.inputType and InputType.TYPE_MASK_CLASS
         val variation = info.inputType and InputType.TYPE_MASK_VARIATION
-        val password = cls == InputType.TYPE_CLASS_TEXT && variation in PASSWORD_VARIATIONS ||
-            cls == InputType.TYPE_CLASS_NUMBER && variation == InputType.TYPE_NUMBER_VARIATION_PASSWORD
+        val password = isPassword(info)
         val address = cls == InputType.TYPE_CLASS_TEXT && variation in ADDRESS_VARIATIONS
         emailField = cls == InputType.TYPE_CLASS_TEXT && variation in EMAIL_VARIATIONS
-        val numeric = cls == InputType.TYPE_CLASS_NUMBER || cls == InputType.TYPE_CLASS_PHONE ||
-            cls == InputType.TYPE_CLASS_DATETIME
+        val numeric = isNumeric(info)
 
         predict = !(password || numeric)
         capsAllowed = predict && !address
-        learning = predict && (info.imeOptions and EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING) == 0
+        exactField = predict && cls == InputType.TYPE_CLASS_TEXT &&
+            (info.inputType and InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS) != 0
+        learning = predict && !exactField && (info.imeOptions and EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING) == 0
         // Exact typing (passwords, numbers) needs real keys, so those fields always use full mode.
-        mode = if (predict) prefMode else Mode.FULL
+        // So does a screen reader's touch exploration: mini mode works by rough taps and swipes,
+        // which it can't offer, while every key of the full keyboard can be found and activated.
+        mode = if (predict && !touchExploring()) prefMode else Mode.FULL
         pendingGlue = null
         wordGlue = null
         deletedSlots = null
@@ -393,10 +471,16 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
         user.save()
     }
 
+    /** Whether a screen reader (TalkBack) is exploring the screen by touch. */
+    private fun touchExploring(): Boolean =
+        getSystemService(AccessibilityManager::class.java)?.isTouchExplorationEnabled == true
+
+    /** The field lost focus (or its app went away). */
     override fun onFinishInput() {
         super.onFinishInput()
         taps.clear()
         result = null
+        privateField = false
     }
 
     /** The cursor moved. If the user tapped elsewhere in the text, drop the word being typed. */
@@ -406,7 +490,15 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
     ) {
         super.onUpdateSelection(oldSelStart, oldSelEnd, newSelStart, newSelEnd, candidatesStart, candidatesEnd)
         // While searching GIFs the word being typed is in the query, not the app's field.
-        if (taps.isEmpty() || queryEditor != null) return
+        if (queryEditor != null) return
+        if (taps.isEmpty()) {
+            // The cursor may have been put somewhere else: once it rests, the bar's predictions follow it.
+            if (predictionsShown && (newSelStart != oldSelStart || newSelEnd != oldSelEnd)) {
+                main.removeCallbacks(followCursor)
+                main.postDelayed(followCursor, FOLLOW_CURSOR_MS)
+            }
+            return
+        }
         // Updates for our own edits can arrive late; only trust "composing vanished" once things settle.
         val composingGone = candidatesStart == -1 && SystemClock.uptimeMillis() - lastEditTime > STALE_UPDATE_MS
         val cursorOutside = candidatesStart != -1 && (newSelStart != candidatesEnd || newSelEnd != candidatesEnd)
@@ -446,6 +538,7 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
                 editor()?.getTextBeforeCursor(it.prefix.length, 0)?.toString() == it.prefix
             }
             pendingGlue = null
+            refreshContext()
         }
         taps += t
         if (shift == Shift.ON) setShift(Shift.OFF)
@@ -467,7 +560,7 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
             if (taps.isNotEmpty()) commitWord(spaced = false, choice = null, keepShown = true)
             val last = lastCommit?.takeIf { !it.spaced }
             pendingGlue = when {
-                last != null -> Glue(last.learned + text, last.prevBefore, wordSentenceStart)
+                last != null -> glueAfter(last, text)
                 before != null -> Glue(before.prefix + text, before.prevBefore, before.sentenceStart)
                 else -> Glue(text, prevWord, atSentenceStart())
             }
@@ -482,7 +575,7 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
         if (taps.isNotEmpty()) commitWord(spaced = false, choice = null)
         // "zazzy" + "'": the next word joins this one (see Glue).
         val joined = lastCommit?.takeIf { !it.spaced && text.length == 1 && text[0] in JOINERS }
-        pendingGlue = joined?.let { Glue(it.learned + text, it.prevBefore, wordSentenceStart) }
+        pendingGlue = joined?.let { glueAfter(it, text) }
         if (queryEditor == null && text.length == 1 && text[0] in '0'..'9') {
             // Digits go as key presses, like other keyboards do: one-time-code boxes often move to
             // the next box on the key event and ignore text committed without one.
@@ -539,7 +632,7 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
         val last = lastCommit ?: return false
         val expected = last.text + if (last.spaced) " " else ""
         if (ic.getTextBeforeCursor(expected.length, 0)?.toString() != expected) return false
-        if (learning) Dictionary.keyOf(last.learned)?.let { user.unlearn(last.prevBefore, it) }
+        if (learning) unlearn(last.prevBefore, last.learned)
         prevWord = last.prevBefore
         ic.beginBatchEdit()
         ic.deleteSurroundingText(expected.length, 0)
@@ -667,6 +760,7 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
      */
     private fun showPunctuationBar(replacePeriod: Boolean) {
         punctuationBar = true
+        predictionsShown = false
         this.replacePeriod = replacePeriod
         slots = PUNCTUATION_BAR
         view?.setSuggestions(slots, if (replacePeriod) PUNCTUATION_BAR.indexOf(".") else -1)
@@ -794,24 +888,50 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
 
     /**
      * Saves the system clipboard's text to the history. Skipped when the copying app marked it
-     * sensitive (passwords, one-time codes; Android 13+ password managers do) and while the field
-     * being typed in is a password, number or incognito field ([learning] off). Only plain text is
-     * kept: a clip that is a link to another app's content is never opened.
+     * sensitive (passwords, one-time codes; Android 13+ password managers do) and while a
+     * password, number or incognito field has focus ([privateField]). Only plain text is kept: a
+     * clip that is a link to another app's content is never opened.
+     *
+     * A clip stays on the system clipboard long after it was copied, and this is called again
+     * later (a new field, the panel opening). So a clip copied in a private field ([fresh]: the
+     * clipboard just changed) is set aside for good ([ClipboardHistory.skip]), not just for now.
      */
-    private fun captureClip() {
-        if (!learning) return
+    private fun captureClip(fresh: Boolean = false) {
+        if (!clipboardOn) return
         val clip = runCatching { getSystemService(ClipboardManager::class.java)?.primaryClip }.getOrNull() ?: return
         if (clip.description?.extras?.getBoolean(EXTRA_IS_SENSITIVE) == true) return
         val text = clip.takeIf { it.itemCount > 0 }?.getItemAt(0)?.text?.toString() ?: return
+        val time = clip.description?.timestamp ?: 0L
+        val hash = text.hashCode()
+        if (privateField) {
+            if (fresh) clipboard.skip(time, hash)
+            return
+        }
+        // Copied anew outside a private field, the same text is wanted; seen again, it is still the private clip.
+        if (!fresh && clipboard.isSkipped(time, hash)) return
         clipboard.add(text)
+    }
+
+    /** Why the clipboard panel has nothing to show (a string resource), or 0 if it may show the history. */
+    private fun clipboardBlocked(): Int = when {
+        !clipboardOn -> R.string.clip_off
+        // Copied text is as private as what's on the phone: none of it while the phone is locked.
+        runCatching { getSystemService(KeyguardManager::class.java)?.isDeviceLocked }.getOrNull() == true -> R.string.clip_locked
+        else -> 0
+    }
+
+    private fun showClips() {
+        val blocked = clipboardBlocked()
+        if (blocked != 0) view?.setClips(emptyList(), getString(blocked)) else view?.setClips(clipboard.texts())
     }
 
     override fun onClipboardOpen() {
         captureClip()
-        view?.setClips(clipboard.texts())
+        showClips()
     }
 
     override fun onClipPicked(index: Int) {
+        if (clipboardBlocked() != 0) return showClips()
         val text = clipboard.texts().getOrNull(index) ?: return
         val ic = editor() ?: return
         if (taps.isNotEmpty()) commitWord(spaced = false, choice = null)
@@ -823,13 +943,13 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
     }
 
     override fun onClipRemove(index: Int) {
-        clipboard.remove(index)
-        view?.setClips(clipboard.texts())
+        if (clipboardBlocked() == 0) clipboard.remove(index)
+        showClips()
     }
 
     override fun onClipClear() {
-        clipboard.clear()
-        view?.setClips(clipboard.texts())
+        if (clipboardBlocked() == 0) clipboard.clear()
+        showClips()
     }
 
     // ---- stickers ---------------------------------------------------------------------------
@@ -936,10 +1056,13 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
         if (queryEditor != null) return
         finishComposing()
         lastCommit = null
-        fieldState = FieldState(predict, capsAllowed, learning, prevWord)
+        fieldState = FieldState(predict, capsAllowed, learning, prevWord, textReadable)
         predict = true
         capsAllowed = false
         learning = false
+        // The query is a text of its own: its words follow each other, not the app's last word.
+        prevWord = null
+        textReadable = null
         resetWordState()
         if (query.getSpans(0, query.length, TextWatcher::class.java).isEmpty()) {
             query.setSpan(queryWatcher, 0, query.length, Spanned.SPAN_INCLUSIVE_INCLUSIVE)
@@ -965,6 +1088,7 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
             capsAllowed = it.capsAllowed
             learning = it.learning
             prevWord = it.prevWord
+            textReadable = it.textReadable
         }
         fieldState = null
         view?.emailField = emailField
@@ -1040,8 +1164,10 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
         val ic = editor() ?: return
         if (taps.isEmpty()) return
         val d = decoder
-        val r = d?.decode(taps, tapMode, layout, prevWord)
+        // The end of a joined word ("zazzy'" + "s") or of a number ("16" + "th") is not two words.
+        val r = d?.decode(taps, tapMode, layout, prevWord, splits = wordGlue == null && afterNumber == null)
         result = r
+        predictionsShown = false
         val literal = r?.literal ?: buildString { for (t in taps) append('a' + nearestLetter(t)) }
         val literalText = applyCase(literal, keepDisplay = false)
         val words = r?.words.orEmpty().map { applyCase(it.display) }
@@ -1116,13 +1242,17 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
 
     /** Full mode: the word space will commit. Keeps real words unless the alternative is far more likely. */
     private fun autocorrectPick(r: DecodeResult?, literalText: String, words: List<String>): String {
-        // The end of a joined word ("zazzy'" + "s") is typed as is.
+        // The end of a joined word ("zazzy'" + "s") is typed as is, and so is a field that asks for no
+        // suggestions (but not the GIF search opened from one).
+        if (exactField && queryEditor == null) return literalText
         if (!autocorrect || r == null || wordGlue != null || afterNumber != null || taps.any { it.exact >= 0 }) return literalText
         val best = r.words.firstOrNull() ?: return literalText
         if (best.key == r.literal) {
-            // The same letters with an apostrophe or hyphen ("dont" → "don't", "zazzys" → "zazzy's"),
-            // unless what was typed is a word as it stands ("its").
-            val typedIsWord = r.words.any { it.key == r.literal && it.display.equals(r.literal, ignoreCase = true) }
+            // The same letters with an apostrophe, hyphen or space ("dont" → "don't", "zazzys" →
+            // "zazzy's", "thankyou" → "thank you"), unless what was typed is a word as it stands
+            // ("its"; not a known misspelling like "ofthe", which the word list also holds).
+            val typedIsWord = r.literalIsWord &&
+                r.words.any { it.key == r.literal && it.display.equals(r.literal, ignoreCase = true) }
             return if (!typedIsWord && best.display.any { !it.isLetter() }) words.first() else literalText
         }
         if (r.literalIsWord && best.score - r.literalScore < KEEP_REAL_WORD_MARGIN) return literalText
@@ -1173,6 +1303,11 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
      * nor do all caps for emphasis ("NEVER"), unless the word is spelled that way ("NASA") or new.
      */
     private fun learn(word: String, sentenceStart: Boolean, picked: Boolean = false) {
+        // Two words typed as one ("thank you" for "thankyou") are learned one after the other.
+        if (' ' in word) {
+            word.split(' ').filter { it.isNotEmpty() }.forEachIndexed { i, w -> learn(w, sentenceStart && i == 0) }
+            return
+        }
         // An emoji (or anything without letters) is not learned, and the word before it no longer counts.
         // Nor is a German word or one with digits ("some1"): its key would drop those and match other words.
         val key = Dictionary.keyOf(word)?.takeIf { word.none { it in GERMAN_LETTERS || it.isDigit() } } ?: run { prevWord = null; return }
@@ -1197,6 +1332,43 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
         prevWord = key
     }
 
+    /** Takes back what [learn] taught for [text] typed after [prev] (each word of it, if it is two). */
+    private fun unlearn(prev: String?, text: String) {
+        var before = prev
+        for (word in text.split(' ')) {
+            val key = Dictionary.keyOf(word) ?: continue
+            user.unlearn(before, key)
+            before = key
+        }
+    }
+
+    /**
+     * The glue for a joiner or German letter typed right after the commit [last]: the next word
+     * joins its (last) word, and replaces what was learned for that.
+     */
+    private fun glueAfter(last: LastCommit, text: String): Glue {
+        val words = last.learned.split(' ')
+        if (words.size < 2) return Glue(last.learned + text, last.prevBefore, wordSentenceStart)
+        return Glue(words.last() + text, Dictionary.keyOf(words[words.size - 2]), false)
+    }
+
+    /**
+     * Sets [prevWord] from the text before the cursor ([TextContext]). Fields that don't let the
+     * keyboard read their text (some terminals and games answer with nothing) keep the word that
+     * was typed last instead: an empty answer only counts once the field has shown it can answer.
+     */
+    private fun refreshContext() {
+        if (textReadable == false) return
+        val before = editor()?.getTextBeforeCursor(TextContext.WINDOW, 0) ?: return
+        if (before.isNotEmpty()) textReadable = true else if (textReadable == null) return
+        prevWord = TextContext.previousWord(before)
+    }
+
+    /** The cursor was moved while nothing was being typed: fill the bar for where it is now. */
+    private val followCursor = Runnable {
+        if (taps.isEmpty() && queryEditor == null && predictionsShown) showPredictions()
+    }
+
     /** Snapshots the word and its alternatives before the first deletion of a run (see [deletedSlots]). */
     private fun rememberDeletedWord() {
         if (deletedSlots != null || composingText.isEmpty()) return
@@ -1209,6 +1381,7 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
         deletedSlots = null
         if (list == null || !predict) return showPredictions()
         punctuationBar = false
+        predictionsShown = false
         slots = pad(list.take(MAX_SUGGESTIONS))
         view?.setSuggestions(slots, -1)
     }
@@ -1217,6 +1390,8 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
     private fun showPredictions() {
         punctuationBar = false
         if (taps.isNotEmpty()) return
+        predictionsShown = false
+        if (predict) refreshContext()
         val v = view ?: return
         val d = decoder
         if (!predict || d == null) {
@@ -1224,6 +1399,7 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
             v.setSuggestions(slots, -1)
             return
         }
+        predictionsShown = true
         val words = d.predict(prevWord, sentenceStart = shift != Shift.OFF, limit = MAX_SUGGESTIONS).map {
             when (shift) {
                 Shift.OFF -> it
@@ -1281,9 +1457,12 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
         if (view?.panel == KeyboardView.Panel.STICKERS) loadStickers()
     }
 
+    /** The keyboard went away: stop the animals, and give back the memory of the GIFs it was showing. */
     override fun onWindowHidden() {
         super.onWindowHidden()
         view?.keyboardHidden()
+        view?.releaseGifs(force = true)
+        gifs.release()
     }
 
     /**
@@ -1395,6 +1574,9 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
         /** Full-mode autocorrect keeps a real typed word unless a correction scores this much better (log). */
         private const val KEEP_REAL_WORD_MARGIN = 5f
         private const val STALE_UPDATE_MS = 300L
+        /** How long the cursor must rest before the bar's predictions are redone for its new place. */
+        private const val FOLLOW_CURSOR_MS = 150L
+        private const val HOUR_MS = 60L * 60 * 1000
         /** GIF search: how long typing must pause before the results update. */
         private const val LIVE_SEARCH_MS = 600L
         /** Punctuation that sticks to the previous word, taking the space before it. */

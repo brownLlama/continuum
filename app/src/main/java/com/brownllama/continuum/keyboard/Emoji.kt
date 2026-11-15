@@ -2,7 +2,10 @@ package com.brownllama.continuum.keyboard
 
 import android.content.Context
 import android.graphics.Paint
+import com.brownllama.continuum.DiskIo
+import com.brownllama.continuum.Loading
 import java.io.File
+import java.util.concurrent.Executor
 
 /** One tab of the emoji panel. [id] picks the tab icon (see KeyIcons.emojiTab). */
 class EmojiGroup(val id: String, val emoji: List<String>)
@@ -42,11 +45,15 @@ object Emoji {
     }
 }
 
-/** How often each emoji was picked from the panel, for the "frequently used" tab. */
-class EmojiHistory(private val file: File) {
+/**
+ * How often each emoji was picked from the panel, for the "frequently used" tab. With an [io]
+ * executor the file is read and written in the background (the keyboard passes one); without it,
+ * at once.
+ */
+class EmojiHistory(private val file: File, private val io: Executor? = null) {
     private val counts = LinkedHashMap<String, Int>()
 
-    init {
+    private val loading = Loading(io) {
         if (file.exists()) runCatching {
             file.forEachLine { line ->
                 val p = line.split('\t')
@@ -56,14 +63,16 @@ class EmojiHistory(private val file: File) {
     }
 
     fun use(emoji: String) {
+        loading.await()
         // Re-inserting moves it to the end, so among equal counts the most recent wins.
         val c = (counts.remove(emoji) ?: 0) + 1
         counts[emoji] = c
-        runCatching { file.writeText(counts.entries.joinToString("") { "${it.key}\t${it.value}\n" }) }
+        DiskIo.write(file, counts.entries.joinToString("") { "${it.key}\t${it.value}\n" }, io)
     }
 
     /** The user's most used emoji first, topped up with [Emoji.DEFAULT_FREQUENT] to [n]. */
     fun top(n: Int): List<String> {
+        loading.await()
         val mine = counts.entries.toList().asReversed().sortedByDescending { it.value }.map { it.key }
         return (mine + Emoji.DEFAULT_FREQUENT).distinct().take(n)
     }

@@ -38,7 +38,11 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // R8 drops what the app doesn't use of its libraries (most of the APK's code) and
+            // unused resources. The app's own classes are left as written: see proguard-rules.pro.
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             if (signing("STORE_FILE") != null) signingConfig = signingConfigs.getByName("release")
         }
     }
@@ -49,7 +53,12 @@ android {
     }
 
     testOptions {
-        unitTests.isIncludeAndroidResources = true
+        unitTests {
+            isIncludeAndroidResources = true
+            // Robolectric's Android 16 reaches into a JDK-internal package, which Java 17 and later
+            // keep closed unless it is exported to the tests.
+            all { it.jvmArgs("--add-exports=java.base/jdk.internal.access=ALL-UNNAMED") }
+        }
     }
 }
 
@@ -57,6 +66,9 @@ dependencies {
     implementation("androidx.appcompat:appcompat:1.8.0")
     implementation("androidx.preference:preference-ktx:1.2.1")
     implementation("com.google.android.material:material:1.14.0")
+    // ExploreByTouchHelper, which describes the custom-drawn keyboard to screen readers. (The
+    // libraries above already bring this version in; it is named because the app uses it itself.)
+    implementation("androidx.customview:customview:1.2.0")
     // Installs the startup profile (src/main/baseline-prof.txt) on sideloaded installs too.
     implementation("androidx.profileinstaller:profileinstaller:1.4.1")
     testImplementation("junit:junit:4.13.2")

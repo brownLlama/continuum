@@ -70,6 +70,7 @@ authorization of the copyright holder.
 |---|---|
 | [AndroidX AppCompat](https://developer.android.com/jetpack/androidx/releases/appcompat) | [Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0) |
 | [AndroidX Preference](https://developer.android.com/jetpack/androidx/releases/preference) | [Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0) |
+| [AndroidX CustomView](https://developer.android.com/jetpack/androidx/releases/customview) | [Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0) |
 | [Material Components for Android](https://github.com/material-components/material-components-android) | [Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0) |
 | [Kotlin standard library](https://kotlinlang.org/) | [Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0) |
 

@@ -105,10 +105,11 @@ Swipe up to get a normal keyboard drawn the same way: flat keys, one font, line 
 
 - A **probabilistic decoder**: each tap is scored against every possible word, weighted by word frequency and your own history. It answers in a few milliseconds per tap, even with 10,000 learned words.
 - **Typo correction** handles missed, extra, doubled and swapped letters (*recieve* → *receive*, *helllo* → *hello*), but only takes over when it's clearly better than what you typed.
+- **Missed spaces:** two words typed as one (*thankyou*, *ofthe*) are offered as two, and typed as two where that is clearly meant. Real words that happen to be two words in a row (*today*, *income*) are left alone, and pairs you type often split more readily.
 - **It learns your words**, how you capitalise and spell them, and which words tend to follow which. A brand-new word appears next to the best guess after you type it once, and becomes a normal suggestion after the second time.
 - **Fix a word:** backspace right after a word reopens it with its alternatives. Delete a word completely, or swipe away any finished word, and the bar offers it back with the words it could have been.
 - **Numbers:** right after a number the bar offers its ending (16**th**, 1**st**, 2**nd**, 3**rd**), and words like *someone* or *today* also come as *some1* or *2day*.
-- **Next-word predictions** after a space, learned from the word pairs you actually type.
+- **Next-word predictions** after a space, learned from the word pairs you actually type. They go by the word before the cursor, so they stay right after you move the cursor or come back to text you wrote earlier.
 - **Hold a suggestion** to remove it for good.
 
 ### 👆 Gestures
@@ -132,7 +133,7 @@ How sensitive swipes are (shortest swipe, flick speed, long swipe, straightness)
 </p>
 
 - **Emoji panel:** every Unicode emoji, your most-used first, with tabs to jump between groups. Open it from the zoom (☺) or by holding the comma.
-- **Clipboard:** your last 30 copies (kept for 7 days) as cards, opened from mini mode's symbol row. Tap to paste, hold to delete. Anything copied from a password or private field is skipped.
+- **Clipboard:** your last 30 copies (kept for 7 days, or 1 day or 1 hour if you prefer) as cards, opened from mini mode's symbol row. Tap to paste, hold to delete. Anything copied from a password or private field is skipped, nothing is shown while the phone is locked, and the history can be switched off (Settings → Typing).
 - **GIF search** with [KLIPY](https://partner.klipy.com): search, tap and the GIF is sent as a real animated GIF (apps that can't take GIFs get the link). It needs your own free KLIPY key, entered in the app. Don't want GIFs? Turn off **Show GIFs** and the GIF tab disappears from the emoji panel.
 
 ### 🎨 Themes

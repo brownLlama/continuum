@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Corrections, feedback and learned words. -->
+<!-- Corrections, feedback, the clipboard history and learned words. -->
 <PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
     <SwitchPreferenceCompat
@@ -38,6 +38,21 @@
             app:summary="@string/pref_vibrate_strength_summary"
             app:title="@string/pref_vibrate_strength"
             app:updatesContinuously="true" />
+    </PreferenceCategory>
+    <PreferenceCategory app:title="@string/cat_clipboard">
+        <SwitchPreferenceCompat
+            app:defaultValue="true"
+            app:key="clipboard_history"
+            app:summary="@string/pref_clipboard_summary"
+            app:title="@string/pref_clipboard" />
+        <ListPreference
+            app:defaultValue="168"
+            app:dependency="clipboard_history"
+            app:entries="@array/clipboard_keep_names"
+            app:entryValues="@array/clipboard_keep_values"
+            app:key="clipboard_keep_hours"
+            app:title="@string/pref_clipboard_keep"
+            app:useSimpleSummaryProvider="true" />
     </PreferenceCategory>
     <PreferenceCategory app:title="@string/cat_learned">
         <Preference

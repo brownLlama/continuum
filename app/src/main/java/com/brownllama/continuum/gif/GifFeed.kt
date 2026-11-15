@@ -43,12 +43,22 @@ class GifFeed(private val context: Context, private val prefs: SharedPreferences
     private var loading = false
     private val gifs = ArrayList<Gif>()
 
+    /** When the cache was last tidied (uptime of this process is enough: it only spaces the tidying out). */
+    private var prunedAt = 0L
+
     init {
-        // Keep the cache small: previews and sent GIFs are only needed for a while.
-        background {
-            val old = System.currentTimeMillis() - CACHE_MS
-            dir.listFiles()?.forEach { if (it.lastModified() < old) it.delete() }
-        }
+        pruneCache()
+    }
+
+    /**
+     * Keeps the cache small: previews and sent GIFs are only needed for a while. Files older than
+     * [CACHE_MS] go; if what is left is still over [MAX_CACHE_BYTES], the oldest of it goes too,
+     * except files touched in the last [RECENT_MS] (one may be on its way to an app right now).
+     * Runs when the keyboard starts and, at most every [PRUNE_EVERY_MS], when the GIFs are let go.
+     */
+    private fun pruneCache() {
+        prunedAt = System.currentTimeMillis()
+        background { prune(dir, System.currentTimeMillis()) }
     }
 
     /** The free key the user entered in settings, or null. */
@@ -131,7 +141,10 @@ class GifFeed(private val context: Context, private val prefs: SharedPreferences
         val client = client()
         background {
             val file = File(dir, "${safe(gif.slug)}.gif")
-            val ok = runCatching { if (!file.exists()) KlipyClient.download(gif.sendUrl, file) }.isSuccess
+            val ok = runCatching {
+                // A cached GIF counts as fresh again, so tidying the cache can't take it mid-send.
+                if (file.exists()) file.setLastModified(System.currentTimeMillis()) else KlipyClient.download(gif.sendUrl, file)
+            }.isSuccess
             client?.shared(gif.slug)
             main.post { done(if (ok) file else null) }
         }
@@ -174,6 +187,7 @@ class GifFeed(private val context: Context, private val prefs: SharedPreferences
         loading = false
         hasNext = false
         gifs.clear()
+        if (System.currentTimeMillis() - prunedAt > PRUNE_EVERY_MS) pruneCache()
     }
 
     /** Runs [task] on [io], unless the keyboard has shut down (then the task is dropped). */
@@ -191,6 +205,31 @@ class GifFeed(private val context: Context, private val prefs: SharedPreferences
         /** Characters not allowed in a cached file's name. */
         private val UNSAFE = Regex("[^A-Za-z0-9_-]")
         private const val CACHE_MS = 24 * 60 * 60 * 1000L
+        /** The cache's size limit; previews are small, so this is mostly the GIFs that were sent. */
+        private const val MAX_CACHE_BYTES = 64L * 1024 * 1024
+        private const val RECENT_MS = 10 * 60 * 1000L
+        private const val PRUNE_EVERY_MS = 60 * 60 * 1000L
+
+        /** Tidies the cache folder [dir] as of [now] (see [pruneCache]). */
+        internal fun prune(dir: File, now: Long, maxBytes: Long = MAX_CACHE_BYTES) {
+            val kept = ArrayList<File>()
+            var total = 0L
+            for (f in dir.listFiles().orEmpty()) {
+                if (f.lastModified() < now - CACHE_MS) {
+                    f.delete()
+                } else {
+                    kept += f
+                    total += f.length()
+                }
+            }
+            if (total <= maxBytes) return
+            kept.sortBy { it.lastModified() }
+            for (f in kept) {
+                if (total <= maxBytes || f.lastModified() > now - RECENT_MS) break
+                total -= f.length()
+                f.delete()
+            }
+        }
         private const val IDLE_S = 30L
         /** Infinite scroll stops after this many pages (150 GIFs), so the panel's memory stays bounded. */
         private const val MAX_PAGES = 5

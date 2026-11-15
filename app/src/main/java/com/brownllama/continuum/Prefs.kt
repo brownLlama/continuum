@@ -65,8 +65,16 @@ object Prefs {
     val RESETTABLE = listOf(
         THEME, LAYOUT, MINI_HEIGHT, FULL_HEIGHT, BAR_HEIGHT, BOTTOM_SPACE, HIDE_SYSTEM_BUTTONS,
         AUTOCORRECT, AUTOCAPS, ANIMALS, ANIMAL_KINDS, ANIMAL_FREQUENCY, HOLD_MS, VIBRATE, VIBRATE_STRENGTH, SWIPE_MIN, SWIPE_LONG, SWIPE_SPEED, SWIPE_STRAIGHTNESS, SHOW_GIFS,
+        CLIPBOARD, CLIPBOARD_KEEP,
         "haptics", "previews", "llama",
     )
+
+    /** Whether copied text is kept for the clipboard panel; switching it off also deletes what was kept. */
+    const val CLIPBOARD = "clipboard_history"
+    const val CLIPBOARD_DEFAULT = true
+    /** How long a copy is kept, in hours (a list setting, so stored as text); a week by default. */
+    const val CLIPBOARD_KEEP = "clipboard_keep_hours"
+    const val CLIPBOARD_KEEP_DEFAULT = 168L
 
     /** Written with a timestamp to ask the IME to forget learned words. */
     const val CLEAR_LEARNED = "clear_learned"

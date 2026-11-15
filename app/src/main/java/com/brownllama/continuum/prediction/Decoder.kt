@@ -42,7 +42,11 @@ class DecodeResult(
     val literalIsWord: Boolean,
     /** Score of [literal] on the same scale as the candidates, for autocorrect decisions. */
     val literalScore: Float,
-    /** Words the taps spell with a typo ([Candidate.edited]), best first, for the suggestion bar. */
+    /**
+     * Words the taps spell with a typo ([Candidate.edited]), best first, for the suggestion bar.
+     * Among them: two words typed without the space between ("thank you" for "thankyou"), whose
+     * display has the space and whose key is both keys joined.
+     */
     val corrections: List<Candidate> = emptyList(),
 )
 
@@ -57,8 +61,12 @@ class Decoder(private val dict: Dictionary, private val user: UserModel) {
      * Ranks words for [taps]. [prev] is the previous word's key (for bigrams and next-word bonuses).
      * Dictionary words are scored by brute force over the words of the right length, pruned as soon
      * as a word can't beat the current top [limit]; the user's own words are then rescored on top.
+     * With [splits] off, two-word readings ("thank you" for "thankyou") are not looked for: for a
+     * word that is only the end of another ("zazzy'" + "s") or follows a number.
      */
-    fun decode(taps: List<Tap>, mode: Mode, layout: KeyLayout, prev: String?, limit: Int = 8): DecodeResult {
+    fun decode(
+        taps: List<Tap>, mode: Mode, layout: KeyLayout, prev: String?, limit: Int = 8, splits: Boolean = true,
+    ): DecodeResult {
         val n = taps.size
         val table = Array(n) { i -> spatialRow(taps[i], mode, layout) }
 
@@ -72,7 +80,7 @@ class Decoder(private val dict: Dictionary, private val user: UserModel) {
         if (n <= dict.maxLength) {
             for (idx in dict.ofLength(n)) {
                 val lm = dict.logFreq[idx]
-                val s = spatial(dict.letters, dict.offset(idx), table, n, words.floor() - lm)
+                val s = spatial(dict.letters, dict.offset(idx), table, 0, n, words.floor() - lm)
                 if (s != MISS && !(anyBlocked && user.isBlocked(dict.display(idx)))) words.offer(idx, s + lm)
             }
             val maxLen = minOf(dict.maxLength, n + MAX_COMPLETION_EXTRA)
@@ -80,7 +88,7 @@ class Decoder(private val dict: Dictionary, private val user: UserModel) {
                 val penalty = COMPLETION_PENALTY - COMPLETION_PER_LETTER * (len - n)
                 for (idx in dict.ofLength(len)) {
                     val lm = dict.logFreq[idx] + penalty
-                    val s = spatial(dict.letters, dict.offset(idx), table, n, completions.floor() - lm)
+                    val s = spatial(dict.letters, dict.offset(idx), table, 0, n, completions.floor() - lm)
                     if (s != MISS && !(anyBlocked && user.isBlocked(dict.display(idx)))) completions.offer(idx, s + lm)
                 }
             }
@@ -115,12 +123,15 @@ class Decoder(private val dict: Dictionary, private val user: UserModel) {
         // 2. The user's other words join only if they can still reach the top [limit]: the bound is
         // checked before any letters are scored, and scoring stops as soon as a word falls below it.
         // (Scores only ever rise while merging, so a word below the current floor stays out.)
+        val learned = user.unigrams
+        // Words since forgotten (or cleared) leave the cache too, so it can't outgrow the vocabulary.
+        if (userWords.size > learned.size + USER_WORD_SLACK) userWords.keys.retainAll(learned.keys)
         val inLists = HashSet<String>()
         for (c in boosted) inLists += c.key
         for (c in boostedComp) inLists += c.key
         val floors = arrayOf(Floor(limit, boosted), Floor(limit, boostedComp))
         val bonus = if (expected.isNotEmpty()) NEXT_WORD_BONUS else 0f
-        for ((key, count) in user.unigrams) {
+        for ((key, count) in learned) {
             if (key.length < n || key in inLists) continue
             val extra = key.length - n
             val floor = floors[if (extra == 0) 0 else 1]
@@ -130,7 +141,7 @@ class Decoder(private val dict: Dictionary, private val user: UserModel) {
             // Words the user has typed are completed much more eagerly than dictionary words.
             val rest = base + userBoost(count, user.bigramCount(prev, key)) + userPenalty(extra)
             if (rest + bonus < floor.value) continue
-            val s = spatial(w.codes, 0, table, n, floor.value - rest - bonus)
+            val s = spatial(w.codes, 0, table, 0, n, floor.value - rest - bonus)
             if (s == MISS) continue
             val form = user.formOf(key)
             val display = form ?: dict.displayFor(key)
@@ -167,18 +178,23 @@ class Decoder(private val dict: Dictionary, private val user: UserModel) {
         val unfinished = boostedComp.firstOrNull()?.score ?: MISS
         val fixes = if (n < MIN_CORRECTION_TAPS || taps.any { it.exact >= 0 }) emptyList() else {
             val gate = maxOf(top.firstOrNull()?.score ?: MISS, unfinished) - CORRECTION_WINDOW
-            corrections(table, n, prev, gate, boosted.mapTo(HashSet()) { it.key }, expected, minOf(limit, MAX_CORRECTIONS))
+            val typos = corrections(table, n, prev, gate, boosted.mapTo(HashSet()) { it.key }, expected, minOf(limit, MAX_CORRECTIONS))
+            val pairs = if (splits) twoWords(table, n, gate) else emptyList()
+            if (pairs.isEmpty()) typos else (typos + pairs).sortedByDescending { it.score }
         }
         // A correction becomes the default only when it clearly beats the best exact match (even a
         // tentative one), by more still if that's one of the user's own words (and simply by beating
         // a known misspelling), and the taps don't read better as the start of a longer word. Short
         // words need a wider margin, unless full mode's typed letters aren't a word at all ("teh").
-        val fix = fixes.firstOrNull { !it.tentative }
+        // Splitting a real word in two ("tome" → "to me") needs a wider margin still; where a
+        // two-word reading falls short of it, the best typo correction that qualifies leads instead.
         val first = top.maxByOrNull { it.score }
         val short = if (mode == Mode.FULL && !literalIsWord) 0f else SHORT_WORD_MARGIN * maxOf(0, SHORT_WORD_TAPS - n)
-        if (fix != null && fix.score - unfinished > CORRECTION_MARGIN + short &&
-            (first == null || fix.score - first.score > correctionMargin(first) + short)
-        ) top = listOf(fix) + top.take(limit - 1)
+        val fix = fixes.firstOrNull { fix ->
+            !fix.tentative && fix.score - unfinished > CORRECTION_MARGIN + short &&
+                (first == null || fix.score - first.score > correctionMargin(first) + short + splitMargin(fix, first))
+        }
+        if (fix != null) top = listOf(fix) + top.take(limit - 1)
         return DecodeResult(
             top, boostedComp.take(limit), literal, literalIsWord, literalSpatial + literalLm, fixes,
         )
@@ -252,6 +268,73 @@ class Decoder(private val dict: Dictionary, private val user: UserModel) {
         if (expected.isNotEmpty()) for (i in out.indices) if (out[i].display in expected) out[i] = out[i].plus(NEXT_WORD_BONUS)
         out.sortByDescending { it.score }
         return out.take(limit)
+    }
+
+    /**
+     * Two words typed without the space between them ("thankyou", "inthe"), scoring at least
+     * [gate]: for every place the space could have been, the best dictionary word for the taps
+     * before it and the best for the taps after it, their scores added, minus [SPLIT_COST] for
+     * the missed space bar. Best first, at most [MAX_SPLITS].
+     *
+     * Only the dictionary's frequencies count for the two words, plus how often the user typed
+     * the second after the first: the user's word counts would make any two favourite words
+     * outweigh the single word they happen to spell together. Each bucket is read most frequent
+     * first and left as soon as its words are too rare to reach the gate.
+     */
+    private fun twoWords(table: Array<FloatArray>, n: Int, gate: Float): List<Candidate> {
+        if (n < 2 * MIN_SPLIT_PART) return emptyList()
+        val anyBlocked = user.anyBlocked
+        val out = ArrayList<Candidate>()
+        for (k in MIN_SPLIT_PART..n - MIN_SPLIT_PART) {
+            // The other word can at best be the most common one, tapped perfectly.
+            val a = bestPart(table, 0, k, gate + SPLIT_COST - dict.maxLogFreq, anyBlocked)
+            if (a < 0) continue
+            val aScore = partScore
+            val b = bestPart(table, k, n - k, gate + SPLIT_COST - aScore, anyBlocked)
+            if (b < 0) continue
+            var score = aScore + partScore - SPLIT_COST
+            val aKey = dict.key(a)
+            val bKey = dict.key(b)
+            score += BIGRAM_WEIGHT * ln(1f + user.bigramCount(aKey, bKey))
+            if (dict.display(b) in dict.nextFor(aKey)) score += NEXT_WORD_BONUS
+            val display = dict.display(a) + " " + dict.display(b)
+            if (score < gate || anyBlocked && user.isBlocked(display)) continue
+            out += Candidate(aKey + bKey, display, score, edited = true)
+        }
+        out.sortByDescending { it.score }
+        return out.take(MAX_SPLITS)
+    }
+
+    /** Score of the word [bestPart] last returned. */
+    private var partScore = 0f
+
+    /**
+     * The best dictionary word of [len] letters for the taps from [from], scoring at least [floor]:
+     * its index (its score in [partScore]), or -1. Not a known misspelling, a blocked word, or a
+     * leftover half of a contraction ("don", "ll"), which word lists made from text are full of.
+     */
+    private fun bestPart(table: Array<FloatArray>, from: Int, len: Int, floor: Float, anyBlocked: Boolean): Int {
+        var best = -1
+        var bestScore = floor
+        for (idx in dict.ofLengthByFrequency(len)) {
+            val lm = dict.logFreq[idx]
+            if (lm < bestScore) break
+            val s = spatial(dict.letters, dict.offset(idx), table, from, len, bestScore - lm)
+            if (s == MISS || s + lm <= bestScore && best >= 0) continue
+            if (dict.isMisspelling(idx) || dict.key(idx) in FRAGMENTS) continue
+            if (anyBlocked && user.isBlocked(dict.display(idx))) continue
+            best = idx
+            bestScore = s + lm
+        }
+        partScore = bestScore
+        return best
+    }
+
+    /** The extra margin a two-word reading needs to replace [exact] when that is a real word. */
+    private fun splitMargin(fix: Candidate, exact: Candidate): Float {
+        if (' ' !in fix.display) return 0f
+        val i = dict.indexOf(exact.key)
+        return if (i >= 0 && !dict.isMisspelling(i) || user.count(exact.key) > 0) SPLIT_MARGIN else 0f
     }
 
     /** Keys where one of the candidates is spelled the way the user writes the word ([UserModel.formOf]). */
@@ -411,13 +494,13 @@ class Decoder(private val dict: Dictionary, private val user: UserModel) {
     }
 
     /**
-     * Sum of spatial log-likelihoods for the first [n] letter codes at [codes] from [offset], or
-     * [MISS] once it drops below [floor].
+     * Sum of spatial log-likelihoods of [n] letter codes at [codes] from [offset] for the taps
+     * from [from], or [MISS] once it drops below [floor].
      */
-    private fun spatial(codes: ByteArray, offset: Int, table: Array<FloatArray>, n: Int, floor: Float): Float {
+    private fun spatial(codes: ByteArray, offset: Int, table: Array<FloatArray>, from: Int, n: Int, floor: Float): Float {
         var s = 0f
         for (i in 0 until n) {
-            s += table[i][codes[offset + i].toInt()]
+            s += table[from + i][codes[offset + i].toInt()]
             if (s < floor) return MISS
         }
         return s
@@ -487,6 +570,8 @@ class Decoder(private val dict: Dictionary, private val user: UserModel) {
 
     companion object {
         private const val MISS = Float.NEGATIVE_INFINITY
+        /** [userWords] is trimmed once it holds this many more words than the user's vocabulary. */
+        private const val USER_WORD_SLACK = 256
 
         /** Std-dev of a tap around a letter, in mini slots. ~1.4 slots ≈ "this letter or its neighbours". */
         private const val MINI_SIGMA = 1.4f
@@ -545,6 +630,25 @@ class Decoder(private val dict: Dictionary, private val user: UserModel) {
         private const val LEARNED_WORD_MARGIN = 5f
         /** Corrections kept for the bar (it shows about three at a time). */
         private const val MAX_CORRECTIONS = 4
+        /**
+         * Two words for one run of taps ([twoWords]): what a missed space bar costs, the shortest
+         * either word may be ("I", "a"), how many readings are kept, and how much further one must
+         * lead to replace a real word ([splitMargin]).
+         *
+         * Tuned on the open word list: every word tapped exactly, and 12,000 words tapped with
+         * noise, keep their default in both modes, while pairs like "thankyou", "ofthe" and
+         * "toyou" split. A narrower margin (1.0) starts splitting real words ("youths" → "you
+         * the"); a lower cost (1.5) splits little more and guesses more at unknown words.
+         */
+        private const val SPLIT_COST = 2.0f
+        private const val MIN_SPLIT_PART = 1
+        private const val MAX_SPLITS = 2
+        private const val SPLIT_MARGIN = 2.5f
+        /** Halves of contractions that word lists count as words; never one of two split words. */
+        private val FRAGMENTS = setOf(
+            "ll", "re", "ve", "don", "didn", "doesn", "isn", "wasn", "aren", "couldn", "wouldn", "shouldn",
+            "hasn", "haven", "hadn", "weren", "ain", "mustn", "needn", "shan",
+        )
         /** Extra margin per tap under [SHORT_WORD_TAPS]: a short word's taps fit many words. */
         private const val SHORT_WORD_MARGIN = 1.5f
         private const val SHORT_WORD_TAPS = 5
