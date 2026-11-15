@@ -62,9 +62,10 @@ class Keyboard(prefs: Map<String, Any> = emptyMap()) {
         inputType = type; imeOptions = options; packageName = "test.app"
     }
 
-    /** Focus a field of this kind and show the keyboard for it. */
-    fun focus(info: EditorInfo = info()) {
-        edit.setText("")
+    /** Focus a field of this kind, holding [text] with the cursor at its end, and show the keyboard for it. */
+    fun focus(info: EditorInfo = info(), text: String = "") {
+        edit.setText(text)
+        edit.setSelection(text.length)
         ime.ic = edit.onCreateInputConnection(EditorInfo())
         ime.onStartInput(info, false)
         ime.onStartInputView(info, false)
@@ -89,6 +90,17 @@ class Keyboard(prefs: Map<String, Any> = emptyMap()) {
     }
 
     val text: String get() = edit.text.toString()
+
+    /** The user puts the cursor at [position]; the keyboard hears of it as it would from the app, and the cursor rests. */
+    fun moveCursor(position: Int) {
+        val old = edit.selectionStart
+        edit.setSelection(position)
+        ime.onUpdateSelection(old, old, position, position, -1, -1)
+        shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(400))
+    }
+
+    /** The suggestion bar's words, left to right, without its empty slots. */
+    val bar: List<String> get() = ime.suggestionSlots.filter { it.isNotEmpty() }
 
     private val layout get() = KeyLayout.named(PreferenceManager.getDefaultSharedPreferences(context).getString(Prefs.LAYOUT, Prefs.LAYOUT_DEFAULT))
     private val full get() = PreferenceManager.getDefaultSharedPreferences(context).getString(Prefs.MODE, "mini") == "full"

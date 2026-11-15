@@ -102,6 +102,9 @@ class Dictionary private constructor(
 
     val maxLength: Int get() = byLength.size - 1
 
+    /** The most frequent word's log-frequency: the best any word can score before its taps count. */
+    val maxLogFreq: Float = if (size == 0) 0f else logFreq.max()
+
     fun ofLength(n: Int): IntArray = if (n in byLength.indices) byLength[n] else EMPTY
 
     /** Like [ofLength], most frequent first. */
@@ -221,7 +224,10 @@ class Dictionary private constructor(
         fun build(): Dictionary {
             val n = keys.size
             val known = keys.toHashSet()
-            val wrong = (0 until n).filter { i -> misspellings[keys[i]]?.any { it in known } == true }
+            // Also two words written as one ("thankyou"), where the list knows both of them.
+            val wrong = (0 until n).filter { i ->
+                misspellings[keys[i]]?.any { it in known } == true || JOINED[keys[i]]?.all { it in known } == true
+            }
             for (i in wrong) counts[i] *= MISSPELLING_FACTOR
             val total = counts.sum()
             val starts = IntArray(n + 1)
@@ -331,6 +337,19 @@ class Dictionary private constructor(
          * the contraction as a second entry with the same key, and both are offered.
          */
         private val ALSO_WORDS = setOf("its", "ill", "id", "were", "well", "hell", "shell", "shed", "wed", "lets")
+
+        /**
+         * Two words often written as one, which word lists made from text therefore hold as words of
+         * their own. They are treated like [isMisspelling] entries (typeable, but rare and readily
+         * corrected), so the decoder's two-word reading wins. Picked by hand: frequency alone can't
+         * tell "ofthe" from "theme" (the + me) or "income" (in + come).
+         */
+        private val JOINED: Map<String, List<String>> = listOf(
+            "a lot", "as well", "in fact", "in case", "of course", "each other", "at least", "thank you",
+            "no one", "every time", "high school", "in front", "up to", "come on", "all right", "damn it",
+            "of the", "in the", "for the", "to the", "on the", "at the", "if you", "for you", "are you",
+            "do you", "of you", "it is", "it was", "to be", "i am", "and i",
+        ).associate { it.replace(" ", "") to it.split(' ') }
 
         private val DISPLAY_OVERRIDES: Map<String, String> =
             CONTRACTIONS.filterKeys { it !in ALSO_WORDS }.mapValues { it.value.first } + mapOf("i" to "I")

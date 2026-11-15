@@ -105,10 +105,11 @@ Swipe up to get a normal keyboard drawn the same way: flat keys, one font, line 
 
 - A **probabilistic decoder**: each tap is scored against every possible word, weighted by word frequency and your own history. It answers in a few milliseconds per tap, even with 10,000 learned words.
 - **Typo correction** handles missed, extra, doubled and swapped letters (*recieve* → *receive*, *helllo* → *hello*), but only takes over when it's clearly better than what you typed.
+- **Missed spaces:** two words typed as one (*thankyou*, *ofthe*) are offered as two, and typed as two where that is clearly meant. Real words that happen to be two words in a row (*today*, *income*) are left alone, and pairs you type often split more readily.
 - **It learns your words**, how you capitalise and spell them, and which words tend to follow which. A brand-new word appears next to the best guess after you type it once, and becomes a normal suggestion after the second time.
 - **Fix a word:** backspace right after a word reopens it with its alternatives. Delete a word completely, or swipe away any finished word, and the bar offers it back with the words it could have been.
 - **Numbers:** right after a number the bar offers its ending (16**th**, 1**st**, 2**nd**, 3**rd**), and words like *someone* or *today* also come as *some1* or *2day*.
-- **Next-word predictions** after a space, learned from the word pairs you actually type.
+- **Next-word predictions** after a space, learned from the word pairs you actually type. They go by the word before the cursor, so they stay right after you move the cursor or come back to text you wrote earlier.
 - **Hold a suggestion** to remove it for good.
 
 ### 👆 Gestures

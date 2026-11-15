@@ -50,6 +50,7 @@ import com.brownllama.continuum.prediction.Decoder
 import com.brownllama.continuum.prediction.Dictionary
 import com.brownllama.continuum.prediction.Mode
 import com.brownllama.continuum.prediction.Tap
+import com.brownllama.continuum.prediction.TextContext
 import com.brownllama.continuum.prediction.UserModel
 import com.brownllama.continuum.sticker.AddStickerActivity
 import com.brownllama.continuum.sticker.Sticker
@@ -71,6 +72,11 @@ import kotlin.math.roundToInt
  * - Space, punctuation or a suggestion commits the word ([commitWord]) and teaches it to the
  *   [UserModel] ([learn]). Backspace right after that reopens the word ([LastCommit]).
  * - With nothing being typed, the bar shows next-word predictions ([showPredictions]).
+ * - The word before the cursor ([prevWord]) is read from the field's text whenever a word starts
+ *   or the bar is filled ([refreshContext]), so it is right after the cursor moved or text was
+ *   deleted too.
+ * - Taps that read best as two words with the space missed ("thankyou") are offered, and where it
+ *   is clear typed, as those two words; they are learned one after the other ([learn]).
  * - Password and number fields are typed letter by letter in full mode ([predict] off). Email and
  *   URL fields predict as usual but don't auto-capitalise. With a screen reader exploring by
  *   touch, every field opens in full mode.
@@ -155,10 +161,21 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
     /** The current word starts a sentence (so a capital first letter is not part of its spelling). */
     private var wordSentenceStart = false
     private var lastShiftTap = 0L
-    /** Key of the previous word, for next-word predictions; null at the start of a sentence. */
+    /**
+     * Key of the word before the cursor, for the decoder and next-word predictions; null at the
+     * start of a sentence. Read from the text ([refreshContext]) and, as words are committed,
+     * kept in step by [learn].
+     */
     private var prevWord: String? = null
     /** When we last set composing text; selection updates arriving sooner may be stale. */
     private var lastEditTime = 0L
+    /**
+     * Whether the field lets the keyboard read its text (see [refreshContext]): null until it has
+     * answered with some.
+     */
+    private var textReadable: Boolean? = null
+    /** The bar shows next-word predictions (not a word's alternatives, punctuation or a deleted word). */
+    private var predictionsShown = false
 
     /**
      * The last word committed by space/suggestion, so backspace can reopen it for correction. [text]
@@ -213,7 +230,9 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
     /** Edits [query]; set only while the search is open. */
     private var queryEditor: InputConnection? = null
     /** The app field's settings, put back when the search closes. */
-    private class FieldState(val predict: Boolean, val capsAllowed: Boolean, val learning: Boolean, val prevWord: String?)
+    private class FieldState(
+        val predict: Boolean, val capsAllowed: Boolean, val learning: Boolean, val prevWord: String?, val textReadable: Boolean?,
+    )
     private var fieldState: FieldState? = null
     /** Searches as you type, once typing pauses for [LIVE_SEARCH_MS]. */
     private val liveSearch = Runnable { if (queryEditor != null) gifs.search(query.toString(), live = true) }
@@ -409,6 +428,7 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
         lastExpansion = null
         autoSpace = false
         prevWord = null
+        textReadable = null
 
         val cls = info.inputType and InputType.TYPE_MASK_CLASS
         val variation = info.inputType and InputType.TYPE_MASK_VARIATION
@@ -470,7 +490,15 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
     ) {
         super.onUpdateSelection(oldSelStart, oldSelEnd, newSelStart, newSelEnd, candidatesStart, candidatesEnd)
         // While searching GIFs the word being typed is in the query, not the app's field.
-        if (taps.isEmpty() || queryEditor != null) return
+        if (queryEditor != null) return
+        if (taps.isEmpty()) {
+            // The cursor may have been put somewhere else: once it rests, the bar's predictions follow it.
+            if (predictionsShown && (newSelStart != oldSelStart || newSelEnd != oldSelEnd)) {
+                main.removeCallbacks(followCursor)
+                main.postDelayed(followCursor, FOLLOW_CURSOR_MS)
+            }
+            return
+        }
         // Updates for our own edits can arrive late; only trust "composing vanished" once things settle.
         val composingGone = candidatesStart == -1 && SystemClock.uptimeMillis() - lastEditTime > STALE_UPDATE_MS
         val cursorOutside = candidatesStart != -1 && (newSelStart != candidatesEnd || newSelEnd != candidatesEnd)
@@ -510,6 +538,7 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
                 editor()?.getTextBeforeCursor(it.prefix.length, 0)?.toString() == it.prefix
             }
             pendingGlue = null
+            refreshContext()
         }
         taps += t
         if (shift == Shift.ON) setShift(Shift.OFF)
@@ -531,7 +560,7 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
             if (taps.isNotEmpty()) commitWord(spaced = false, choice = null, keepShown = true)
             val last = lastCommit?.takeIf { !it.spaced }
             pendingGlue = when {
-                last != null -> Glue(last.learned + text, last.prevBefore, wordSentenceStart)
+                last != null -> glueAfter(last, text)
                 before != null -> Glue(before.prefix + text, before.prevBefore, before.sentenceStart)
                 else -> Glue(text, prevWord, atSentenceStart())
             }
@@ -546,7 +575,7 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
         if (taps.isNotEmpty()) commitWord(spaced = false, choice = null)
         // "zazzy" + "'": the next word joins this one (see Glue).
         val joined = lastCommit?.takeIf { !it.spaced && text.length == 1 && text[0] in JOINERS }
-        pendingGlue = joined?.let { Glue(it.learned + text, it.prevBefore, wordSentenceStart) }
+        pendingGlue = joined?.let { glueAfter(it, text) }
         if (queryEditor == null && text.length == 1 && text[0] in '0'..'9') {
             // Digits go as key presses, like other keyboards do: one-time-code boxes often move to
             // the next box on the key event and ignore text committed without one.
@@ -603,7 +632,7 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
         val last = lastCommit ?: return false
         val expected = last.text + if (last.spaced) " " else ""
         if (ic.getTextBeforeCursor(expected.length, 0)?.toString() != expected) return false
-        if (learning) Dictionary.keyOf(last.learned)?.let { user.unlearn(last.prevBefore, it) }
+        if (learning) unlearn(last.prevBefore, last.learned)
         prevWord = last.prevBefore
         ic.beginBatchEdit()
         ic.deleteSurroundingText(expected.length, 0)
@@ -731,6 +760,7 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
      */
     private fun showPunctuationBar(replacePeriod: Boolean) {
         punctuationBar = true
+        predictionsShown = false
         this.replacePeriod = replacePeriod
         slots = PUNCTUATION_BAR
         view?.setSuggestions(slots, if (replacePeriod) PUNCTUATION_BAR.indexOf(".") else -1)
@@ -1026,10 +1056,13 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
         if (queryEditor != null) return
         finishComposing()
         lastCommit = null
-        fieldState = FieldState(predict, capsAllowed, learning, prevWord)
+        fieldState = FieldState(predict, capsAllowed, learning, prevWord, textReadable)
         predict = true
         capsAllowed = false
         learning = false
+        // The query is a text of its own: its words follow each other, not the app's last word.
+        prevWord = null
+        textReadable = null
         resetWordState()
         if (query.getSpans(0, query.length, TextWatcher::class.java).isEmpty()) {
             query.setSpan(queryWatcher, 0, query.length, Spanned.SPAN_INCLUSIVE_INCLUSIVE)
@@ -1055,6 +1088,7 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
             capsAllowed = it.capsAllowed
             learning = it.learning
             prevWord = it.prevWord
+            textReadable = it.textReadable
         }
         fieldState = null
         view?.emailField = emailField
@@ -1130,8 +1164,10 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
         val ic = editor() ?: return
         if (taps.isEmpty()) return
         val d = decoder
-        val r = d?.decode(taps, tapMode, layout, prevWord)
+        // The end of a joined word ("zazzy'" + "s") or of a number ("16" + "th") is not two words.
+        val r = d?.decode(taps, tapMode, layout, prevWord, splits = wordGlue == null && afterNumber == null)
         result = r
+        predictionsShown = false
         val literal = r?.literal ?: buildString { for (t in taps) append('a' + nearestLetter(t)) }
         val literalText = applyCase(literal, keepDisplay = false)
         val words = r?.words.orEmpty().map { applyCase(it.display) }
@@ -1212,9 +1248,11 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
         if (!autocorrect || r == null || wordGlue != null || afterNumber != null || taps.any { it.exact >= 0 }) return literalText
         val best = r.words.firstOrNull() ?: return literalText
         if (best.key == r.literal) {
-            // The same letters with an apostrophe or hyphen ("dont" → "don't", "zazzys" → "zazzy's"),
-            // unless what was typed is a word as it stands ("its").
-            val typedIsWord = r.words.any { it.key == r.literal && it.display.equals(r.literal, ignoreCase = true) }
+            // The same letters with an apostrophe, hyphen or space ("dont" → "don't", "zazzys" →
+            // "zazzy's", "thankyou" → "thank you"), unless what was typed is a word as it stands
+            // ("its"; not a known misspelling like "ofthe", which the word list also holds).
+            val typedIsWord = r.literalIsWord &&
+                r.words.any { it.key == r.literal && it.display.equals(r.literal, ignoreCase = true) }
             return if (!typedIsWord && best.display.any { !it.isLetter() }) words.first() else literalText
         }
         if (r.literalIsWord && best.score - r.literalScore < KEEP_REAL_WORD_MARGIN) return literalText
@@ -1265,6 +1303,11 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
      * nor do all caps for emphasis ("NEVER"), unless the word is spelled that way ("NASA") or new.
      */
     private fun learn(word: String, sentenceStart: Boolean, picked: Boolean = false) {
+        // Two words typed as one ("thank you" for "thankyou") are learned one after the other.
+        if (' ' in word) {
+            word.split(' ').filter { it.isNotEmpty() }.forEachIndexed { i, w -> learn(w, sentenceStart && i == 0) }
+            return
+        }
         // An emoji (or anything without letters) is not learned, and the word before it no longer counts.
         // Nor is a German word or one with digits ("some1"): its key would drop those and match other words.
         val key = Dictionary.keyOf(word)?.takeIf { word.none { it in GERMAN_LETTERS || it.isDigit() } } ?: run { prevWord = null; return }
@@ -1289,6 +1332,43 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
         prevWord = key
     }
 
+    /** Takes back what [learn] taught for [text] typed after [prev] (each word of it, if it is two). */
+    private fun unlearn(prev: String?, text: String) {
+        var before = prev
+        for (word in text.split(' ')) {
+            val key = Dictionary.keyOf(word) ?: continue
+            user.unlearn(before, key)
+            before = key
+        }
+    }
+
+    /**
+     * The glue for a joiner or German letter typed right after the commit [last]: the next word
+     * joins its (last) word, and replaces what was learned for that.
+     */
+    private fun glueAfter(last: LastCommit, text: String): Glue {
+        val words = last.learned.split(' ')
+        if (words.size < 2) return Glue(last.learned + text, last.prevBefore, wordSentenceStart)
+        return Glue(words.last() + text, Dictionary.keyOf(words[words.size - 2]), false)
+    }
+
+    /**
+     * Sets [prevWord] from the text before the cursor ([TextContext]). Fields that don't let the
+     * keyboard read their text (some terminals and games answer with nothing) keep the word that
+     * was typed last instead: an empty answer only counts once the field has shown it can answer.
+     */
+    private fun refreshContext() {
+        if (textReadable == false) return
+        val before = editor()?.getTextBeforeCursor(TextContext.WINDOW, 0) ?: return
+        if (before.isNotEmpty()) textReadable = true else if (textReadable == null) return
+        prevWord = TextContext.previousWord(before)
+    }
+
+    /** The cursor was moved while nothing was being typed: fill the bar for where it is now. */
+    private val followCursor = Runnable {
+        if (taps.isEmpty() && queryEditor == null && predictionsShown) showPredictions()
+    }
+
     /** Snapshots the word and its alternatives before the first deletion of a run (see [deletedSlots]). */
     private fun rememberDeletedWord() {
         if (deletedSlots != null || composingText.isEmpty()) return
@@ -1301,6 +1381,7 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
         deletedSlots = null
         if (list == null || !predict) return showPredictions()
         punctuationBar = false
+        predictionsShown = false
         slots = pad(list.take(MAX_SUGGESTIONS))
         view?.setSuggestions(slots, -1)
     }
@@ -1309,6 +1390,8 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
     private fun showPredictions() {
         punctuationBar = false
         if (taps.isNotEmpty()) return
+        predictionsShown = false
+        if (predict) refreshContext()
         val v = view ?: return
         val d = decoder
         if (!predict || d == null) {
@@ -1316,6 +1399,7 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
             v.setSuggestions(slots, -1)
             return
         }
+        predictionsShown = true
         val words = d.predict(prevWord, sentenceStart = shift != Shift.OFF, limit = MAX_SUGGESTIONS).map {
             when (shift) {
                 Shift.OFF -> it
@@ -1490,6 +1574,8 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
         /** Full-mode autocorrect keeps a real typed word unless a correction scores this much better (log). */
         private const val KEEP_REAL_WORD_MARGIN = 5f
         private const val STALE_UPDATE_MS = 300L
+        /** How long the cursor must rest before the bar's predictions are redone for its new place. */
+        private const val FOLLOW_CURSOR_MS = 150L
         private const val HOUR_MS = 60L * 60 * 1000
         /** GIF search: how long typing must pause before the results update. */
         private const val LIVE_SEARCH_MS = 600L
