@@ -53,7 +53,12 @@ android {
     }
 
     testOptions {
-        unitTests.isIncludeAndroidResources = true
+        unitTests {
+            isIncludeAndroidResources = true
+            // Robolectric's Android 16 reaches into a JDK-internal package, which Java 17 and later
+            // keep closed unless it is exported to the tests.
+            all { it.jvmArgs("--add-exports=java.base/jdk.internal.access=ALL-UNNAMED") }
+        }
     }
 }
 
