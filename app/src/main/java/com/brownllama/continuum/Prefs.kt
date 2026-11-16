@@ -65,7 +65,7 @@ object Prefs {
     val RESETTABLE = listOf(
         THEME, LAYOUT, MINI_HEIGHT, FULL_HEIGHT, BAR_HEIGHT, BOTTOM_SPACE, HIDE_SYSTEM_BUTTONS,
         AUTOCORRECT, AUTOCAPS, ANIMALS, ANIMAL_KINDS, ANIMAL_FREQUENCY, HOLD_MS, VIBRATE, VIBRATE_STRENGTH, SWIPE_MIN, SWIPE_LONG, SWIPE_SPEED, SWIPE_STRAIGHTNESS, SHOW_GIFS,
-        CLIPBOARD, CLIPBOARD_KEEP,
+        CLIPBOARD, CLIPBOARD_KEEP, TOUCH_ADAPT,
         "haptics", "previews", "llama",
     )
 
@@ -76,7 +76,11 @@ object Prefs {
     const val CLIPBOARD_KEEP = "clipboard_keep_hours"
     const val CLIPBOARD_KEEP_DEFAULT = 168L
 
-    /** Written with a timestamp to ask the IME to forget learned words. */
+    /** Learn where the user's taps land for each letter (prediction/TouchModel), and read taps by it. */
+    const val TOUCH_ADAPT = "touch_adapt"
+    const val TOUCH_ADAPT_DEFAULT = true
+
+    /** Written with a timestamp to ask the IME to forget learned words (and how the user taps). */
     const val CLEAR_LEARNED = "clear_learned"
 
     /** Whether the emoji panel offers the GIF tab (off for people without a KLIPY key). */
