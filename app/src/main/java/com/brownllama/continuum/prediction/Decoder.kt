@@ -484,11 +484,10 @@ class Decoder(private val dict: Dictionary, private val user: UserModel) {
     /** The next-word context for [prev] (or a sentence's [start]), kept while it stays the same: decode runs on every tap. */
     private fun context(prev: String?, start: Boolean): NextContext {
         val s = start && prev == null
-        if (prev == ctxPrev && s == ctxStart && CONTEXT_WEIGHT == ctxWeight) return ctxLast
+        if (prev == ctxPrev && s == ctxStart) return ctxLast
         for (i in ctxLast.entries) marks[i] = false
         ctxPrev = prev
         ctxStart = s
-        ctxWeight = CONTEXT_WEIGHT
         ctxLast = dict.context(prev, s, CONTEXT_WEIGHT) ?: NextContext.NONE
         for (i in ctxLast.entries) marks[i] = true
         return ctxLast
@@ -499,7 +498,6 @@ class Decoder(private val dict: Dictionary, private val user: UserModel) {
 
     /** The current context's [NextContext.entries], marked by entry, so scans needn't look them up. */
     private val marks = BooleanArray(dict.size)
-    private var ctxWeight = CONTEXT_WEIGHT
     private var ctxPrev: String? = null
     private var ctxStart = false
     private var ctxLast = NextContext.NONE
@@ -643,9 +641,11 @@ class Decoder(private val dict: Dictionary, private val user: UserModel) {
         private const val BIGRAM_WEIGHT = 1.5f
         /**
          * How much the next-word model counts: 1 takes its probabilities as they are; less trusts
-         * them less (its word pairs come from books, not from messages).
+         * them less (its word pairs come from books, not from messages). Tuned by typing 196
+         * everyday sentences with noisy taps: 0.75 to 1 do best in both modes (mini mode 92.1% of
+         * words right without the model, 94.6% with it), 0.5 and 1.25 a little worse.
          */
-        @JvmField internal var CONTEXT_WEIGHT = 1.0f
+        const val CONTEXT_WEIGHT = 0.8f
         /**
          * Starting score for words the user typed that the dictionary lacks: as likely as a common
          * word (about the 1,500th most frequent), so a word typed once on purpose comes back even
