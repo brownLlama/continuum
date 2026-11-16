@@ -16,7 +16,7 @@ enum class Mode { MINI, FULL }
 /**
  * A suggested word: [key] is letters-only lowercase, [display] how it's shown, [score] a log-probability.
  * [tentative]: a new word the user has typed only once (see [UserModel.isConfirmed]), offered but
- * never the default pick. [edited]: a typo correction (the taps spell it only with a missing,
+ * the default pick only when it fits the taps far better than any other word. [edited]: a typo correction (the taps spell it only with a missing,
  * extra, swapped or far-off letter).
  */
 class Candidate(
@@ -30,8 +30,8 @@ class Candidate(
 /** Everything [Decoder.decode] found for the taps so far. */
 class DecodeResult(
     /**
-     * Best whole-word matches for exactly as many letters as taps, best first (never a tentative one,
-     * if there's another). A typo correction leads instead when it wins by a clear margin.
+     * Best whole-word matches for exactly as many letters as taps, best first (a tentative one only
+     * if it leads the others by far). A typo correction leads instead when it wins by a clear margin.
      */
     val words: List<Candidate>,
     /** Longer words whose beginning matches the taps. */
@@ -170,11 +170,12 @@ class Decoder(private val dict: Dictionary, private val user: UserModel) {
         }
         boosted.sortByDescending { it.score }
         boostedComp.sortByDescending { it.score }
-        // A candidate (new word typed once) is offered but never the default: the best real word
-        // goes first, so space doesn't commit what may have been a typo.
+        // A candidate (new word typed once) is the default only when the taps fit it far better
+        // than any real word ("nepali" over "nelson"); otherwise the best real word goes first, so
+        // space doesn't commit what may have been a typo ("caot" when "coat" was meant).
         if (boosted.firstOrNull()?.tentative == true) {
             val i = boosted.indexOfFirst { !it.tentative }
-            if (i > 0) boosted.add(0, boosted.removeAt(i))
+            if (i > 0 && boosted[0].score - boosted[i].score < TENTATIVE_MARGIN) boosted.add(0, boosted.removeAt(i))
         }
 
         val literalIdx = dict.indexOf(literal)
@@ -683,6 +684,15 @@ class Decoder(private val dict: Dictionary, private val user: UserModel) {
         /** How much a correction must beat the best exact match (a dictionary / the user's word) to lead. */
         private const val CORRECTION_MARGIN = 2.5f
         private const val LEARNED_WORD_MARGIN = 5f
+        /**
+         * How much a new word typed only once must beat the best other word to be the default.
+         * Tuned on simulated typing: 400 words left out of the word list, typed once and then
+         * again with noisy taps, and 400 typos of common words ("caot"), kept once, then the
+         * real word typed. At 6 the new word comes back as the default 77–82% of the time in mini
+         * mode (0.3% when it never led) and 87–93% in full mode, while no real word turned into
+         * a kept typo more often than before; at 5 a few did (0.1–0.6%), at 3 up to 10%.
+         */
+        private const val TENTATIVE_MARGIN = 6f
         /** Corrections kept for the bar (it shows about three at a time). */
         private const val MAX_CORRECTIONS = 4
         /**

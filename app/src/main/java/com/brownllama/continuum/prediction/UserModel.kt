@@ -15,7 +15,8 @@ import java.util.concurrent.TimeUnit
  * The vocabulary stays bounded ([compact]): it keeps at most [MAX_WORDS] words and [MAX_PAIRS]
  * word pairs, dropping the least recently used first, and forgets words not used for
  * [FORGET_DAYS] days. A word typed only once is a *candidate* ([isConfirmed] false): it's offered,
- * but not as the default pick, and it fades after [CANDIDATE_DAYS] days unless used again.
+ * but the default pick only when the taps fit it far better than any other word, and it fades
+ * after [CANDIDATE_DAYS] days unless used again.
  * [today] is the clock in days, replaceable for tests.
  *
  * With [background] the file is read on the writer thread (the keyboard does this, so the service
