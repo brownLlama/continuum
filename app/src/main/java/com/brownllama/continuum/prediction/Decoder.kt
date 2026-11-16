@@ -58,17 +58,27 @@ class DecodeResult(
 class Decoder(private val dict: Dictionary, private val user: UserModel) {
 
     /**
+     * Where this user's taps land ([TouchModel]); null reads every tap against the key centres
+     * with the default spread (setting "Learn how you tap" off).
+     */
+    var touch: TouchModel? = null
+
+    /**
      * Ranks words for [taps]. [prev] is the previous word's key (for bigrams and next-word bonuses).
      * Dictionary words are scored by brute force over the words of the right length, pruned as soon
      * as a word can't beat the current top [limit]; the user's own words are then rescored on top.
      * With [splits] off, two-word readings ("thank you" for "thankyou") are not looked for: for a
-     * word that is only the end of another ("zazzy'" + "s") or follows a number.
+     * word that is only the end of another ("zazzy'" + "s") or follows a number. With [adapt]
+     * off, the taps are read against the key centres even if [touch] has learned otherwise (for
+     * taps made up from a word's letters, which are on the centres).
      */
     fun decode(
         taps: List<Tap>, mode: Mode, layout: KeyLayout, prev: String?, limit: Int = 8, splits: Boolean = true,
+        adapt: Boolean = true,
     ): DecodeResult {
         val n = taps.size
-        val table = Array(n) { i -> spatialRow(taps[i], mode, layout) }
+        val shape = if (adapt) touch?.shape(layout, mode) else null
+        val table = Array(n) { i -> spatialRow(taps[i], mode, layout, shape) }
 
         val literal = buildString { for (row in table) append('a' + argmax(row)) }
         val literalSpatial = (0 until n).sumOf { i -> table[i][literal[i] - 'a'].toDouble() }.toFloat()
@@ -472,22 +482,33 @@ class Decoder(private val dict: Dictionary, private val user: UserModel) {
         return out
     }
 
-    /** Log-likelihood of each letter a..z given one tap (a Gaussian around each letter's position). */
-    private fun spatialRow(tap: Tap, mode: Mode, layout: KeyLayout): FloatArray {
+    /**
+     * Log-likelihood of each letter a..z given one tap: a Gaussian around where that letter's taps
+     * land. Without [shape] that is the key's centre with the default spread; with it, the centre
+     * moved by the letter's learned offset, with the user's own spread ([TouchModel]).
+     */
+    private fun spatialRow(tap: Tap, mode: Mode, layout: KeyLayout, shape: TouchModel.Shape?): FloatArray {
         val row = FloatArray(26)
         if (tap.exact >= 0) {
             for (c in 0 until 26) row[c] = if (c == tap.exact) 0f else EXACT_MISS
             return row
         }
         when (mode) {
-            Mode.MINI -> for (c in 0 until 26) {
-                val d = tap.x - layout.miniSlot[c]
-                row[c] = -(d * d) / (2 * MINI_SIGMA * MINI_SIGMA)
+            Mode.MINI -> {
+                val s = MINI_SIGMA * (shape?.scaleX ?: 1f)
+                for (c in 0 until 26) {
+                    val d = tap.x - layout.miniSlot[c] - (shape?.dx?.get(c) ?: 0f)
+                    row[c] = -(d * d) / (2 * s * s)
+                }
             }
-            Mode.FULL -> for (c in 0 until 26) {
-                val dx = (tap.x - layout.fullX[c]) / FULL_SIGMA_X
-                val dy = (tap.y - layout.fullY[c]) / FULL_SIGMA_Y
-                row[c] = -(dx * dx + dy * dy) / 2
+            Mode.FULL -> {
+                val sx = FULL_SIGMA_X * (shape?.scaleX ?: 1f)
+                val sy = FULL_SIGMA_Y * (shape?.scaleY ?: 1f)
+                for (c in 0 until 26) {
+                    val dx = (tap.x - layout.fullX[c] - (shape?.dx?.get(c) ?: 0f)) / sx
+                    val dy = (tap.y - layout.fullY[c] - (shape?.dy?.get(c) ?: 0f)) / sy
+                    row[c] = -(dx * dx + dy * dy) / 2
+                }
             }
         }
         return row
@@ -570,6 +591,10 @@ class Decoder(private val dict: Dictionary, private val user: UserModel) {
 
     companion object {
         private const val MISS = Float.NEGATIVE_INFINITY
+
+        /** The default spread of taps around a key's centre, across and (full mode) down; see [TouchModel]. */
+        internal fun sigmaX(mode: Mode) = if (mode == Mode.MINI) MINI_SIGMA else FULL_SIGMA_X
+        internal fun sigmaY(mode: Mode) = if (mode == Mode.MINI) 1f else FULL_SIGMA_Y
         /** [userWords] is trimmed once it holds this many more words than the user's vocabulary. */
         private const val USER_WORD_SLACK = 256
 

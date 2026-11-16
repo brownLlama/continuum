@@ -68,7 +68,9 @@
     <string name="pref_clipboard_keep">Keep copies for</string>
     <string name="cat_learned">Learned words</string>
     <string name="pref_clear">Forget learned words</string>
-    <string name="pref_clear_summary">Clear the words and phrases learned from your typing</string>
+    <string name="pref_touch_adapt">Learn how you tap</string>
+    <string name="pref_touch_adapt_summary">Where your thumbs land on each letter is learned from the words you keep, so rough taps are read the way you mean them. Stays on the phone.</string>
+    <string name="pref_clear_summary">Clear the words and phrases learned from your typing, and how you tap</string>
     <string name="clear_confirm_title">Forget learned words?</string>
     <string name="clear_confirm_message">Suggestions go back to the built-in dictionary. This can\'t be undone.</string>
     <string name="clear_confirm">Forget</string>
@@ -161,7 +163,7 @@
     <string name="guide_gif">In the emoji panel, tap GIF. Tap the search field to type, enter to search, then tap a GIF to send it. Apps that don\'t take GIFs get the link instead. Needs a free KLIPY key (Settings → GIFs), where you can also hide the GIF tab.</string>
     <string name="guide_cat_5">Learning and privacy</string>
     <string name="guide_learning_title">Learning your words</string>
-    <string name="guide_learning">Continuum learns the words you type, how you spell them, and which words follow which. A new word typed once shows up next to the best guess; type it again or pick it from the bar and it becomes a normal suggestion. Typing → Forget learned words clears everything learned.</string>
+    <string name="guide_learning">Continuum learns the words you type, how you spell them, and which words follow which. A new word typed once shows up next to the best guess; type it again or pick it from the bar and it becomes a normal suggestion. It also learns where your thumbs land on each letter, from the words you keep (Typing → Learn how you tap). Typing → Forget learned words clears everything learned.</string>
     <string name="guide_privacy_title">Privacy</string>
     <string name="guide_privacy">Everything you type stays on your phone and is never backed up to the cloud. Private (incognito) fields teach it nothing. The only thing that goes online is a GIF search, sent to KLIPY.</string>
     <string name="guide_cat_6">Settings</string>

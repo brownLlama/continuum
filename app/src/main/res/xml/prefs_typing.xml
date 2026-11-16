@@ -55,6 +55,11 @@
             app:useSimpleSummaryProvider="true" />
     </PreferenceCategory>
     <PreferenceCategory app:title="@string/cat_learned">
+        <SwitchPreferenceCompat
+            app:defaultValue="true"
+            app:key="touch_adapt"
+            app:summary="@string/pref_touch_adapt_summary"
+            app:title="@string/pref_touch_adapt" />
         <Preference
             app:icon="@drawable/ic_delete"
             app:key="clear_learned_action"

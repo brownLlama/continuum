@@ -105,11 +105,14 @@ class Keyboard(prefs: Map<String, Any> = emptyMap()) {
     private val layout get() = KeyLayout.named(PreferenceManager.getDefaultSharedPreferences(context).getString(Prefs.LAYOUT, Prefs.LAYOUT_DEFAULT))
     private val full get() = PreferenceManager.getDefaultSharedPreferences(context).getString(Prefs.MODE, "mini") == "full"
 
-    /** Taps the letters of [word], as full-mode key taps when [full] (password fields are always full mode). */
-    fun type(word: String, full: Boolean = this.full) {
+    /**
+     * Taps the letters of [word], as full-mode key taps when [full] (password fields are always
+     * full mode), each [dx] across and [dy] down from the key's centre (in slots or keys).
+     */
+    fun type(word: String, full: Boolean = this.full, dx: Float = 0f, dy: Float = 0f) {
         for (ch in word) {
             val c = ch.lowercaseChar() - 'a'
-            ime.onLetterTap(if (full) Tap(layout.fullX[c], layout.fullY[c]) else Tap(layout.miniSlot[c].toFloat(), 0f))
+            ime.onLetterTap(if (full) Tap(layout.fullX[c] + dx, layout.fullY[c] + dy) else Tap(layout.miniSlot[c] + dx, 0f))
         }
     }
 
