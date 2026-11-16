@@ -220,7 +220,7 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
      */
     private class LastCommit(
         val text: String, val spaced: Boolean, val taps: List<Tap>, val mode: Mode, val prevBefore: String?,
-        val learned: String, val glue: Glue?,
+        val learned: String, val glue: Glue?, val sentenceStart: Boolean,
     )
     private var lastCommit: LastCommit? = null
 
@@ -728,7 +728,7 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
         pendingWord?.let { if (it.split) stats.splitUndone(it.mode) }
         pendingWord = null
         fixing = true
-        if (learning) unlearn(last.prevBefore, last.learned)
+        if (learning) unlearn(pairPrev(last.prevBefore, last.sentenceStart), last.learned)
         prevWord = last.prevBefore
         ic.beginBatchEdit()
         ic.deleteSurroundingText(expected.length, 0)
@@ -1387,7 +1387,7 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
         // A joined word replaces what was learned for its first part: "zazzy" + "'s" → "zazzy's".
         val g = wordGlue?.takeIf { Dictionary.keyOf(text) != null }
         if (g != null && !g.absorbed) {
-            if (learning) Dictionary.keyOf(g.prefix)?.let { user.unlearn(g.prevBefore, it) }
+            if (learning) Dictionary.keyOf(g.prefix)?.let { user.unlearn(pairPrev(g.prevBefore, g.sentenceStart), it) }
             g.absorbed = true
         }
         if (g != null) prevWord = g.prevBefore
@@ -1416,7 +1416,7 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
             pendingTouch = PendingTouch(layout, tapMode, ArrayList(taps), typedKey, fixed)
         }
         deletedTaps.clear()
-        lastCommit = LastCommit(text, spaced, ArrayList(taps), tapMode, prevBefore, learned, g)
+        lastCommit = LastCommit(text, spaced, ArrayList(taps), tapMode, prevBefore, learned, g, g?.sentenceStart ?: wordSentenceStart)
         wordGlue = null
         taps.clear()
         result = null
@@ -1461,11 +1461,17 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
             sentenceStart && word.drop(1).none { it.isUpperCase() } -> null
             else -> word
         }
-        user.learn(prevWord, key, form)
+        user.learn(pairPrev(prevWord, sentenceStart), key, form)
         // Picking a new word from the bar confirms it, as typing it a second time would.
         if (picked) user.confirm(key)
         prevWord = key
     }
+
+    /**
+     * The word a word is learned after: [prev], or at the start of a sentence, the sentence start
+     * ([UserModel.START]), so the words the user begins with are learned as well.
+     */
+    private fun pairPrev(prev: String?, sentenceStart: Boolean) = prev ?: if (sentenceStart) UserModel.START else null
 
     /** Takes back what [learn] taught for [text] typed after [prev] (each word of it, if it is two). */
     private fun unlearn(prev: String?, text: String) {

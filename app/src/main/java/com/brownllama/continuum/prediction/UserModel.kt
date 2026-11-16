@@ -316,6 +316,12 @@ class UserModel(
         private const val FLUSH_TIMEOUT_S = 2L
         /** One background thread for every save, so writes never overlap or run out of order. */
         private val WRITER = Executors.newSingleThreadExecutor { r -> Thread(r, "user-model").apply { isDaemon = true } }
+        /**
+         * Stands for the start of a sentence in word pairs, so the words the user begins with
+         * ("ok", "hi") are learned like those after a word. Not a word (no letters), so it never
+         * clashes with one.
+         */
+        const val START = "<s>"
         /** Uses after which a word is the user's own rather than a candidate (see [isConfirmed]). */
         const val CONFIRMED_COUNT = 2
         /** Caps, as in AOSP's keyboard; pruning starts once a table is [COMPACT_AT] times over. */

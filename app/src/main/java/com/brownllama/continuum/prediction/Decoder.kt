@@ -81,6 +81,8 @@ class Decoder(private val dict: Dictionary, private val user: UserModel) {
     ): DecodeResult {
         val n = taps.size
         val ctx = context(prev, start)
+        // What the user typed after this word, or at the start of a sentence (how they begin: "ok").
+        val userPrev = prev ?: if (start) UserModel.START else null
         val shape = if (adapt) touch?.shape(layout, mode) else null
         val table = Array(n) { i -> spatialRow(taps[i], mode, layout, shape) }
 
@@ -130,7 +132,7 @@ class Decoder(private val dict: Dictionary, private val user: UserModel) {
             val di = dict.indexOf(c.key)
             // A word the user typed is at least as likely as a new word, however rare in the corpus.
             val lift = if (di >= 0) maxOf(0f, NEW_WORD_LOG_FREQ - dict.logFreq[di]) else 0f
-            var b = c.plus(userBoost(count, user.bigramCount(prev, c.key)) + lift + userPenalty(extra) - dictPenalty(extra))
+            var b = c.plus(userBoost(count, user.bigramCount(userPrev, c.key)) + lift + userPenalty(extra) - dictPenalty(extra))
             // Show the word the way the user writes it ("tero"), not the dictionary's "Tero".
             val form = shownForm(c.key)
             if (form != null && b.display.equals(form, ignoreCase = true)) b = b.shownAs(form)
@@ -156,7 +158,7 @@ class Decoder(private val dict: Dictionary, private val user: UserModel) {
             // A word the dictionary lacks has no next-word data: neither lift nor backoff.
             val base = if (di >= 0) maxOf(dict.logFreq[di], NEW_WORD_LOG_FREQ) + bonus(ctx, di) else NEW_WORD_LOG_FREQ
             // Words the user has typed are completed much more eagerly than dictionary words.
-            val rest = base + userBoost(count, user.bigramCount(prev, key)) + userPenalty(extra)
+            val rest = base + userBoost(count, user.bigramCount(userPrev, key)) + userPenalty(extra)
             if (rest < floor.value) continue
             val s = spatial(w.codes, 0, table, 0, n, floor.value - rest)
             if (s == MISS) continue
@@ -182,7 +184,7 @@ class Decoder(private val dict: Dictionary, private val user: UserModel) {
         val literalCount = user.count(literal)
         val literalIsWord = (literalIdx >= 0 && !dict.isMisspelling(literalIdx)) || literalCount > 0
         val literalLm = (if (literalIdx >= 0) dict.logFreq[literalIdx] + ctx.of(literalIdx) else Dictionary.UNKNOWN_LOG_FREQ) +
-            userBoost(literalCount, user.bigramCount(prev, literal))
+            userBoost(literalCount, user.bigramCount(userPrev, literal))
 
         // Typos: only corrections that come close to the best reading without one (an exact match, or
         // a word still being typed) are worth finding. Letters picked exactly (zoom / long-press) are
@@ -191,7 +193,7 @@ class Decoder(private val dict: Dictionary, private val user: UserModel) {
         val unfinished = boostedComp.firstOrNull()?.score ?: MISS
         val fixes = if (n < MIN_CORRECTION_TAPS || taps.any { it.exact >= 0 }) emptyList() else {
             val gate = maxOf(top.firstOrNull()?.score ?: MISS, unfinished) - CORRECTION_WINDOW
-            val typos = corrections(table, n, prev, gate, boosted.mapTo(HashSet()) { it.key }, ctx, minOf(limit, MAX_CORRECTIONS))
+            val typos = corrections(table, n, userPrev, gate, boosted.mapTo(HashSet()) { it.key }, ctx, minOf(limit, MAX_CORRECTIONS))
             val pairs = if (splits) twoWords(table, n, gate, ctx) else emptyList()
             if (pairs.isEmpty()) typos else (typos + pairs).sortedByDescending { it.score }
         }
@@ -219,7 +221,7 @@ class Decoder(private val dict: Dictionary, private val user: UserModel) {
      * Keys in [skip] are already offered as exact matches.
      */
     private fun corrections(
-        table: Array<FloatArray>, n: Int, prev: String?, gate: Float, skip: Set<String>,
+        table: Array<FloatArray>, n: Int, userPrev: String?, gate: Float, skip: Set<String>,
         ctx: NextContext, limit: Int,
     ): List<Candidate> {
         val maxEdits = if (n >= TWO_EDIT_TAPS) 2 else 1
@@ -261,7 +263,7 @@ class Decoder(private val dict: Dictionary, private val user: UserModel) {
             val count = user.count(c.key)
             if (count == 0 || !isUsersForm(c, spelled)) { out += c.edit(); continue }
             val lift = maxOf(0f, NEW_WORD_LOG_FREQ - dict.logFreq[dict.indexOf(c.key)])
-            var b = c.plus(userBoost(count, user.bigramCount(prev, c.key)) + lift)
+            var b = c.plus(userBoost(count, user.bigramCount(userPrev, c.key)) + lift)
             val form = shownForm(c.key)
             if (form != null && b.display.equals(form, ignoreCase = true)) b = b.shownAs(form)
             out += b.edit()
@@ -276,7 +278,7 @@ class Decoder(private val dict: Dictionary, private val user: UserModel) {
             val w = userWord(key)
             val di = w.index
             val rest = (if (di >= 0) maxOf(dict.logFreq[di], NEW_WORD_LOG_FREQ) + bonus(ctx, di) else NEW_WORD_LOG_FREQ) +
-                userBoost(count, user.bigramCount(prev, key))
+                userBoost(count, user.bigramCount(userPrev, key))
             val min = maxOf(floor.value, gate) - rest
             if (table[0][w.codes[0].toInt()] - minCost(key.length, n) < min) continue
             val s = edited(w.codes, 0, key.length, table, n, min, scratch)
@@ -520,7 +522,8 @@ class Decoder(private val dict: Dictionary, private val user: UserModel) {
     /** Next-word suggestions when nothing is being typed. */
     fun predict(prev: String?, sentenceStart: Boolean, limit: Int = 3): List<String> {
         val out = ArrayList<String>()
-        for (k in user.following(prev, limit)) out += shownForm(k) ?: dict.displayFor(k)
+        // With no word before, the words the user starts with ("ok", "hi").
+        for (k in user.following(prev ?: UserModel.START, limit)) out += shownForm(k) ?: dict.displayFor(k)
         val model = if (sentenceStart || prev == null) dict.startWords else dict.nextFor(prev)
         val defaults = if (sentenceStart || prev == null) START_WORDS else FOLLOW_WORDS
         val frequent = user.mostUsed(limit).map { shownForm(it) ?: dict.displayFor(it) }
