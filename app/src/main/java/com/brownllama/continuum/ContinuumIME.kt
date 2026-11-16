@@ -1435,7 +1435,8 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
     /**
      * Records a committed word, and how the user spells it. Only capitals that say something about
      * the word change that spelling: a capital starting a sentence doesn't ("Zorp is…" stays "zorp"),
-     * nor do all caps for emphasis ("NEVER"), unless the word is spelled that way ("NASA") or new.
+     * nor do all caps (caps lock, "NEVER"). Only a capital inside a word is shown without shift
+     * ("brownLlama"; the first letter's case is the dictionary's, see Decoder.shownForm).
      */
     private fun learn(word: String, sentenceStart: Boolean, picked: Boolean = false) {
         // Two words typed as one ("thank you" for "thankyou") are learned one after the other.
@@ -1452,12 +1453,11 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
             return
         }
         user.unblock(word)
-        val dictForm = dict?.takeIf { it.contains(key) }?.displayFor(key)
         // null keeps the spelling learned before (or the dictionary's).
         val form = when {
             word.none { it.isUpperCase() } -> word
-            word.count { it.isLetter() } > 1 && word.none { it.isLowerCase() } ->
-                word.takeIf { it == dictForm || dictForm == null && user.count(key) == 0 }
+            // All caps is caps lock (or emphasis): capitals only ever come from shift.
+            word.count { it.isLetter() } > 1 && word.none { it.isLowerCase() } -> null
             sentenceStart && word.drop(1).none { it.isUpperCase() } -> null
             else -> word
         }

@@ -81,6 +81,34 @@ class CapitalsTest {
         assertEquals("BrownLlama ", k.typed("by ", "brownllama", shift = true))
     }
 
+    @Test fun `shift at a sentence start doesn't change a word's spelling`() {
+        for (mode in listOf("mini", "full")) {
+            val k = keyboard(mode)
+            // iPhone started with shift is "IPhone" that once, and "iPhone" again after.
+            assertEquals(mode, "IPhone ", k.typed("", "iphone", shift = true))
+            assertEquals(mode, "iPhone ", k.typed("my ", "iphone"))
+            assertEquals(mode, "iPhone ", k.typed("my ", "iphone"))
+        }
+        // The same for a word of the user's own with a capital inside.
+        val k = keyboard("full")
+        k.focus(text = "ok ")
+        k.type("brown"); k.ime.onShift(); k.type("llama"); k.space()
+        assertEquals("BrownLlama ", k.typed("", "brownllama", shift = true))
+        assertEquals("brownLlama ", k.typed("by ", "brownllama"))
+    }
+
+    @Test fun `all caps typed with caps lock don't stick`() {
+        for (mode in listOf("full", "mini")) {
+            val k = keyboard("full")
+            k.focus(text = "ok ")
+            k.ime.onShift(); k.ime.onShift() // caps lock
+            k.type("zorbix"); k.ime.onShift(); k.ime.onShift(); k.space()
+            assertTrue(mode, k.text.startsWith("ok ZORBIX"))
+            if (mode == "mini") { k.ime.onModeToggle(); k.idle() }
+            assertEquals(mode, "zorbix ", k.typed("ok ", "zorbix"))
+        }
+    }
+
     @Test fun `a word learned in lowercase first shows only the spelling typed with a capital`() {
         for (mode in listOf("full", "mini")) {
             val k = keyboard("full")

@@ -132,7 +132,7 @@ class Decoder(private val dict: Dictionary, private val user: UserModel) {
             val lift = if (di >= 0) maxOf(0f, NEW_WORD_LOG_FREQ - dict.logFreq[di]) else 0f
             var b = c.plus(userBoost(count, user.bigramCount(prev, c.key)) + lift + userPenalty(extra) - dictPenalty(extra))
             // Show the word the way the user writes it ("tero"), not the dictionary's "Tero".
-            val form = user.formOf(c.key)
+            val form = shownForm(c.key)
             if (form != null && b.display.equals(form, ignoreCase = true)) b = b.shownAs(form)
             list[i] = b
         }
@@ -160,7 +160,7 @@ class Decoder(private val dict: Dictionary, private val user: UserModel) {
             if (rest < floor.value) continue
             val s = spatial(w.codes, 0, table, 0, n, floor.value - rest)
             if (s == MISS) continue
-            val form = user.formOf(key)
+            val form = shownForm(key)
             val display = form ?: dict.displayFor(key)
             if (user.isBlocked(display)) continue
             val tentative = di < 0 && !user.isConfirmed(key)
@@ -262,7 +262,7 @@ class Decoder(private val dict: Dictionary, private val user: UserModel) {
             if (count == 0 || !isUsersForm(c, spelled)) { out += c.edit(); continue }
             val lift = maxOf(0f, NEW_WORD_LOG_FREQ - dict.logFreq[dict.indexOf(c.key)])
             var b = c.plus(userBoost(count, user.bigramCount(prev, c.key)) + lift)
-            val form = user.formOf(c.key)
+            val form = shownForm(c.key)
             if (form != null && b.display.equals(form, ignoreCase = true)) b = b.shownAs(form)
             out += b.edit()
         }
@@ -281,7 +281,7 @@ class Decoder(private val dict: Dictionary, private val user: UserModel) {
             if (table[0][w.codes[0].toInt()] - minCost(key.length, n) < min) continue
             val s = edited(w.codes, 0, key.length, table, n, min, scratch)
             if (s == MISS) continue
-            val display = user.formOf(key) ?: dict.displayFor(key)
+            val display = shownForm(key) ?: dict.displayFor(key)
             if (user.isBlocked(display)) continue
             val tentative = di < 0 && !user.isConfirmed(key)
             out += Candidate(key, display, s + rest, if (di >= 0) dict.emojiFor(di) else null, tentative, edited = true)
@@ -357,6 +357,20 @@ class Decoder(private val dict: Dictionary, private val user: UserModel) {
         if (' ' !in fix.display) return 0f
         val i = dict.indexOf(exact.key)
         return if (i >= 0 && !dict.isMisspelling(i) || user.count(exact.key) > 0) SPLIT_MARGIN else 0f
+    }
+
+    /**
+     * How the user writes the word with this [key] ([UserModel.formOf]), with its first letter as
+     * the dictionary has it (lowercase for a word it lacks): a capital there comes from shift each
+     * time, never from the spelling, so "iPhone" typed with shift at a sentence start ("IPhone")
+     * doesn't become "IPhone" for good. The dictionary's own capital stays ("I'm").
+     */
+    private fun shownForm(key: String): String? {
+        val form = user.formOf(key) ?: return null
+        val di = dict.indexOf(key)
+        val upper = di >= 0 && dict.display(di).firstOrNull()?.isUpperCase() == true
+        if (form.isEmpty() || form[0].isUpperCase() == upper) return form
+        return form.replaceFirstChar { if (upper) it.uppercaseChar() else it.lowercaseChar() }
     }
 
     /** Keys where one of the candidates is spelled the way the user writes the word ([UserModel.formOf]). */
@@ -506,10 +520,10 @@ class Decoder(private val dict: Dictionary, private val user: UserModel) {
     /** Next-word suggestions when nothing is being typed. */
     fun predict(prev: String?, sentenceStart: Boolean, limit: Int = 3): List<String> {
         val out = ArrayList<String>()
-        for (k in user.following(prev, limit)) out += user.formOf(k) ?: dict.displayFor(k)
+        for (k in user.following(prev, limit)) out += shownForm(k) ?: dict.displayFor(k)
         val model = if (sentenceStart || prev == null) dict.startWords else dict.nextFor(prev)
         val defaults = if (sentenceStart || prev == null) START_WORDS else FOLLOW_WORDS
-        val frequent = user.mostUsed(limit).map { user.formOf(it) ?: dict.displayFor(it) }
+        val frequent = user.mostUsed(limit).map { shownForm(it) ?: dict.displayFor(it) }
         for (d in model + defaults + frequent) if (out.size < limit && out.none { it.equals(d, ignoreCase = true) }) out += d
         out.removeAll { user.isBlocked(it) }
         return out
