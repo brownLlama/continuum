@@ -60,6 +60,7 @@ import com.brownllama.continuum.stats.TypingStats
 import com.brownllama.continuum.theme.AppThemes
 import com.brownllama.continuum.theme.KeyboardTheme
 import java.io.File
+import java.util.Locale
 import java.util.concurrent.Executors
 import kotlin.math.roundToInt
 
@@ -1277,7 +1278,12 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
         predictionsShown = false
         deletedShown = false
         val literal = r?.literal ?: buildString { for (t in taps) append('a' + nearestLetter(t)) }
-        val literalText = applyCase(literal, keepDisplay = false)
+        // The typed letters spelled the way the word is when that differs only in capitals ("iphone"
+        // → "iPhone", "i" → "I", a learned "brownLlama"): no letter changes, so it is still exact.
+        val spelled = r?.words?.firstOrNull {
+            it.key == literal && it.display.length == literal.length && it.display.equals(literal, ignoreCase = true)
+        }?.display ?: literal
+        val literalText = applyCase(spelled)
         val words = r?.words.orEmpty().map { applyCase(it.display) }
         // Typo corrections take their place among the runners-up by score.
         val more = (r?.words.orEmpty().drop(1) + r?.completions.orEmpty() + r?.corrections.orEmpty())
@@ -1376,7 +1382,7 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
         val ic = editor() ?: return
         val text = if (keepShown && composingText.isNotEmpty()) composingText
             else choice ?: slots.getOrNull(defaultSlot)?.takeIf { it.isNotEmpty() }
-                ?: applyCase(result?.literal ?: "", keepDisplay = false)
+                ?: applyCase(result?.literal ?: "")
         if (keepShown) ic.finishComposingText() else ic.commitText(text + if (spaced) " " else "", 1)
         // A joined word replaces what was learned for its first part: "zazzy" + "'s" → "zazzy's".
         val g = wordGlue?.takeIf { Dictionary.keyOf(text) != null }
@@ -1531,11 +1537,13 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
             return
         }
         predictionsShown = true
+        // Lowercase unless shift is on, like typed words (see applyCase).
         val words = d.predict(prevWord, sentenceStart = shift != Shift.OFF, limit = MAX_SUGGESTIONS).map {
+            val plain = plainCase(it)
             when (shift) {
-                Shift.OFF -> it
-                Shift.ON -> it.replaceFirstChar { c -> c.uppercaseChar() }
-                Shift.LOCK -> it.uppercase()
+                Shift.OFF -> plain
+                Shift.ON -> plain.replaceFirstChar { c -> c.uppercaseChar() }
+                Shift.LOCK -> plain.uppercase(Locale.ROOT)
             }
         }
         // Left to right by likelihood ("the | I | in").
@@ -1544,20 +1552,34 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
     }
 
     /**
-     * Applies the shift state of the taps to a suggestion: all caps if every letter was shifted,
-     * else a capital first letter. With [keepDisplay] off, each letter follows its own tap instead.
+     * Applies the shift state of the taps to a suggestion. Capitals come only from shift: the word
+     * is lowercase but for capitals inside it ([plainCase]: "london", "iPhone"), then all caps if
+     * every letter was shifted, else each letter typed with shift is a capital (when the word's
+     * letters line up with the taps), else just the first letter if that was shifted.
      */
-    private fun applyCase(word: String, keepDisplay: Boolean = true): String {
+    private fun applyCase(word: String): String {
         if (word.isEmpty() || taps.isEmpty()) return word
-        return when {
-            taps.size > 1 && taps.all { it.upper } -> word.uppercase()
-            !keepDisplay -> String(CharArray(word.length) { i ->
-                if (taps.getOrNull(i)?.upper == true) word[i].uppercaseChar() else word[i]
+        val plain = plainCase(word)
+        if (taps.size > 1 && taps.all { it.upper }) return plain.uppercase(Locale.ROOT)
+        if (plain.count { it.isLetter() } == taps.size) {
+            var t = 0
+            return String(CharArray(plain.length) { i ->
+                val ch = plain[i]
+                if (ch.isLetter() && taps[t++].upper) ch.uppercaseChar() else ch
             })
-            taps[0].upper -> word.replaceFirstChar { it.uppercaseChar() }
-            else -> word
         }
+        return if (taps[0].upper) plain.replaceFirstChar { it.uppercaseChar() } else plain
     }
+
+    /**
+     * How a word is spelled when shift wasn't pressed: lowercase ("hey", "london", even if it was
+     * learned or listed with a capital), except a word with a capital inside it ("iPhone",
+     * "McDonald", one the user typed that way), and "I" and its contractions ("I'm", "I'll", "I'd",
+     * "I've"), which always have a capital I. Two words ("am I") are each treated so.
+     */
+    private fun plainCase(word: String): String = word.split(' ')
+        .joinToString(" ") { w -> if (w.drop(1).any { it.isUpperCase() }) w else w.lowercase(Locale.ROOT) }
+        .replace(LONE_I, "I")
 
     /** The letter (0..25) closest to a tap, ignoring word likelihood. */
     private fun nearestLetter(t: Tap): Int {
@@ -1638,7 +1660,6 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
         setShift(if (atSentenceStart(ic)) Shift.ON else Shift.OFF)
     }
 
-    /** The cursor is at the start of the field, a line, or a sentence ("Done. |"). */
     /** The ordinal ending for the number right before the cursor ("1" → "st", "12" → "th"), or null. */
     private fun ordinalAfterCursor(): String? {
         val before = editor()?.getTextBeforeCursor(8, 0)?.toString() ?: return null
@@ -1670,10 +1691,11 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
         val r = d.decode(synthetic, mode, layout, null, adapt = false)
         val cap = word.first().isUpperCase()
         val alts = (r.words + r.corrections + r.completions).sortedByDescending { it.score }
-            .map { c -> if (cap) c.display.replaceFirstChar { it.uppercaseChar() } else c.display }
+            .map { c -> plainCase(c.display).let { w -> if (cap) w.replaceFirstChar { it.uppercaseChar() } else w } }
         return (listOf(word) + alts).distinct()
     }
 
+    /** The cursor is at the start of the field, a line, or a sentence ("Done. |"). */
     private fun atSentenceStart(ic: InputConnection? = editor()): Boolean {
         val before = ic?.getTextBeforeCursor(3, 0)?.toString() ?: return false
         val trimmed = before.trimEnd(' ')
@@ -1713,6 +1735,8 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
         /** Punctuation that sticks to the previous word, taking the space before it. */
         private const val ATTACHING_PUNCTUATION = ".,!?;:"
         private const val SENTENCE_END = ".!?"
+        /** "i" as a word of its own (or before an apostrophe: "i'm"), not inside one ("in"). */
+        private val LONE_I = Regex("(?<!\\p{L})i(?!\\p{L})")
         /** Characters that join two parts into one word ("zazzy's", "self-aware"). */
         private const val JOINERS = "'’-"
         /** Number spellings offered next to a word ("someone" → "some1"). */
