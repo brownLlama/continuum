@@ -24,6 +24,30 @@
     <string name="summary_gestures">← delete word · → space · ↓ numbers · ↑ full · ↖ ↗ enter</string>
     <string name="version_title">Version</string>
     <string name="summary_guide">How to type, gestures, emoji, clipboard, privacy</string>
+    <string name="screen_stats">Typing statistics</string>
+    <string name="summary_stats_empty">How often words are kept as typed, picked or fixed</string>
+    <string name="summary_stats">Last 7 days: %1$d%% of words kept as typed</string>
+
+    <!-- Typing statistics page (TypingStats). -->
+    <string name="stats_about_title">Counts only</string>
+    <string name="stats_about">How your typing goes, to see whether a change helps: no words or text are kept, only counts. They stay on this phone.</string>
+    <string name="stats_week">Last 7 days</string>
+    <string name="stats_since">Since %1$s</string>
+    <string name="stats_mode_mini">Mini mode</string>
+    <string name="stats_mode_full">Full keyboard</string>
+    <string name="stats_mode_title">%1$s · %2$s words</string>
+    <string name="stats_mode_summary">Kept as typed %1$d%% · picked from the bar %2$d%% · fixed %3$d%%</string>
+    <string name="stats_predictions">Next-word predictions used: %1$s</string>
+    <string name="stats_splits">Missed spaces: %1$s typed as two words, %2$s undone</string>
+    <string name="stats_taps">Learn how you tap: learned from %1$s taps</string>
+    <string name="stats_none">Nothing counted yet.</string>
+    <string name="stats_cat_reset">Start again</string>
+    <string name="stats_reset">Reset statistics</string>
+    <string name="stats_reset_summary">Count from zero, for example before trying a setting. Learned words stay.</string>
+    <string name="stats_reset_confirm_title">Reset statistics?</string>
+    <string name="stats_reset_confirm_message">All counts start again from zero. Learned words and settings are not affected.</string>
+    <string name="stats_reset_confirm">Reset</string>
+    <string name="stats_reset_done">Statistics reset</string>
     <string name="reset_title">Reset to defaults</string>
     <string name="reset_summary">Put every setting back as it was. Learned words and your KLIPY key are kept.</string>
     <string name="reset_confirm_title">Reset all settings?</string>

@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Typing statistics: counts only, filled in by SettingsActivity.ScreenFragment (see TypingStats). -->
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+    <Preference
+        app:key="stats_about"
+        app:selectable="false"
+        app:summary="@string/stats_about"
+        app:title="@string/stats_about_title" />
+    <PreferenceCategory
+        app:key="stats_week"
+        app:title="@string/stats_week" />
+    <PreferenceCategory app:key="stats_all" />
+    <PreferenceCategory app:title="@string/stats_cat_reset">
+        <Preference
+            app:icon="@drawable/ic_delete"
+            app:key="stats_reset"
+            app:summary="@string/stats_reset_summary"
+            app:title="@string/stats_reset" />
+    </PreferenceCategory>
+</PreferenceScreen>

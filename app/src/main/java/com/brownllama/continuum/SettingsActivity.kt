@@ -28,11 +28,17 @@ import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.snackbar.Snackbar
 import com.google.android.material.textfield.TextInputLayout
+import com.brownllama.continuum.prediction.Mode
+import com.brownllama.continuum.stats.TypingStats
+import java.text.DateFormat
+import java.text.NumberFormat
+import java.util.Date
 
 /**
  * The app's launcher screen. On top: a setup card (only until Continuum is the current keyboard)
  * and a field to try the keyboard. Below: a short menu (res/xml/prefs_root.xml) whose rows open
- * one page each (Appearance, Size & position, Typing, Gestures, Text shortcuts, GIFs, Guide) and
+ * one page each (Appearance, Size & position, Typing, Gestures, Text shortcuts, GIFs, Typing
+ * statistics, Guide) and
  * Reset to defaults.
  *
  * The keyboard service reads the same SharedPreferences and updates live as they change.
@@ -134,6 +140,10 @@ class SettingsActivity : AppCompatActivity(), PreferenceFragmentCompat.OnPrefere
                     }
                     showShortcuts()
                 }
+                "stats" -> findPreference<Preference>("stats_reset")?.setOnPreferenceClickListener {
+                    confirmStatsReset()
+                    true
+                }
                 "gifs" -> findPreference<EditTextPreference>(Prefs.KLIPY_KEY)?.apply {
                     // Show whether a key is set, not the key itself.
                     summaryProvider = Preference.SummaryProvider<EditTextPreference> {
@@ -150,6 +160,63 @@ class SettingsActivity : AppCompatActivity(), PreferenceFragmentCompat.OnPrefere
         override fun onResume() {
             super.onResume()
             if (screen == ROOT) updateMenuSummaries()
+            if (screen == "stats") showStats()
+        }
+
+        /** Fills the statistics page: per mode, the last 7 days and everything since counting began. */
+        private fun showStats() {
+            val stats = TypingStats.get(requireContext())
+            // Before anything was counted, counting starts today.
+            val day = stats.since.takeIf { it > 0 } ?: (System.currentTimeMillis() / DAY_MS).toInt()
+            val since = DateFormat.getDateInstance(DateFormat.MEDIUM).format(Date(day * DAY_MS))
+            findPreference<PreferenceGroup>("stats_all")?.title = getString(R.string.stats_since, since)
+            fill("stats_week", stats.counts(WEEK))
+            fill("stats_all", stats.counts(null))
+        }
+
+        private fun fill(key: String, counts: Map<Mode, TypingStats.Counts>) {
+            val group = findPreference<PreferenceGroup>(key) ?: return
+            group.removeAll()
+            val n = NumberFormat.getIntegerInstance()
+            fun row(title: String, summary: String?) = group.addPreference(
+                Preference(requireContext()).apply {
+                    this.title = title
+                    this.summary = summary
+                    isSelectable = false
+                    isPersistent = false
+                    isIconSpaceReserved = false
+                },
+            )
+            var any = false
+            for (mode in Mode.entries) {
+                val c = counts[mode] ?: continue
+                if (c.words == 0L && c.predictions == 0L) continue
+                any = true
+                val name = getString(if (mode == Mode.MINI) R.string.stats_mode_mini else R.string.stats_mode_full)
+                val lines = ArrayList<String>()
+                if (c.words > 0) lines += getString(R.string.stats_mode_summary, pct(c.kept, c.words), pct(c.picked, c.words), pct(c.fixed, c.words))
+                if (c.predictions > 0) lines += getString(R.string.stats_predictions, n.format(c.predictions))
+                if (c.splits > 0) lines += getString(R.string.stats_splits, n.format(c.splits), n.format(c.splitsUndone))
+                if (c.tapsLearned > 0) lines += getString(R.string.stats_taps, n.format(c.tapsLearned))
+                row(getString(R.string.stats_mode_title, name, n.format(c.words)), lines.joinToString("\n"))
+            }
+            if (!any) row(getString(R.string.stats_none), null)
+        }
+
+        /** [part] of [whole] in whole percent; the three shares of a mode add up to about 100. */
+        private fun pct(part: Long, whole: Long) = if (whole == 0L) 0 else Math.round(part * 100.0 / whole).toInt()
+
+        private fun confirmStatsReset() {
+            MaterialAlertDialogBuilder(requireContext())
+                .setTitle(R.string.stats_reset_confirm_title)
+                .setMessage(R.string.stats_reset_confirm_message)
+                .setNegativeButton(android.R.string.cancel, null)
+                .setPositiveButton(R.string.stats_reset_confirm) { _, _ ->
+                    TypingStats.get(requireContext()).reset()
+                    showStats()
+                    Toast.makeText(requireContext(), R.string.stats_reset_done, Toast.LENGTH_SHORT).show()
+                }
+                .show()
         }
 
         override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
@@ -293,6 +360,10 @@ class SettingsActivity : AppCompatActivity(), PreferenceFragmentCompat.OnPrefere
                 },
             )
             findPreference<Preference>("guide")?.setSummary(R.string.summary_guide)
+            val week = TypingStats.get(requireContext()).counts(WEEK).values
+            val words = week.sumOf { it.words }
+            findPreference<Preference>("stats")?.summary = if (words == 0L) getString(R.string.summary_stats_empty)
+                else getString(R.string.summary_stats, pct(week.sumOf { it.kept }, words))
         }
 
         /** The IME owns the learned words, so it's asked to clear them through a preference change. */
@@ -325,6 +396,9 @@ class SettingsActivity : AppCompatActivity(), PreferenceFragmentCompat.OnPrefere
         companion object {
             const val ROOT = "root"
             private const val ARG_SCREEN = "screen"
+            /** The statistics page's short window, in days. */
+            private const val WEEK = 7
+            private const val DAY_MS = 24L * 60 * 60 * 1000
 
             /** Page name (the menu row's key) → its preferences XML. */
             private val SCREENS: Map<String, Int> = mapOf(
@@ -335,6 +409,7 @@ class SettingsActivity : AppCompatActivity(), PreferenceFragmentCompat.OnPrefere
                 "gestures" to R.xml.prefs_gestures,
                 "shortcuts" to R.xml.prefs_shortcuts,
                 "gifs" to R.xml.prefs_gifs,
+                "stats" to R.xml.prefs_stats,
                 "guide" to R.xml.prefs_guide,
             )
 
