@@ -9,51 +9,48 @@ import java.util.concurrent.Executor
 import kotlin.math.sqrt
 
 /**
- * Where this user's taps land: for each letter, how far from the key's centre they usually are,
- * and for the keyboard as a whole, how widely they scatter. The decoder ([Decoder.touch]) then
- * expects each letter where the user actually puts it, instead of at the centre of its key.
+ * Where this user's taps land: for each letter, how far from its key's centre they usually are.
+ * The decoder ([Decoder.touch]) then expects each letter where the user actually puts it.
  *
  * It learns from words the user kept ([learn]): every tap of such a word was meant for its letter.
  * Words whose taps don't fit their letters (a typo that was corrected, a slip) are left out whole,
- * so a correction can't teach that a letter is somewhere it isn't. It changes slowly: a letter
- * needs [PRIOR_LETTER] taps before its offset counts half, only the last [MAX_LETTER_N] taps of
- * it matter, and offsets and spread stay within fixed bounds, so a few odd taps or a different
- * grip can't take the keyboard far from its defaults.
+ * so a correction can't teach that a letter is somewhere it isn't. An offset is learned in two
+ * parts: where taps land on the whole (one thumb's reach, landing low), from every tap, and each
+ * letter's own difference from that, which needs [PRIOR_LETTER] taps of the letter before it
+ * counts half. Only the latest taps count ([MAX_ALL_N], [MAX_LETTER_N]), so it follows a change of
+ * grip, and offsets stay within [MAX_OFFSET], so a few odd taps can't move a letter far.
+ *
+ * How widely taps scatter is not learned: measured on simulated typists, a spread learned from a
+ * precise typist kept a sloppier one (typing while walking, someone else) worse off than the
+ * default for hundreds of words, because only words that were read right are learned from.
  *
  * Kept separately per layout and mode (a mini-mode slot and a full-mode key are different
  * things), in [file]: app-private, excluded from backups. With [io], the file is read and
- * written in the background.
- *
- * Internally offsets and residuals are in units of the decoder's default spread ([Decoder.sigmaX]),
- * so the same bounds apply to both modes; [Shape] gives them back in the layout's own units.
+ * written in the background. Internally offsets are in units of the decoder's default spread
+ * ([Decoder.sigmaX]), so the same bounds apply to both modes; [Shape] gives them in slots or keys.
  */
 class TouchModel(private val file: File, private val io: Executor? = null) {
 
-    /**
-     * What the decoder needs for one layout and mode: how far each letter's taps land from its
-     * key's centre ([dx], [dy] by letter code, in slots or keys), and how much wider or tighter
-     * than the default they scatter ([scaleX], [scaleY]).
-     */
-    class Shape(val dx: FloatArray, val dy: FloatArray, val scaleX: Float, val scaleY: Float)
+    /** How far each letter's taps land from its key's centre, by letter code: across ([dx]) and down ([dy]). */
+    class Shape(val dx: FloatArray, val dy: FloatArray)
 
-    private class Letter {
+    /** A running mean of where taps landed, over about the latest [n] of them. */
+    private class Mean {
         var n = 0f
         var dx = 0f
         var dy = 0f
-    }
 
-    /** Mean squared distance of taps from where they were expected, in default-spread units. */
-    private class Spread {
-        var n = 0f
-        var vx = 1f
-        var vy = 1f
+        fun add(x: Float, y: Float, max: Float) {
+            n = minOf(n + 1f, max)
+            dx += (x - dx) / n
+            dy += (y - dy) / n
+        }
     }
 
     private class Group {
-        val letters = Array(26) { Letter() }
-        /** Where taps land on average, all letters together. */
-        val all = Letter()
-        val spread = Spread()
+        val letters = Array(26) { Mean() }
+        /** All letters together. */
+        val all = Mean()
         /** [build]'s result, until the next [learn]. */
         var shape: Shape? = null
     }
@@ -78,7 +75,7 @@ class TouchModel(private val file: File, private val io: Executor? = null) {
      * says nothing about where the finger lands. Returns whether the word was used: not when it
      * has fewer than [MIN_TAPS] such taps, its letters don't match the taps one for one (a
      * completion, a correction that added or dropped a letter), or any tap lies further than
-     * [OUTLIER] spreads from where its letter is expected.
+     * [OUTLIER] default spreads from where its letter is expected.
      */
     fun learn(layout: KeyLayout, mode: Mode, taps: List<Tap>, key: String): Boolean {
         loading.await()
@@ -96,33 +93,17 @@ class TouchModel(private val file: File, private val io: Executor? = null) {
             val c = key[i] - 'a'
             rx[i] = (t.x - centreX(layout, mode, c)) / sx
             ry[i] = if (mode == Mode.FULL) (t.y - layout.fullY[c]) / sy else 0f
-            // How far it is from where the letter is expected now, in spreads.
-            // Measured against the default spread at least: a spread learned tighter mustn't keep
-            // out the wider taps that would show it has become wider again.
-            val ex = (rx[i] - (now?.dx?.get(c) ?: 0f) / sx) / maxOf(now?.scaleX ?: 1f, 1f)
-            val ey = (ry[i] - (now?.dy?.get(c) ?: 0f) / sy) / maxOf(now?.scaleY ?: 1f, 1f)
+            // How far it is from where the letter is expected now.
+            val ex = rx[i] - (now?.dx?.get(c) ?: 0f) / sx
+            val ey = ry[i] - (now?.dy?.get(c) ?: 0f) / sy
             if (ex * ex + ey * ey > OUTLIER * OUTLIER) return false
             used += i
         }
         if (used.size < MIN_TAPS) return false
         val group = g ?: Group().also { groups[groupKey(layout, mode)] = it }
-        val spread = group.spread
         for (i in used) {
-            val c = key[i] - 'a'
-            val l = group.letters[c]
-            // The residual from the letter's current offset, for the spread.
-            val ex = rx[i] - (now?.dx?.get(c) ?: 0f) / sx
-            val ey = ry[i] - (now?.dy?.get(c) ?: 0f) / sy
-            l.n = minOf(l.n + 1f, MAX_LETTER_N)
-            l.dx += (rx[i] - l.dx) / l.n
-            l.dy += (ry[i] - l.dy) / l.n
-            val a = group.all
-            a.n = minOf(a.n + 1f, MAX_ALL_N)
-            a.dx += (rx[i] - a.dx) / a.n
-            a.dy += (ry[i] - a.dy) / a.n
-            spread.n = minOf(spread.n + 1f, MAX_SPREAD_N)
-            spread.vx += (ex * ex - spread.vx) / spread.n
-            if (mode == Mode.FULL) spread.vy += (ey * ey - spread.vy) / spread.n
+            group.letters[key[i] - 'a'].add(rx[i], ry[i], MAX_LETTER_N)
+            group.all.add(rx[i], ry[i], MAX_ALL_N)
         }
         group.shape = null
         if (++dirty >= SAVE_EVERY) save()
@@ -143,17 +124,14 @@ class TouchModel(private val file: File, private val io: Executor? = null) {
         if (dirty == 0) return
         dirty = 0
         val text = buildString {
+            fun line(kind: String, name: String, letter: Char?, m: Mean) {
+                append(kind).append('\t').append(name).append('\t')
+                if (letter != null) append(letter).append('\t')
+                append(m.n).append('\t').append(m.dx).append('\t').append(m.dy).append('\n')
+            }
             for ((name, g) in groups) {
-                append("s\t").append(name).append('\t').append(g.spread.n).append('\t')
-                    .append(g.spread.vx).append('\t').append(g.spread.vy).append('\n')
-                append("a\t").append(name).append('\t').append(g.all.n).append('\t')
-                    .append(g.all.dx).append('\t').append(g.all.dy).append('\n')
-                g.letters.forEachIndexed { c, l ->
-                    if (l.n > 0f) {
-                        append("l\t").append(name).append('\t').append('a' + c).append('\t').append(l.n).append('\t')
-                            .append(l.dx).append('\t').append(l.dy).append('\n')
-                    }
-                }
+                line("a", name, null, g.all)
+                g.letters.forEachIndexed { c, m -> if (m.n > 0f) line("l", name, 'a' + c, m) }
             }
         }
         DiskIo.write(file, text, io)
@@ -164,87 +142,65 @@ class TouchModel(private val file: File, private val io: Executor? = null) {
         runCatching {
             file.forEachLine { line ->
                 val p = line.split('\t')
-                when {
-                    p.size == 5 && p[0] == "s" -> groups.getOrPut(p[1]) { Group() }.spread.apply {
-                        n = p[2].toFloatOrNull()?.coerceIn(0f, MAX_SPREAD_N) ?: return@forEachLine
-                        vx = p[3].toFloatOrNull()?.takeIf { it.isFinite() && it >= 0f } ?: 1f
-                        vy = p[4].toFloatOrNull()?.takeIf { it.isFinite() && it >= 0f } ?: 1f
-                    }
-                    p.size == 5 && p[0] == "a" -> groups.getOrPut(p[1]) { Group() }.all.apply {
-                        n = p[2].toFloatOrNull()?.coerceIn(0f, MAX_ALL_N) ?: return@forEachLine
-                        dx = p[3].toFloatOrNull()?.takeIf { it.isFinite() } ?: 0f
-                        dy = p[4].toFloatOrNull()?.takeIf { it.isFinite() } ?: 0f
-                    }
+                val (m, max, at) = when {
+                    p.size == 5 && p[0] == "a" -> Triple(groups.getOrPut(p[1]) { Group() }.all, MAX_ALL_N, 2)
                     p.size == 6 && p[0] == "l" && p[2].length == 1 && p[2][0] in 'a'..'z' ->
-                        groups.getOrPut(p[1]) { Group() }.letters[p[2][0] - 'a'].apply {
-                            n = p[3].toFloatOrNull()?.coerceIn(0f, MAX_LETTER_N) ?: return@forEachLine
-                            dx = p[4].toFloatOrNull()?.takeIf { it.isFinite() } ?: 0f
-                            dy = p[5].toFloatOrNull()?.takeIf { it.isFinite() } ?: 0f
-                        }
+                        Triple(groups.getOrPut(p[1]) { Group() }.letters[p[2][0] - 'a'], MAX_LETTER_N, 3)
+                    else -> return@forEachLine
                 }
+                val n = p[at].toFloatOrNull()?.takeIf { it.isFinite() } ?: return@forEachLine
+                val dx = p[at + 1].toFloatOrNull()?.takeIf { it.isFinite() } ?: return@forEachLine
+                val dy = p[at + 2].toFloatOrNull()?.takeIf { it.isFinite() } ?: return@forEachLine
+                m.n = n.coerceIn(0f, max)
+                m.dx = dx
+                m.dy = dy
             }
         }
     }
 
     /**
-     * The learned numbers as the decoder uses them: each letter's offset weighed by how many of
-     * its taps there are, the spread by how many taps there are in all (both starting from the
-     * defaults), each within its bounds.
+     * The learned offsets as the decoder uses them: where taps land on the whole, weighed by how
+     * many taps that rests on, plus each letter's own difference from it, weighed by the
+     * letter's taps, within [MAX_OFFSET].
      */
     private fun build(g: Group, mode: Mode): Shape {
         val sx = Decoder.sigmaX(mode)
         val sy = Decoder.sigmaY(mode)
-        val dx = FloatArray(26)
-        val dy = FloatArray(26)
-        // Where taps land on the whole, then each letter's own difference from that, both weighed
-        // by how many taps they rest on.
         val a = g.all
-        val aw = if (EVAL_GLOBAL) a.n / (a.n + PRIOR_ALL) else 0f
+        val aw = a.n / (a.n + PRIOR_ALL)
         val gx = a.dx * aw
         val gy = a.dy * aw
+        val dx = FloatArray(26)
+        val dy = FloatArray(26)
         for (c in 0 until 26) {
             val l = g.letters[c]
-            val weight = l.n / (l.n + EVAL_PRIOR_DEV)
-            dx[c] = (gx + (l.dx - gx) * weight).coerceIn(-MAX_OFFSET, MAX_OFFSET) * sx
-            dy[c] = if (mode == Mode.FULL) (gy + (l.dy - gy) * weight).coerceIn(-MAX_OFFSET, MAX_OFFSET) * sy else 0f
+            val w = l.n / (l.n + PRIOR_LETTER)
+            dx[c] = (gx + (l.dx - gx) * w).coerceIn(-MAX_OFFSET, MAX_OFFSET) * sx
+            dy[c] = if (mode == Mode.FULL) (gy + (l.dy - gy) * w).coerceIn(-MAX_OFFSET, MAX_OFFSET) * sy else 0f
         }
-        val s = g.spread
-        fun scale(v: Float): Float {
-            // Taps beyond OUTLIER were never counted, which makes the spread look a little tighter.
-            val blended = (s.n * v / TRUNCATION + PRIOR_SPREAD) / (s.n + PRIOR_SPREAD)
-            return sqrt(blended).coerceIn(MIN_SCALE, MAX_SCALE)
-        }
-        if (!EVAL_SPREAD) return Shape(dx, dy, 1f, 1f)
-        return Shape(dx, dy, scale(s.vx), if (mode == Mode.FULL) scale(s.vy) else 1f)
+        return Shape(dx, dy)
     }
 
     private fun centreX(layout: KeyLayout, mode: Mode, c: Int) =
         if (mode == Mode.MINI) layout.miniSlot[c].toFloat() else layout.fullX[c]
 
     companion object {
-        @JvmField internal var EVAL_SPREAD = true
-        @JvmField internal var EVAL_GLOBAL = true
-        @JvmField internal var EVAL_PRIOR_DEV = 30f
+        /** Words with fewer taps that say where a finger landed aren't used. */
+        const val MIN_TAPS = 2
+        /** A tap further than this many default spreads from its letter means the word doesn't fit its taps. */
+        const val OUTLIER = 2.2f
         /** Taps in all before the shared offset counts half; only about the latest [MAX_ALL_N] count. */
         const val PRIOR_ALL = 20f
         const val MAX_ALL_N = 200f
-        /** Words with fewer taps that say where a finger landed aren't used. */
-        const val MIN_TAPS = 2
-        /** A tap further than this many spreads from its letter means the word doesn't fit its taps. */
-        const val OUTLIER = 2.2f
-        /** Taps of a letter before its learned offset counts half. */
-        const val PRIOR_LETTER = 12f
-        /** Only about this many of a letter's latest taps count, so the offset follows a change of grip. */
+        /**
+         * Taps of a letter before its own difference from the shared offset counts half; only about
+         * the latest [MAX_LETTER_N] count. Tuned on simulated typists: a weaker prior (12) made
+         * offsets noisy enough to cost a typist who hits the centres a point.
+         */
+        const val PRIOR_LETTER = 30f
         const val MAX_LETTER_N = 60f
-        /** Taps in all before the learned spread counts half, and how many of the latest count. */
-        const val PRIOR_SPREAD = 150f
-        const val MAX_SPREAD_N = 600f
-        /** Bounds, in default spreads: how far a letter may move, and how much tighter or wider taps may be. */
+        /** How far a letter may move, in default spreads (about one slot in mini mode, 0.4 keys in full). */
         const val MAX_OFFSET = 0.75f
-        const val MIN_SCALE = 0.8f
-        const val MAX_SCALE = 1.25f
-        /** The share of a normal spread's variance left once taps beyond [OUTLIER] are dropped. */
-        private const val TRUNCATION = 0.87f
         /** Learned words between saves (and the keyboard saves when it closes). */
         private const val SAVE_EVERY = 10
     }

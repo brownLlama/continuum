@@ -59,7 +59,7 @@ class TouchModelTest {
         assertEquals(0.3f, s.dy['e' - 'a'], 0.04f)
     }
 
-    @Test fun `offsets and spread stay within their bounds`() {
+    @Test fun `offsets stay within their bounds`() {
         val m = model()
         // Each word a little further off than the last: every tap stays close to where its letter is now expected.
         var off = 0f
@@ -69,12 +69,18 @@ class TouchModelTest {
         }
         val s = m.shape(qwerty, Mode.MINI)!!
         for (c in "helotabuwdp".map { it - 'a' }) assertTrue("${'a' + c}: ${s.dx[c]}", abs(s.dx[c]) <= 0.75f * 1.4f + 1e-4f)
-        assertTrue(s.scaleX in 0.8f..1.25f)
-        // Very wide scatter can widen the spread only so far.
+        // Wide scatter around the centres teaches no offset to speak of.
         val wide = model(File(tmp.root, "wide.tsv"))
         val rnd = Random(1)
-        repeat(300) { for (w in words) wide.learn(qwerty, Mode.MINI, mini(w, 0f, 2.5f, rnd), w) }
-        assertTrue(wide.shape(qwerty, Mode.MINI)!!.scaleX in 0.8f..1.25f)
+        repeat(300) { for (w in words) wide.learn(qwerty, Mode.MINI, mini(w, 0f, 1.2f, rnd), w) }
+        for (c in "helotabuwdp".map { it - 'a' }) assertEquals(0f, wide.shape(qwerty, Mode.MINI)!!.dx[c], 0.2f)
+    }
+
+    @Test fun `a shift of all taps is learned for letters not typed yet too`() {
+        val m = model()
+        repeat(20) { for (w in words) m.learn(qwerty, Mode.FULL, full(w, 0f, 0.3f), w) }
+        // "k" is in none of the words, yet it is expected lower like the rest.
+        assertTrue(m.shape(qwerty, Mode.FULL)!!.dy['k' - 'a'] > 0.2f)
     }
 
     @Test fun `a word whose taps don't fit its letters teaches nothing`() {
@@ -128,7 +134,6 @@ class TouchModelTest {
         val again = model(file).shape(qwerty, Mode.FULL)!!
         assertEquals(before.dx.toList(), again.dx.toList())
         assertEquals(before.dy.toList(), again.dy.toList())
-        assertEquals(before.scaleX, again.scaleX, 0f)
         m.clear()
         assertNull(m.shape(qwerty, Mode.FULL))
         assertNull(model(file).shape(qwerty, Mode.FULL))
@@ -136,9 +141,10 @@ class TouchModelTest {
 
     @Test fun `a damaged file is read as far as it makes sense`() {
         val file = File(tmp.root, "touch.tsv")
-        file.writeText("s\tqwerty/mini\tnope\t1\t1\nl\tqwerty/mini\to\t50\t0.4\t0\nl\tqwerty/mini\tö\t5\t1\t1\nl\tqwerty/mini\te\t50\tNaN\t0\ngarbage\n")
+        file.writeText("a\tqwerty/mini\tnope\t1\t1\nl\tqwerty/mini\to\t50\t0.4\t0\nl\tqwerty/mini\tö\t5\t1\t1\nl\tqwerty/mini\te\t50\tNaN\t0\ngarbage\n")
         val s = model(file).shape(qwerty, Mode.MINI)!!
-        assertEquals(0.4f * 50 / 62 * 1.4f, s.dx['o' - 'a'], 1e-4f)
+        // The broken shared line is skipped (it stays 0); "o" is read; "ö" and the NaN line are not.
+        assertEquals(0.4f * 50 / 80 * 1.4f, s.dx['o' - 'a'], 1e-4f)
         assertEquals(0f, s.dx['e' - 'a'], 0f)
     }
 

@@ -484,8 +484,8 @@ class Decoder(private val dict: Dictionary, private val user: UserModel) {
 
     /**
      * Log-likelihood of each letter a..z given one tap: a Gaussian around where that letter's taps
-     * land. Without [shape] that is the key's centre with the default spread; with it, the centre
-     * moved by the letter's learned offset, with the user's own spread ([TouchModel]).
+     * land. Without [shape] that is the key's centre; with it, the centre moved by the letter's
+     * learned offset ([TouchModel]).
      */
     private fun spatialRow(tap: Tap, mode: Mode, layout: KeyLayout, shape: TouchModel.Shape?): FloatArray {
         val row = FloatArray(26)
@@ -494,21 +494,14 @@ class Decoder(private val dict: Dictionary, private val user: UserModel) {
             return row
         }
         when (mode) {
-            Mode.MINI -> {
-                val s = MINI_SIGMA * (shape?.scaleX ?: 1f)
-                for (c in 0 until 26) {
-                    val d = tap.x - layout.miniSlot[c] - (shape?.dx?.get(c) ?: 0f)
-                    row[c] = -(d * d) / (2 * s * s)
-                }
+            Mode.MINI -> for (c in 0 until 26) {
+                val d = tap.x - layout.miniSlot[c] - (shape?.dx?.get(c) ?: 0f)
+                row[c] = -(d * d) / (2 * MINI_SIGMA * MINI_SIGMA)
             }
-            Mode.FULL -> {
-                val sx = FULL_SIGMA_X * (shape?.scaleX ?: 1f)
-                val sy = FULL_SIGMA_Y * (shape?.scaleY ?: 1f)
-                for (c in 0 until 26) {
-                    val dx = (tap.x - layout.fullX[c] - (shape?.dx?.get(c) ?: 0f)) / sx
-                    val dy = (tap.y - layout.fullY[c] - (shape?.dy?.get(c) ?: 0f)) / sy
-                    row[c] = -(dx * dx + dy * dy) / 2
-                }
+            Mode.FULL -> for (c in 0 until 26) {
+                val dx = (tap.x - layout.fullX[c] - (shape?.dx?.get(c) ?: 0f)) / FULL_SIGMA_X
+                val dy = (tap.y - layout.fullY[c] - (shape?.dy?.get(c) ?: 0f)) / FULL_SIGMA_Y
+                row[c] = -(dx * dx + dy * dy) / 2
             }
         }
         return row
@@ -592,7 +585,7 @@ class Decoder(private val dict: Dictionary, private val user: UserModel) {
     companion object {
         private const val MISS = Float.NEGATIVE_INFINITY
 
-        /** The default spread of taps around a key's centre, across and (full mode) down; see [TouchModel]. */
+        /** The spread of taps around a key's centre, across and (full mode) down; see [TouchModel]. */
         internal fun sigmaX(mode: Mode) = if (mode == Mode.MINI) MINI_SIGMA else FULL_SIGMA_X
         internal fun sigmaY(mode: Mode) = if (mode == Mode.MINI) 1f else FULL_SIGMA_Y
         /** [userWords] is trimmed once it holds this many more words than the user's vocabulary. */
