@@ -469,8 +469,13 @@ class Dictionary private constructor(
             "do you", "of you", "it is", "it was", "to be", "i am", "and i",
         ).associate { it.replace(" ", "") to it.split(' ') }
 
+        /** Words spelled with a capital inside them, which the keyboard keeps without shift. */
+        private val MIXED_CASE = listOf(
+            "iPhone", "iPad", "iPod", "eBay", "YouTube", "WhatsApp", "PowerPoint", "PlayStation", "McDonald", "McDonald's",
+        ).associateBy { w -> w.lowercase().filter { it in 'a'..'z' } }
+
         private val DISPLAY_OVERRIDES: Map<String, String> =
-            CONTRACTIONS.filterKeys { it !in ALSO_WORDS }.mapValues { it.value.first } + mapOf("i" to "I")
+            CONTRACTIONS.filterKeys { it !in ALSO_WORDS }.mapValues { it.value.first } + mapOf("i" to "I") + MIXED_CASE
 
         /**
          * Prefers the local word list when it is present (see the class comment). The parsed
