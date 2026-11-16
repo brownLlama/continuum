@@ -51,6 +51,8 @@ class TouchModel(private val file: File, private val io: Executor? = null) {
 
     private class Group {
         val letters = Array(26) { Letter() }
+        /** Where taps land on average, all letters together. */
+        val all = Letter()
         val spread = Spread()
         /** [build]'s result, until the next [learn]. */
         var shape: Shape? = null
@@ -95,8 +97,10 @@ class TouchModel(private val file: File, private val io: Executor? = null) {
             rx[i] = (t.x - centreX(layout, mode, c)) / sx
             ry[i] = if (mode == Mode.FULL) (t.y - layout.fullY[c]) / sy else 0f
             // How far it is from where the letter is expected now, in spreads.
-            val ex = (rx[i] - (now?.dx?.get(c) ?: 0f) / sx) / (now?.scaleX ?: 1f)
-            val ey = (ry[i] - (now?.dy?.get(c) ?: 0f) / sy) / (now?.scaleY ?: 1f)
+            // Measured against the default spread at least: a spread learned tighter mustn't keep
+            // out the wider taps that would show it has become wider again.
+            val ex = (rx[i] - (now?.dx?.get(c) ?: 0f) / sx) / maxOf(now?.scaleX ?: 1f, 1f)
+            val ey = (ry[i] - (now?.dy?.get(c) ?: 0f) / sy) / maxOf(now?.scaleY ?: 1f, 1f)
             if (ex * ex + ey * ey > OUTLIER * OUTLIER) return false
             used += i
         }
@@ -112,6 +116,10 @@ class TouchModel(private val file: File, private val io: Executor? = null) {
             l.n = minOf(l.n + 1f, MAX_LETTER_N)
             l.dx += (rx[i] - l.dx) / l.n
             l.dy += (ry[i] - l.dy) / l.n
+            val a = group.all
+            a.n = minOf(a.n + 1f, MAX_ALL_N)
+            a.dx += (rx[i] - a.dx) / a.n
+            a.dy += (ry[i] - a.dy) / a.n
             spread.n = minOf(spread.n + 1f, MAX_SPREAD_N)
             spread.vx += (ex * ex - spread.vx) / spread.n
             if (mode == Mode.FULL) spread.vy += (ey * ey - spread.vy) / spread.n
@@ -138,6 +146,8 @@ class TouchModel(private val file: File, private val io: Executor? = null) {
             for ((name, g) in groups) {
                 append("s\t").append(name).append('\t').append(g.spread.n).append('\t')
                     .append(g.spread.vx).append('\t').append(g.spread.vy).append('\n')
+                append("a\t").append(name).append('\t').append(g.all.n).append('\t')
+                    .append(g.all.dx).append('\t').append(g.all.dy).append('\n')
                 g.letters.forEachIndexed { c, l ->
                     if (l.n > 0f) {
                         append("l\t").append(name).append('\t').append('a' + c).append('\t').append(l.n).append('\t')
@@ -160,6 +170,11 @@ class TouchModel(private val file: File, private val io: Executor? = null) {
                         vx = p[3].toFloatOrNull()?.takeIf { it.isFinite() && it >= 0f } ?: 1f
                         vy = p[4].toFloatOrNull()?.takeIf { it.isFinite() && it >= 0f } ?: 1f
                     }
+                    p.size == 5 && p[0] == "a" -> groups.getOrPut(p[1]) { Group() }.all.apply {
+                        n = p[2].toFloatOrNull()?.coerceIn(0f, MAX_ALL_N) ?: return@forEachLine
+                        dx = p[3].toFloatOrNull()?.takeIf { it.isFinite() } ?: 0f
+                        dy = p[4].toFloatOrNull()?.takeIf { it.isFinite() } ?: 0f
+                    }
                     p.size == 6 && p[0] == "l" && p[2].length == 1 && p[2][0] in 'a'..'z' ->
                         groups.getOrPut(p[1]) { Group() }.letters[p[2][0] - 'a'].apply {
                             n = p[3].toFloatOrNull()?.coerceIn(0f, MAX_LETTER_N) ?: return@forEachLine
@@ -181,11 +196,17 @@ class TouchModel(private val file: File, private val io: Executor? = null) {
         val sy = Decoder.sigmaY(mode)
         val dx = FloatArray(26)
         val dy = FloatArray(26)
+        // Where taps land on the whole, then each letter's own difference from that, both weighed
+        // by how many taps they rest on.
+        val a = g.all
+        val aw = if (EVAL_GLOBAL) a.n / (a.n + PRIOR_ALL) else 0f
+        val gx = a.dx * aw
+        val gy = a.dy * aw
         for (c in 0 until 26) {
             val l = g.letters[c]
-            val weight = l.n / (l.n + PRIOR_LETTER)
-            dx[c] = (l.dx * weight).coerceIn(-MAX_OFFSET, MAX_OFFSET) * sx
-            dy[c] = if (mode == Mode.FULL) (l.dy * weight).coerceIn(-MAX_OFFSET, MAX_OFFSET) * sy else 0f
+            val weight = l.n / (l.n + EVAL_PRIOR_DEV)
+            dx[c] = (gx + (l.dx - gx) * weight).coerceIn(-MAX_OFFSET, MAX_OFFSET) * sx
+            dy[c] = if (mode == Mode.FULL) (gy + (l.dy - gy) * weight).coerceIn(-MAX_OFFSET, MAX_OFFSET) * sy else 0f
         }
         val s = g.spread
         fun scale(v: Float): Float {
@@ -202,6 +223,11 @@ class TouchModel(private val file: File, private val io: Executor? = null) {
 
     companion object {
         @JvmField internal var EVAL_SPREAD = true
+        @JvmField internal var EVAL_GLOBAL = true
+        @JvmField internal var EVAL_PRIOR_DEV = 30f
+        /** Taps in all before the shared offset counts half; only about the latest [MAX_ALL_N] count. */
+        const val PRIOR_ALL = 20f
+        const val MAX_ALL_N = 200f
         /** Words with fewer taps that say where a finger landed aren't used. */
         const val MIN_TAPS = 2
         /** A tap further than this many spreads from its letter means the word doesn't fit its taps. */
