@@ -1269,7 +1269,10 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
         if (taps.isEmpty()) return
         val d = decoder
         // The end of a joined word ("zazzy'" + "s") or of a number ("16" + "th") is not two words.
-        val r = d?.decode(taps, tapMode, layout, prevWord, splits = wordGlue == null && afterNumber == null)
+        val r = d?.decode(
+            taps, tapMode, layout, prevWord, splits = wordGlue == null && afterNumber == null,
+            start = prevWord == null && wordSentenceStart,
+        )
         result = r
         predictionsShown = false
         deletedShown = false

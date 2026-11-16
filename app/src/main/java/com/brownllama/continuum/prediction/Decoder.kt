@@ -51,9 +51,11 @@ class DecodeResult(
 )
 
 /**
- * Probabilistic decoder: score(word) = Σ log P(tap_i | letter_i) + log P(word) (+ user boosts).
- * This is what lets the one-row layout work: each tap only says "somewhere around here",
- * and word frequency picks the most likely intended word.
+ * Probabilistic decoder: score(word) = Σ log P(tap_i | letter_i) + log P(word | previous word)
+ * (+ user boosts). This is what lets the one-row layout work: each tap only says "somewhere around
+ * here", and how likely each word is, given the word before it, picks the intended word.
+ * P(word | previous word) is the word's frequency times the next-word model's lift
+ * ([Dictionary.context], weighted by [CONTEXT_WEIGHT]).
  */
 class Decoder(private val dict: Dictionary, private val user: UserModel) {
 
@@ -70,13 +72,15 @@ class Decoder(private val dict: Dictionary, private val user: UserModel) {
      * With [splits] off, two-word readings ("thank you" for "thankyou") are not looked for: for a
      * word that is only the end of another ("zazzy'" + "s") or follows a number. With [adapt]
      * off, the taps are read against the key centres even if [touch] has learned otherwise (for
-     * taps made up from a word's letters, which are on the centres).
+     * taps made up from a word's letters, which are on the centres). [start]: the word starts a
+     * sentence (with no [prev]), which the next-word model also knows about.
      */
     fun decode(
         taps: List<Tap>, mode: Mode, layout: KeyLayout, prev: String?, limit: Int = 8, splits: Boolean = true,
-        adapt: Boolean = true,
+        adapt: Boolean = true, start: Boolean = false,
     ): DecodeResult {
         val n = taps.size
+        val ctx = context(prev, start)
         val shape = if (adapt) touch?.shape(layout, mode) else null
         val table = Array(n) { i -> spatialRow(taps[i], mode, layout, shape) }
 
@@ -88,30 +92,33 @@ class Decoder(private val dict: Dictionary, private val user: UserModel) {
         val anyBlocked = user.anyBlocked
 
         if (n <= dict.maxLength) {
-            for (idx in dict.ofLength(n)) {
-                val lm = dict.logFreq[idx]
+            // Every word not in the context gets its backoff; the few that are ([marks]) are scored
+            // after, with their own bonus, so the long scan does no lookups.
+            val backoff = ctx.backoff
+            fun word(idx: Int, lm: Float) {
                 val s = spatial(dict.letters, dict.offset(idx), table, 0, n, words.floor() - lm)
                 if (s != MISS && !(anyBlocked && user.isBlocked(dict.display(idx)))) words.offer(idx, s + lm)
             }
+            for (idx in dict.ofLength(n)) if (!marks[idx]) word(idx, dict.logFreq[idx] + backoff)
+            for (idx in ctx.entries) if (dict.length(idx) == n) word(idx, dict.logFreq[idx] + ctx.of(idx))
             val maxLen = minOf(dict.maxLength, n + MAX_COMPLETION_EXTRA)
             for (len in n + 1..maxLen) {
                 val penalty = COMPLETION_PENALTY - COMPLETION_PER_LETTER * (len - n)
-                for (idx in dict.ofLength(len)) {
-                    val lm = dict.logFreq[idx] + penalty
+                fun completion(idx: Int, lm: Float) {
                     val s = spatial(dict.letters, dict.offset(idx), table, 0, n, completions.floor() - lm)
                     if (s != MISS && !(anyBlocked && user.isBlocked(dict.display(idx)))) completions.offer(idx, s + lm)
                 }
+                for (idx in dict.ofLength(len)) if (!marks[idx]) completion(idx, dict.logFreq[idx] + penalty + backoff)
+                for (idx in ctx.entries) if (dict.length(idx) == len) completion(idx, dict.logFreq[idx] + penalty + ctx.of(idx))
             }
         }
 
         val out = words.toCandidates(dict)
         val comp = completions.toCandidates(dict)
 
-        // Re-rank with what the user actually types (including words missing from the dictionary),
-        // and with the word list's next-word model for the previous word.
+        // Re-rank with what the user actually types (including words missing from the dictionary).
         val boosted = ArrayList<Candidate>(out)
         val boostedComp = ArrayList<Candidate>(comp)
-        val expected = prev?.let { dict.nextFor(it) }.orEmpty()
 
         // 1. Dictionary candidates the user has typed get their boost (only these few are looked at).
         val spelled = spelledKeys(boosted, boostedComp)
@@ -140,18 +147,18 @@ class Decoder(private val dict: Dictionary, private val user: UserModel) {
         for (c in boosted) inLists += c.key
         for (c in boostedComp) inLists += c.key
         val floors = arrayOf(Floor(limit, boosted), Floor(limit, boostedComp))
-        val bonus = if (expected.isNotEmpty()) NEXT_WORD_BONUS else 0f
         for ((key, count) in learned) {
             if (key.length < n || key in inLists) continue
             val extra = key.length - n
             val floor = floors[if (extra == 0) 0 else 1]
             val w = userWord(key)
             val di = w.index
-            val base = if (di >= 0) maxOf(dict.logFreq[di], NEW_WORD_LOG_FREQ) else NEW_WORD_LOG_FREQ
+            // A word the dictionary lacks has no next-word data: neither lift nor backoff.
+            val base = if (di >= 0) maxOf(dict.logFreq[di], NEW_WORD_LOG_FREQ) + bonus(ctx, di) else NEW_WORD_LOG_FREQ
             // Words the user has typed are completed much more eagerly than dictionary words.
             val rest = base + userBoost(count, user.bigramCount(prev, key)) + userPenalty(extra)
-            if (rest + bonus < floor.value) continue
-            val s = spatial(w.codes, 0, table, 0, n, floor.value - rest - bonus)
+            if (rest < floor.value) continue
+            val s = spatial(w.codes, 0, table, 0, n, floor.value - rest)
             if (s == MISS) continue
             val form = user.formOf(key)
             val display = form ?: dict.displayFor(key)
@@ -160,11 +167,6 @@ class Decoder(private val dict: Dictionary, private val user: UserModel) {
             val c = Candidate(key, display, s + rest, if (di >= 0) dict.emojiFor(di) else null, tentative)
             if (extra == 0) boosted += c else boostedComp += c
             floor.offer(c.score)
-        }
-        if (expected.isNotEmpty()) {
-            for (list in listOf(boosted, boostedComp)) for (i in list.indices) {
-                if (list[i].display in expected) list[i] = list[i].plus(NEXT_WORD_BONUS)
-            }
         }
         boosted.sortByDescending { it.score }
         boostedComp.sortByDescending { it.score }
@@ -178,7 +180,7 @@ class Decoder(private val dict: Dictionary, private val user: UserModel) {
         val literalIdx = dict.indexOf(literal)
         val literalCount = user.count(literal)
         val literalIsWord = (literalIdx >= 0 && !dict.isMisspelling(literalIdx)) || literalCount > 0
-        val literalLm = (if (literalIdx >= 0) dict.logFreq[literalIdx] else Dictionary.UNKNOWN_LOG_FREQ) +
+        val literalLm = (if (literalIdx >= 0) dict.logFreq[literalIdx] + ctx.of(literalIdx) else Dictionary.UNKNOWN_LOG_FREQ) +
             userBoost(literalCount, user.bigramCount(prev, literal))
 
         // Typos: only corrections that come close to the best reading without one (an exact match, or
@@ -188,8 +190,8 @@ class Decoder(private val dict: Dictionary, private val user: UserModel) {
         val unfinished = boostedComp.firstOrNull()?.score ?: MISS
         val fixes = if (n < MIN_CORRECTION_TAPS || taps.any { it.exact >= 0 }) emptyList() else {
             val gate = maxOf(top.firstOrNull()?.score ?: MISS, unfinished) - CORRECTION_WINDOW
-            val typos = corrections(table, n, prev, gate, boosted.mapTo(HashSet()) { it.key }, expected, minOf(limit, MAX_CORRECTIONS))
-            val pairs = if (splits) twoWords(table, n, gate) else emptyList()
+            val typos = corrections(table, n, prev, gate, boosted.mapTo(HashSet()) { it.key }, ctx, minOf(limit, MAX_CORRECTIONS))
+            val pairs = if (splits) twoWords(table, n, gate, ctx) else emptyList()
             if (pairs.isEmpty()) typos else (typos + pairs).sortedByDescending { it.score }
         }
         // A correction becomes the default only when it clearly beats the best exact match (even a
@@ -217,29 +219,39 @@ class Decoder(private val dict: Dictionary, private val user: UserModel) {
      */
     private fun corrections(
         table: Array<FloatArray>, n: Int, prev: String?, gate: Float, skip: Set<String>,
-        expected: List<String>, limit: Int,
+        ctx: NextContext, limit: Int,
     ): List<Candidate> {
         val maxEdits = if (n >= TWO_EDIT_TAPS) 2 else 1
         val scratch = EditScratch(n, maxEdits, n >= SUBSTITUTION_TAPS)
         val anyBlocked = user.anyBlocked
         val found = TopK(limit)
+        /** Scores dictionary entry [idx] ([len] letters) as a correction; false once it can't reach the floor on frequency alone. */
+        fun tryEntry(idx: Int, len: Int, minCost: Float): Boolean {
+            val lm = dict.logFreq[idx] + bonus(ctx, idx)
+            val floor = maxOf(found.floor(), gate) - lm
+            if (-minCost < floor) return false
+            if (table[0][dict.letters[dict.offset(idx)].toInt()] - minCost < floor) return true
+            val s = edited(dict.letters, dict.offset(idx), len, table, n, floor, scratch)
+            if (s == MISS || dict.isMisspelling(idx) || dict.key(idx) in skip) return true
+            if (anyBlocked && user.isBlocked(dict.display(idx))) return true
+            found.offer(idx, s + lm)
+            return true
+        }
         // Most words fail on frequency alone: even the cheapest edits leave them under the floor, and
-        // so does every rarer word after them. Lengths nearest the taps go first: they need the
-        // fewest edits, so they raise the floor soonest.
+        // so does every rarer word after them (the next-word model only lowers words it doesn't
+        // list, so that still holds; the ones it lists are tried on their own). Lengths nearest the
+        // taps go first: they need the fewest edits, so they raise the floor soonest.
         for (d in 0..2 * maxEdits) {
             val len = n + if (d % 2 == 0) d / 2 else -(d + 1) / 2
             if (len < 1 || len > dict.maxLength) continue
             val minCost = minCost(len, n)
             for (idx in dict.ofLengthByFrequency(len)) {
-                val lm = dict.logFreq[idx]
-                val floor = maxOf(found.floor(), gate) - lm
-                if (-minCost < floor) break
-                if (table[0][dict.letters[dict.offset(idx)].toInt()] - minCost < floor) continue
-                val s = edited(dict.letters, dict.offset(idx), len, table, n, floor, scratch)
-                if (s == MISS || dict.isMisspelling(idx) || dict.key(idx) in skip) continue
-                if (anyBlocked && user.isBlocked(dict.display(idx))) continue
-                found.offer(idx, s + lm)
+                if (marks[idx] && ctx.isFollower(idx)) continue
+                // The bound is the word's frequency: no unlisted word scores above it.
+                if (-minCost < maxOf(found.floor(), gate) - dict.logFreq[idx]) break
+                tryEntry(idx, len, minCost)
             }
+            for (idx in ctx.followers) if (dict.length(idx) == len) tryEntry(idx, len, minCost)
         }
         val out = ArrayList<Candidate>()
         val candidates = found.toCandidates(dict)
@@ -258,14 +270,13 @@ class Decoder(private val dict: Dictionary, private val user: UserModel) {
         val inOut = HashSet<String>()
         for (c in out) inOut += c.key
         val floor = Floor(limit, out)
-        val bonus = if (expected.isNotEmpty()) NEXT_WORD_BONUS else 0f
         for ((key, count) in user.unigrams) {
             if (key.length < n - maxEdits || key.length > n + maxEdits || key in skip || key in inOut) continue
             val w = userWord(key)
             val di = w.index
-            val rest = (if (di >= 0) maxOf(dict.logFreq[di], NEW_WORD_LOG_FREQ) else NEW_WORD_LOG_FREQ) +
+            val rest = (if (di >= 0) maxOf(dict.logFreq[di], NEW_WORD_LOG_FREQ) + bonus(ctx, di) else NEW_WORD_LOG_FREQ) +
                 userBoost(count, user.bigramCount(prev, key))
-            val min = maxOf(floor.value, gate) - rest - bonus
+            val min = maxOf(floor.value, gate) - rest
             if (table[0][w.codes[0].toInt()] - minCost(key.length, n) < min) continue
             val s = edited(w.codes, 0, key.length, table, n, min, scratch)
             if (s == MISS) continue
@@ -275,7 +286,6 @@ class Decoder(private val dict: Dictionary, private val user: UserModel) {
             out += Candidate(key, display, s + rest, if (di >= 0) dict.emojiFor(di) else null, tentative, edited = true)
             floor.offer(s + rest)
         }
-        if (expected.isNotEmpty()) for (i in out.indices) if (out[i].display in expected) out[i] = out[i].plus(NEXT_WORD_BONUS)
         out.sortByDescending { it.score }
         return out.take(limit)
     }
@@ -291,7 +301,7 @@ class Decoder(private val dict: Dictionary, private val user: UserModel) {
      * outweigh the single word they happen to spell together. Each bucket is read most frequent
      * first and left as soon as its words are too rare to reach the gate.
      */
-    private fun twoWords(table: Array<FloatArray>, n: Int, gate: Float): List<Candidate> {
+    private fun twoWords(table: Array<FloatArray>, n: Int, gate: Float, ctx: NextContext): List<Candidate> {
         if (n < 2 * MIN_SPLIT_PART) return emptyList()
         val anyBlocked = user.anyBlocked
         val out = ArrayList<Candidate>()
@@ -306,7 +316,8 @@ class Decoder(private val dict: Dictionary, private val user: UserModel) {
             val aKey = dict.key(a)
             val bKey = dict.key(b)
             score += BIGRAM_WEIGHT * ln(1f + user.bigramCount(aKey, bKey))
-            if (dict.display(b) in dict.nextFor(aKey)) score += NEXT_WORD_BONUS
+            // How likely the first word is after the previous one, and the second after the first.
+            score += ctx.of(a) + CONTEXT_WEIGHT * dict.nextBonus(a, b)
             val display = dict.display(a) + " " + dict.display(b)
             if (score < gate || anyBlocked && user.isBlocked(display)) continue
             out += Candidate(aKey + bKey, display, score, edited = true)
@@ -470,6 +481,29 @@ class Decoder(private val dict: Dictionary, private val user: UserModel) {
         return if (best < floor || best <= prev[n * stride]) MISS else best
     }
 
+    /** The next-word context for [prev] (or a sentence's [start]), kept while it stays the same: decode runs on every tap. */
+    private fun context(prev: String?, start: Boolean): NextContext {
+        val s = start && prev == null
+        if (prev == ctxPrev && s == ctxStart && CONTEXT_WEIGHT == ctxWeight) return ctxLast
+        for (i in ctxLast.entries) marks[i] = false
+        ctxPrev = prev
+        ctxStart = s
+        ctxWeight = CONTEXT_WEIGHT
+        ctxLast = dict.context(prev, s, CONTEXT_WEIGHT) ?: NextContext.NONE
+        for (i in ctxLast.entries) marks[i] = true
+        return ctxLast
+    }
+
+    /** [ctx]'s bonus for entry [idx]: its own if [marks] says it has one, else the backoff. */
+    private fun bonus(ctx: NextContext, idx: Int) = if (marks[idx]) ctx.of(idx) else ctx.backoff
+
+    /** The current context's [NextContext.entries], marked by entry, so scans needn't look them up. */
+    private val marks = BooleanArray(dict.size)
+    private var ctxWeight = CONTEXT_WEIGHT
+    private var ctxPrev: String? = null
+    private var ctxStart = false
+    private var ctxLast = NextContext.NONE
+
     /** Next-word suggestions when nothing is being typed. */
     fun predict(prev: String?, sentenceStart: Boolean, limit: Int = 3): List<String> {
         val out = ArrayList<String>()
@@ -607,8 +641,11 @@ class Decoder(private val dict: Dictionary, private val user: UserModel) {
         /** Weights of ln(1 + times typed) and ln(1 + times typed after the previous word). */
         private const val USER_WEIGHT = 1.0f
         private const val BIGRAM_WEIGHT = 1.5f
-        /** Bonus for words the next-word model expects after the previous word. */
-        private const val NEXT_WORD_BONUS = 1.5f
+        /**
+         * How much the next-word model counts: 1 takes its probabilities as they are; less trusts
+         * them less (its word pairs come from books, not from messages).
+         */
+        @JvmField internal var CONTEXT_WEIGHT = 1.0f
         /**
          * Starting score for words the user typed that the dictionary lacks: as likely as a common
          * word (about the 1,500th most frequent), so a word typed once on purpose comes back even

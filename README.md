@@ -110,7 +110,9 @@ Swipe up to get a normal keyboard drawn the same way: flat keys, one font, line 
 - **It learns how you tap.** If your thumb tends to land a little left of some letters, or below the keys, it learns that from the words you keep and reads your taps accordingly. It changes slowly, ignores words you corrected, and can be switched off (Settings → Typing → Learn how you tap).
 - **Fix a word:** backspace right after a word reopens it with its alternatives. Delete a word completely, or swipe away any finished word, and the bar offers it back with the words it could have been.
 - **Numbers:** right after a number the bar offers its ending (16**th**, 1**st**, 2**nd**, 3**rd**), and words like *someone* or *today* also come as *some1* or *2day*.
-- **Next-word predictions** after a space, learned from the word pairs you actually type. They go by the word before the cursor, so they stay right after you move the cursor or come back to text you wrote earlier.
+- **It knows which words go together.** A built-in model of which words follow which (from word-pair counts in fiction books) helps read your taps: after *let's* the same rough taps give *go*, after *have* they give *to*; after *depends*, *on* rather than *in*.
+- **Next-word predictions** after a space, from that model and from the word pairs you actually type. They go by the word before the cursor, so they stay right after you move the cursor or come back to text you wrote earlier.
+- **Typing statistics** (Settings → Typing statistics) show how often your words are kept as typed, picked from the bar or fixed, per mode, so you can see whether a setting helps you. Counts only, no words, and they stay on the phone.
 - **Hold a suggestion** to remove it for good.
 
 ### 👆 Gestures

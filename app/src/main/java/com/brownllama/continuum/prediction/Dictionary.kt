@@ -7,6 +7,7 @@ import java.io.File
 import java.io.InputStream
 import java.nio.ByteBuffer
 import kotlin.math.ln
+import kotlin.math.roundToInt
 
 /**
  * Word list with log-frequencies, bucketed by key length.
@@ -22,6 +23,11 @@ import kotlin.math.ln
  *  - `assets/words.txt` (open FrequencyWords list) otherwise: "word count".
  *
  * Either way, each word's emoji comes from `assets/emoji_keywords.tsv` (CLDR annotations).
+ *
+ * With the open list, which words follow which comes from `assets/next_words.tsv` (built from
+ * Google Books Ngram word pairs, see THIRD_PARTY_NOTICES.md): for a previous word, its likeliest
+ * next words with ln(lift), how many times likelier each is after it than in general, and a
+ * backoff, ln(alpha) ≤ 0, for every word not listed. [context] serves it to the decoder.
  *
  * Both corpora contain common misspellings ("recieve", "definately"). Those listed in
  * `assets/misspellings.txt` (from Wikipedia) whose correction is
@@ -49,6 +55,15 @@ class Dictionary private constructor(
     private val nextStart: IntArray,
     private val nextIds: IntArray,
     private val nextExtra: Array<String>,
+    /** Per next word ([nextIds]' order): ln(lift) × [LIFT_SCALE], 0..255. */
+    private val nextLift: ByteArray,
+    /** Entries with a next-word backoff (ascending), and that ln(backoff) for words not listed after them. */
+    private val ctxIdx: IntArray,
+    private val ctxBackoff: FloatArray,
+    /** The same at the start of a sentence: next words (entry indices), their lifts, the backoff. */
+    private val startIds: IntArray,
+    private val startLift: ByteArray,
+    private val startBackoff: Float,
     private val emojiIdx: IntArray,
     private val emojiText: Array<String>,
     /** Entries that are known misspellings of another entry (ascending). */
@@ -65,6 +80,11 @@ class Dictionary private constructor(
     /** Open-addressing hash of keys → most frequent entry + 1 (0 = empty). */
     private val table: IntArray
     private val mask: Int
+    /** Entries sharing a key with a more frequent one ("it's" with "its"), by that one. */
+    private val siblings = HashMap<Int, IntArray>()
+    /** Entries shown with an apostrophe (contractions): the next-word model gives them no backoff. */
+    private val apostrophes: IntArray =
+        displayIdx.indices.filter { '\'' in displayText[it] || '’' in displayText[it] }.map { displayIdx[it] }.toIntArray()
 
     init {
         var maxLen = 0
@@ -94,7 +114,14 @@ class Dictionary private constructor(
             while (true) {
                 val cur = table[slot] - 1
                 if (cur < 0) { table[slot] = i + 1; break }
-                if (sameKey(cur, i)) { if (logFreq[i] > logFreq[cur]) table[slot] = i + 1; break }
+                if (sameKey(cur, i)) {
+                    val (main, other) = if (logFreq[i] > logFreq[cur]) i to cur else cur to i
+                    table[slot] = main + 1
+                    // The other one stays reachable from the entry the table now names.
+                    val list = (siblings.remove(cur) ?: IntArray(0)) + other
+                    siblings[main] = list.filter { it != main }.toIntArray()
+                    break
+                }
                 slot = (slot + 1) and mask
             }
         }
@@ -164,6 +191,57 @@ class Dictionary private constructor(
         }
     }
 
+    /**
+     * The next-word model's view after the word with key [prevKey], or at the start of a sentence
+     * ([prevKey] null and [start]), its bonuses multiplied by [weight]; null without data.
+     */
+    fun context(prevKey: String?, start: Boolean, weight: Float): NextContext? {
+        if (weight == 0f) return null
+        val ids: IntArray
+        val lifts: ByteArray
+        val from: Int
+        val to: Int
+        val backoff: Float
+        if (prevKey != null) {
+            val i = indexOf(prevKey)
+            if (i < 0) return null
+            val b = ctxIdx.binarySearch(i)
+            if (nextStart[i] == nextStart[i + 1] && b < 0) return null
+            ids = nextIds; lifts = nextLift; from = nextStart[i]; to = nextStart[i + 1]
+            backoff = if (b >= 0) ctxBackoff[b] else 0f
+        } else if (start && startIds.isNotEmpty()) {
+            ids = startIds; lifts = startLift; from = 0; to = startIds.size; backoff = startBackoff
+        } else {
+            return null
+        }
+        var cap = 4
+        while (cap < 2 * (2 * (to - from) + apostrophes.size)) cap = cap shl 1
+        val ctx = NextContext(cap, weight * backoff)
+        for (a in apostrophes) ctx.put(a, 0f, follower = false)
+        for (j in from until to) {
+            val idx = ids[j]
+            if (idx < 0) continue
+            val v = weight * (lifts[j].toInt() and 0xFF) / LIFT_SCALE
+            ctx.put(idx, v, follower = true)
+            siblings[idx]?.forEach { ctx.put(it, v, follower = true) }
+        }
+        return ctx
+    }
+
+    /**
+     * Entry [idx] right after entry [prev], unweighted: its ln(lift) if listed, else [prev]'s
+     * backoff (0 for contractions, or without data).
+     */
+    fun nextBonus(prev: Int, idx: Int): Float {
+        val pa = indexOf(key(prev))
+        val pb = indexOf(key(idx))
+        if (pa < 0 || pb < 0) return 0f
+        for (j in nextStart[pa] until nextStart[pa + 1]) if (nextIds[j] == pb) return (nextLift[j].toInt() and 0xFF) / LIFT_SCALE
+        if (apostrophes.binarySearch(idx) >= 0) return 0f
+        val b = ctxIdx.binarySearch(pa)
+        return if (b >= 0) ctxBackoff[b] else 0f
+    }
+
     private fun hashOf(i: Int): Int {
         var h = 0
         for (j in start[i] until start[i + 1]) h = h * 31 + letters[j]
@@ -194,6 +272,9 @@ class Dictionary private constructor(
             o.writeInt(logFreq.size); for (v in logFreq) o.writeFloat(v)
             ints(displayIdx); strings(displayText.asList())
             ints(nextStart); ints(nextIds); strings(nextExtra.asList())
+            o.writeInt(nextLift.size); o.write(nextLift)
+            ints(ctxIdx); o.writeInt(ctxBackoff.size); for (v in ctxBackoff) o.writeFloat(v)
+            ints(startIds); o.writeInt(startLift.size); o.write(startLift); o.writeFloat(startBackoff)
             ints(emojiIdx); strings(emojiText.asList())
             ints(misspelledIdx)
             strings(startWords)
@@ -212,6 +293,8 @@ class Dictionary private constructor(
         var misspellings: Map<String, List<String>> = emptyMap()
         /** Key → emoji. */
         var emoji: Map<String, String> = emptyMap()
+        /** The next-word model by previous key ([readNext]), and for the start of a sentence. */
+        var nextModel: Map<String, NextRow> = emptyMap()
 
         fun add(text: String, count: Double, next: List<String>?) {
             val key = keyOf(text) ?: return
@@ -242,20 +325,44 @@ class Dictionary private constructor(
                 val cur = byText[display[i]]
                 if (cur == null || logFreq[i] > logFreq[cur]) byText[display[i]] = i
             }
+            // The model's words are keys; point them at the most frequent entry with that key.
+            val byKey = HashMap<String, Int>(n * 2)
+            for (i in 0 until n) {
+                val cur = byKey[keys[i]]
+                if (cur == null || logFreq[i] > logFreq[cur]) byKey[keys[i]] = i
+            }
             val nextStart = IntArray(n + 1)
             val ids = ArrayList<Int>()
+            val lifts = ArrayList<Byte>()
             val extra = LinkedHashMap<String, Int>()
+            val ctxI = ArrayList<Int>()
+            val ctxB = ArrayList<Float>()
             for (i in 0 until n) {
-                next[i]?.forEach { w -> ids += byText[w] ?: (-1 - extra.getOrPut(w) { extra.size }) }
+                // A word list's own next words carry no lift: they get the old flat bonus.
+                next[i]?.forEach { w ->
+                    ids += byText[w] ?: (-1 - extra.getOrPut(w) { extra.size })
+                    lifts += quantize(LIST_LIFT)
+                }
+                if (byKey[keys[i]] == i) nextModel[keys[i]]?.let { row ->
+                    for ((k, l) in row.next) byKey[k]?.let { ids += it; lifts += quantize(l) }
+                    ctxI += i
+                    ctxB += row.backoff
+                }
                 nextStart[i + 1] = ids.size
             }
+            val startRow = nextModel[START_ROW]
+            val startIds = startRow?.next?.mapNotNull { (k, _) -> byKey[k] }.orEmpty()
+            val startLift = startRow?.next?.filter { (k, _) -> k in byKey }?.map { quantize(it.second) }.orEmpty()
+            val startWords = start.ifEmpty { startIds.take(START_WORDS).map { display[it] } }
             val eIdx = (0 until n).filter { keys[it] in emoji }
             return Dictionary(
                 letters, starts, logFreq,
                 dIdx.toIntArray(), Array(dIdx.size) { display[dIdx[it]] },
-                nextStart, ids.toIntArray(), extra.keys.toTypedArray(),
+                nextStart, ids.toIntArray(), extra.keys.toTypedArray(), lifts.toByteArray(),
+                ctxI.toIntArray(), ctxB.toFloatArray(),
+                startIds.toIntArray(), startLift.toByteArray(), startRow?.backoff ?: 0f,
                 eIdx.toIntArray(), Array(eIdx.size) { emoji.getValue(keys[eIdx[it]]) },
-                wrong.toIntArray(), start,
+                wrong.toIntArray(), startWords,
             )
         }
     }
@@ -264,7 +371,18 @@ class Dictionary private constructor(
         private val EMPTY = IntArray(0)
 
         /** Version of the [toBytes] layout; bump when it changes so old copies are rebuilt. */
-        private const val FORMAT = 0x4D44_0003
+        private const val FORMAT = 0x4D44_0004
+
+        /** ln(lift) is kept in a byte, in steps of 1 / [LIFT_SCALE] (up to about 16). */
+        private const val LIFT_SCALE = 16f
+        /** The lift of a next word from a word list that only names them (the private list). */
+        private const val LIST_LIFT = 1.5f
+        /** Sentence starts offered as predictions when the word list names none. */
+        private const val START_WORDS = 8
+
+        private fun quantize(lnLift: Float): Byte = (lnLift * LIFT_SCALE).roundToInt().coerceIn(0, 255).toByte()
+
+        const val NEXT_ASSET = "next_words.tsv"
 
         /** Log-probability floor used for words that are not in the dictionary. */
         const val UNKNOWN_LOG_FREQ = -17f
@@ -369,8 +487,10 @@ class Dictionary private constructor(
             runCatching { if (cache.exists()) return fromBytes(cache.readBytes()) }
             val wrong = runCatching { assets.open(MISSPELLINGS_ASSET).use(::readMisspellings) }.getOrDefault(emptyMap())
             val emoji = runCatching { assets.open(EMOJI_ASSET).use(::readEmoji) }.getOrDefault(emptyMap())
+            val next = if (asset == PRIVATE_ASSET) emptyMap() else
+                runCatching { assets.open(NEXT_ASSET).use(::readNext) }.getOrDefault(emptyMap())
             val dict = assets.open(asset).use {
-                if (asset == PRIVATE_ASSET) loadPrivate(it, wrong, emoji) else loadOpen(it, wrong, emoji)
+                if (asset == PRIVATE_ASSET) loadPrivate(it, wrong, emoji) else loadOpen(it, wrong, emoji, next)
             }
             runCatching {
                 context.noBackupFilesDir.listFiles { f -> f.name.startsWith("dict-") }?.forEach { it.delete() }
@@ -397,11 +517,20 @@ class Dictionary private constructor(
             val nextStart = ints()
             val nextIds = ints()
             val nextExtra = strings()
+            val nextLift = ByteArray(b.int).also { b.get(it) }
+            val ctxIdx = ints()
+            val ctxBackoff = FloatArray(b.int).also { b.asFloatBuffer().get(it); b.position(b.position() + it.size * 4) }
+            val startIds = ints()
+            val startLift = ByteArray(b.int).also { b.get(it) }
+            val startBackoff = b.float
             val eIdx = ints()
             val eText = strings()
             val wrong = ints()
             val startWords = strings().asList()
-            return Dictionary(letters, start, logFreq, dIdx, dText, nextStart, nextIds, nextExtra, eIdx, eText, wrong, startWords)
+            return Dictionary(
+                letters, start, logFreq, dIdx, dText, nextStart, nextIds, nextExtra, nextLift, ctxIdx, ctxBackoff,
+                startIds, startLift, startBackoff, eIdx, eText, wrong, startWords,
+            )
         }
 
         /** `assets/misspellings.txt`: "misspelling\tcorrection|correction" lines, as keys. */
@@ -455,10 +584,37 @@ class Dictionary private constructor(
             return b.build()
         }
 
+        /**
+         * `assets/next_words.tsv`: "previous key \t ln(backoff) \t next key ln(lift) next key ln(lift) …",
+         * the previous key "<s>" for the start of a sentence. A backoff above 0 is read as 0.
+         */
+        fun readNext(input: InputStream): Map<String, NextRow> {
+            val out = HashMap<String, NextRow>()
+            input.bufferedReader().useLines { lines ->
+                for (line in lines) {
+                    if (line.startsWith("#")) continue
+                    val p = line.split('\t')
+                    if (p.size != 3) continue
+                    val backoff = p[1].toFloatOrNull()?.takeIf { it.isFinite() } ?: continue
+                    val f = p[2].split(' ')
+                    val next = ArrayList<Pair<String, Float>>(f.size / 2)
+                    var j = 0
+                    while (j + 1 < f.size) {
+                        val l = f[j + 1].toFloatOrNull()
+                        if (l != null && l.isFinite() && l > 0f && f[j].isNotEmpty()) next += f[j] to l
+                        j += 2
+                    }
+                    out[p[0]] = NextRow(minOf(backoff, 0f), next)
+                }
+            }
+            return out
+        }
+
         fun loadOpen(
             input: InputStream,
             misspellings: Map<String, List<String>> = emptyMap(),
             emoji: Map<String, String> = emptyMap(),
+            next: Map<String, NextRow> = emptyMap(),
         ): Dictionary {
             val counts = LinkedHashMap<String, Long>(50_000)
             input.bufferedReader().useLines { lines ->
@@ -474,6 +630,7 @@ class Dictionary private constructor(
             val b = Builder()
             b.misspellings = misspellings
             b.emoji = emoji
+            b.nextModel = next
             for ((key, count) in counts) b.add(DISPLAY_OVERRIDES[key] ?: key, count.toDouble(), null)
             for (key in ALSO_WORDS) CONTRACTIONS[key]?.let { (form, count) -> b.add(form, count.toDouble(), null) }
             return b.build()
@@ -493,5 +650,68 @@ class Dictionary private constructor(
             val at = idx.binarySearch(i)
             return if (at >= 0) values[at] else null
         }
+    }
+}
+
+/** One previous word in the next-word model: ln(backoff) for words not listed, and the listed words with ln(lift). */
+class NextRow(val backoff: Float, val next: List<Pair<String, Float>>)
+
+/**
+ * The next-word model's view after one previous word, for scoring candidates ([Dictionary.context]):
+ * [of] gives an entry's bonus, its weighted ln(lift) when it is listed after that word, or else the
+ * [backoff] (≤ 0) that every other word gets; contractions get 0. [followers] are the listed
+ * entries, so a scan that stops at the first word too rare to count can still take them in.
+ */
+class NextContext internal constructor(capacity: Int, val backoff: Float) {
+    private val slots = IntArray(capacity)
+    private val values = FloatArray(capacity)
+    private val listed = BooleanArray(capacity)
+    private val mask = capacity - 1
+    private val followerList = ArrayList<Int>()
+    private val entryList = ArrayList<Int>()
+
+    /** The listed entries (and the entries sharing their keys). */
+    val followers: List<Int> get() = followerList
+
+    /** Every entry whose bonus isn't the [backoff]: the [followers] and the contractions. */
+    val entries: List<Int> get() = entryList
+
+    internal fun put(idx: Int, v: Float, follower: Boolean) {
+        var s = slot(idx)
+        while (slots[s] != 0 && slots[s] != idx + 1) s = (s + 1) and mask
+        if (follower && !listed[s]) followerList += idx
+        if (slots[s] == 0) entryList += idx
+        slots[s] = idx + 1
+        values[s] = v
+        if (follower) listed[s] = true
+    }
+
+    /** Entry [idx]'s bonus after this context's previous word. */
+    fun of(idx: Int): Float {
+        var s = slot(idx)
+        while (true) {
+            val e = slots[s]
+            if (e == 0) return backoff
+            if (e == idx + 1) return values[s]
+            s = (s + 1) and mask
+        }
+    }
+
+    /** Whether [idx] is one of the [followers]. */
+    fun isFollower(idx: Int): Boolean {
+        var s = slot(idx)
+        while (true) {
+            val e = slots[s]
+            if (e == 0) return false
+            if (e == idx + 1) return listed[s]
+            s = (s + 1) and mask
+        }
+    }
+
+    private fun slot(idx: Int) = (idx * -0x61c88647) ushr 7 and mask
+
+    companion object {
+        /** No context: every word as it is. */
+        val NONE = NextContext(2, 0f)
     }
 }

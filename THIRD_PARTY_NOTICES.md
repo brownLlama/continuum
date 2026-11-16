@@ -9,6 +9,13 @@ Continuum includes the following third-party material. Everything not listed her
 - **Changes:** trimmed to the 45,000 most frequent words. At load time the app also raises the counts of common contractions ("don't", "I'm" …).
 - `words.txt` is shared under the same CC BY-SA 4.0 licence.
 
+## Next words: `app/src/main/assets/next_words.tsv`
+
+- **Source:** the [Google Books Ngram Corpus](https://storage.googleapis.com/books/ngrams/books/datasetsv3.html) (version 3, 2020), English Fiction 2-grams and 3-grams, by Google.
+- **Licence:** [Creative Commons Attribution 3.0 Unported (CC BY 3.0)](https://creativecommons.org/licenses/by/3.0/).
+- **Changes:** counts from 1970 on, lower-cased and summed; only pairs of words in `words.txt` were kept. From those, for each common word, its likeliest next words and how many times likelier each is after it than in general (as a natural logarithm), plus how much less likely the words not listed are. Contractions Google splits ("it 's") were put back together, their next words taken from 3-grams. No text from the books is included, only these numbers.
+- `next_words.tsv` is shared under the same CC BY 3.0 licence.
+
 ## Common misspellings: `app/src/main/assets/misspellings.txt`
 
 - **Source:** Wikipedia, [Lists of common misspellings/For machines](https://en.wikipedia.org/wiki/Wikipedia:Lists_of_common_misspellings/For_machines), by Wikipedia contributors.
