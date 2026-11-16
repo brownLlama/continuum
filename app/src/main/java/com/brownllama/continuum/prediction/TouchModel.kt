@@ -14,7 +14,12 @@ import kotlin.math.sqrt
  *
  * It learns from words the user kept ([learn]): every tap of such a word was meant for its letter.
  * Words whose taps don't fit their letters (a typo that was corrected, a slip) are left out whole,
- * so a correction can't teach that a letter is somewhere it isn't. An offset is learned in two
+ * so a correction can't teach that a letter is somewhere it isn't. It also learns from letters
+ * the user fixed ([learnTap]): a tap deleted and typed again was meant for the letter typed in
+ * its place. Those matter most when the learned offsets have gone wrong (a big change of grip):
+ * words are then rarely read right, and without the fixes it would hardly learn anything new.
+ * A tap counts if it fits where its letter is expected now or the key's centre, so a model that
+ * went wrong can still find its way back. An offset is learned in two
  * parts: where taps land on the whole (one thumb's reach, landing low), from every tap, and each
  * letter's own difference from that, which needs [PRIOR_LETTER] taps of the letter before it
  * counts half. Only the latest taps count ([MAX_ALL_N], [MAX_LETTER_N]), so it follows a change of
@@ -80,34 +85,62 @@ class TouchModel(private val file: File, private val io: Executor? = null) {
     fun learn(layout: KeyLayout, mode: Mode, taps: List<Tap>, key: String): Boolean {
         loading.await()
         if (taps.size != key.length || key.any { it !in 'a'..'z' }) return false
-        val sx = Decoder.sigmaX(mode)
-        val sy = Decoder.sigmaY(mode)
-        val g = groups[groupKey(layout, mode)]
-        val now = g?.let { it.shape ?: build(it, mode).also { s -> it.shape = s } }
+        val now = shape(layout, mode)
         val used = ArrayList<Int>(taps.size)
-        val rx = FloatArray(taps.size)
-        val ry = FloatArray(taps.size)
+        val r = Array(taps.size) { FloatArray(2) }
         for (i in taps.indices) {
-            val t = taps[i]
-            if (t.exact >= 0) continue
-            val c = key[i] - 'a'
-            rx[i] = (t.x - centreX(layout, mode, c)) / sx
-            ry[i] = if (mode == Mode.FULL) (t.y - layout.fullY[c]) / sy else 0f
-            // How far it is from where the letter is expected now.
-            val ex = rx[i] - (now?.dx?.get(c) ?: 0f) / sx
-            val ey = ry[i] - (now?.dy?.get(c) ?: 0f) / sy
-            if (ex * ex + ey * ey > OUTLIER * OUTLIER) return false
+            if (taps[i].exact >= 0) continue
+            if (!residual(layout, mode, taps[i], key[i] - 'a', now, r[i])) return false
             used += i
         }
         if (used.size < MIN_TAPS) return false
-        val group = g ?: Group().also { groups[groupKey(layout, mode)] = it }
-        for (i in used) {
-            group.letters[key[i] - 'a'].add(rx[i], ry[i], MAX_LETTER_N)
-            group.all.add(rx[i], ry[i], MAX_ALL_N)
-        }
+        val group = groups.getOrPut(groupKey(layout, mode)) { Group() }
+        for (i in used) add(group, key[i] - 'a', r[i])
+        changed(group)
+        return true
+    }
+
+    /**
+     * The user deleted [tap] and typed [letter] in its place: it was meant for [letter]. Returns
+     * whether it was used: not if it was picked exactly, or lies too far from [letter] (deleting
+     * and typing something else, rather than fixing one letter).
+     */
+    fun learnTap(layout: KeyLayout, mode: Mode, tap: Tap, letter: Char): Boolean {
+        loading.await()
+        if (tap.exact >= 0 || letter !in 'a'..'z') return false
+        val r = FloatArray(2)
+        if (!residual(layout, mode, tap, letter - 'a', shape(layout, mode), r)) return false
+        val group = groups.getOrPut(groupKey(layout, mode)) { Group() }
+        add(group, letter - 'a', r)
+        changed(group)
+        return true
+    }
+
+    /**
+     * Where [tap] landed from letter [c]'s key centre, in default spreads, into [out]; false if it
+     * is further than [OUTLIER] both from there and from where the letter is expected [now].
+     */
+    private fun residual(layout: KeyLayout, mode: Mode, tap: Tap, c: Int, now: Shape?, out: FloatArray): Boolean {
+        val sx = Decoder.sigmaX(mode)
+        val sy = Decoder.sigmaY(mode)
+        val rx = (tap.x - centreX(layout, mode, c)) / sx
+        val ry = if (mode == Mode.FULL) (tap.y - layout.fullY[c]) / sy else 0f
+        out[0] = rx
+        out[1] = ry
+        val ex = rx - (now?.dx?.get(c) ?: 0f) / sx
+        val ey = ry - (now?.dy?.get(c) ?: 0f) / sy
+        val limit = OUTLIER * OUTLIER
+        return ex * ex + ey * ey <= limit || rx * rx + ry * ry <= limit
+    }
+
+    private fun add(group: Group, c: Int, r: FloatArray) {
+        group.letters[c].add(r[0], r[1], MAX_LETTER_N)
+        group.all.add(r[0], r[1], MAX_ALL_N)
+    }
+
+    private fun changed(group: Group) {
         group.shape = null
         if (++dirty >= SAVE_EVERY) save()
-        return true
     }
 
     /** Forgets everything learned (with the learned words). */
@@ -187,7 +220,10 @@ class TouchModel(private val file: File, private val io: Executor? = null) {
     companion object {
         /** Words with fewer taps that say where a finger landed aren't used. */
         const val MIN_TAPS = 2
-        /** A tap further than this many default spreads from its letter means the word doesn't fit its taps. */
+        /**
+         * A tap further than this many default spreads from its letter (from where it is expected
+         * now and from the key's centre) means the word doesn't fit its taps.
+         */
         const val OUTLIER = 2.2f
         /** Taps in all before the shared offset counts half; only about the latest [MAX_ALL_N] count. */
         const val PRIOR_ALL = 20f

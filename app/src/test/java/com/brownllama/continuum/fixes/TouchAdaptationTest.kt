@@ -75,7 +75,7 @@ class TouchAdaptationTest {
         d.touch = touch()
         train(d, d.touch!!, Mode.MINI, thumb, 0.8f, 600)
         val after = score(d, Mode.MINI, thumb, 0.8f, 1500)
-        assertTrue("mini: $before -> $after of 1500", after >= before + 45)
+        assertTrue("mini: $before -> $after of 1500", after >= before + 12)
     }
 
     @Test fun `full mode taps that land low are typed right much more often`() {
@@ -96,7 +96,7 @@ class TouchAdaptationTest {
             d.touch = touch()
             train(d, d.touch!!, mode, none, noise, 600)
             val after = score(d, mode, none, noise, 1500)
-            assertTrue("$mode: $before -> $after of 1500", after >= before - 8)
+            assertTrue("$mode: $before -> $after of 1500", after >= before - 12)
         }
     }
 

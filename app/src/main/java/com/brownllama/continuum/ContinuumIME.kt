@@ -110,9 +110,20 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
     private lateinit var touch: TouchModel
     /** Setting "Learn how you tap": the decoder reads taps by [touch], and it keeps learning. */
     private var touchOn = Prefs.TOUCH_ADAPT_DEFAULT
-    /** The last committed word's taps, for [touch] once it's clear the word was kept ([flushTouch]). */
-    private class PendingTouch(val layout: KeyLayout, val mode: Mode, val taps: List<Tap>, val key: String)
+    /**
+     * The last committed word's taps, for [touch] once it's clear the word was kept ([flushTouch]),
+     * and the taps that were deleted while typing it, each with the letter typed in its place.
+     */
+    private class PendingTouch(
+        val layout: KeyLayout, val mode: Mode, val taps: List<Tap>, val key: String, val fixed: List<Pair<Tap, Char>>,
+    )
     private var pendingTouch: PendingTouch? = null
+    /**
+     * Taps of the word being typed that backspace deleted, by their place in the word (the first
+     * one deleted at each place). The letter the word ends up with there is what it was meant
+     * for ([commitWord]). Forgotten when the word goes away without being committed.
+     */
+    private val deletedTaps = HashMap<Int, Tap>()
     private lateinit var appThemes: AppThemes
     private var currentPackage: String? = null
     @Volatile private var decoder: Decoder? = null
@@ -416,7 +427,9 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
     private fun flushTouch() {
         val p = pendingTouch ?: return
         pendingTouch = null
-        if (touchOn) touch.learn(p.layout, p.mode, p.taps, p.key)
+        if (!touchOn) return
+        touch.learn(p.layout, p.mode, p.taps, p.key)
+        for ((tap, letter) in p.fixed) touch.learnTap(p.layout, p.mode, tap, letter)
     }
 
     /** The clipboard settings: with the history off, what was kept goes too. */
@@ -462,6 +475,7 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
         currentPackage = info.packageName
         applyPrefs()
         taps.clear()
+        deletedTaps.clear()
         result = null
         lastCommit = null
         lastExpansion = null
@@ -520,6 +534,7 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
     override fun onFinishInput() {
         super.onFinishInput()
         taps.clear()
+        deletedTaps.clear()
         result = null
         privateField = false
     }
@@ -545,6 +560,7 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
         val cursorOutside = candidatesStart != -1 && (newSelStart != candidatesEnd || newSelEnd != candidatesEnd)
         if (composingGone || cursorOutside) {
             taps.clear()
+            deletedTaps.clear()
             result = null
             editor()?.finishComposingText()
             lastCommit = null
@@ -644,8 +660,11 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
         val ic = editor() ?: return
         if (taps.isNotEmpty()) {
             rememberDeletedWord()
-            taps.removeAt(taps.lastIndex)
+            val removed = taps.removeAt(taps.lastIndex)
+            deletedTaps.putIfAbsent(taps.size, removed)
             if (taps.isEmpty()) {
+                // The whole word went: what is typed next may be another word altogether.
+                deletedTaps.clear()
                 ic.commitText("", 1)
                 result = null
                 updateAutoShift()
@@ -675,6 +694,7 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
         if (ic.getTextBeforeCursor(expected.length, 0)?.toString() != expected) return false
         // Taken back: its taps don't say where the user's fingers land for those letters.
         pendingTouch = null
+        deletedTaps.clear()
         if (learning) unlearn(last.prevBefore, last.learned)
         prevWord = last.prevBefore
         ic.beginBatchEdit()
@@ -739,6 +759,7 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
         if (taps.isNotEmpty()) {
             rememberDeletedWord()
             taps.clear()
+            deletedTaps.clear()
             ic.commitText("", 1)
             result = null
             lastCommit = null
@@ -1154,6 +1175,7 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
     /** Forgets the word being typed and what it was attached to (switching between the app and the query). */
     private fun resetWordState() {
         taps.clear()
+        deletedTaps.clear()
         result = null
         lastCommit = null
         pendingGlue = null
@@ -1327,7 +1349,14 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
         // Where the taps landed counts once this word is kept (see flushTouch).
         flushTouch()
         val typedKey = Dictionary.keyOf(text)
-        if (learning && touchOn && typedKey != null) pendingTouch = PendingTouch(layout, tapMode, ArrayList(taps), typedKey)
+        if (learning && touchOn && typedKey != null) {
+            // A tap deleted while typing was meant for the letter the word has there now (if the
+            // word's letters still line up with its taps).
+            val fixed = if (typedKey.length != taps.size) emptyList() else
+                deletedTaps.mapNotNull { (at, tap) -> typedKey.getOrNull(at)?.let { tap to it } }
+            pendingTouch = PendingTouch(layout, tapMode, ArrayList(taps), typedKey, fixed)
+        }
+        deletedTaps.clear()
         lastCommit = LastCommit(text, spaced, ArrayList(taps), tapMode, prevBefore, learned, g)
         wordGlue = null
         taps.clear()

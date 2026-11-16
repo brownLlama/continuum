@@ -47,8 +47,8 @@ class TouchModelTest {
         val many = m.shape(qwerty, Mode.MINI)!!.dx['o' - 'a']
         assertTrue("few $few many $many", few in 0.1f..many)
         assertEquals(0.6f, many, 0.08f)
-        // Letters never typed stay where they were.
-        assertEquals(0f, m.shape(qwerty, Mode.MINI)!!.dx['k' - 'a'], 0f)
+        // Letters never typed move with the rest, by the shift all taps share.
+        assertEquals(0.6f, m.shape(qwerty, Mode.MINI)!!.dx['k' - 'a'], 0.08f)
     }
 
     @Test fun `full mode learns across and down`() {
@@ -105,7 +105,26 @@ class TouchModelTest {
         val mixed = exact.take(3) + mini("lo", 0.5f)
         assertTrue(m.learn(qwerty, Mode.MINI, mixed, "hello"))
         assertNotNull(m.shape(qwerty, Mode.MINI))
-        assertEquals(0f, m.shape(qwerty, Mode.MINI)!!.dx['h' - 'a'], 0f)
+        // "h" was picked exactly: it has nothing of its own, only a little of the shared shift.
+        assertTrue(m.shape(qwerty, Mode.MINI)!!.dx['h' - 'a'] < 0.1f)
+    }
+
+    @Test fun `a fixed letter teaches where its tap really was`() {
+        val m = model()
+        // The thumb meant "e" but landed on "r", every time; the user deleted it and typed "e".
+        repeat(60) { assertTrue(m.learnTap(qwerty, Mode.FULL, Tap(qwerty.fullX['r' - 'a'], qwerty.fullY['r' - 'a']), 'e')) }
+        assertTrue(m.shape(qwerty, Mode.FULL)!!.dx['e' - 'a'] > 0.3f)
+        // A tap far from the letter typed in its place (deleting and typing another word) is not used.
+        assertFalse(m.learnTap(qwerty, Mode.FULL, Tap(qwerty.fullX['p' - 'a'], qwerty.fullY['p' - 'a']), 'a'))
+        assertFalse(m.learnTap(qwerty, Mode.FULL, Tap(0f, 0f, exact = 4), 'e'))
+    }
+
+    @Test fun `a model gone wrong can find its way back to the key centres`() {
+        val m = model()
+        repeat(60) { for (w in words) m.learn(qwerty, Mode.FULL, full(w, 0f, 0.35f), w) }
+        // Now the taps land on the centres; far from where the model expects them, but on the keys.
+        repeat(60) { for (w in words) assertTrue(m.learn(qwerty, Mode.FULL, full(w, 0f, 0f), w)) }
+        assertEquals(0f, m.shape(qwerty, Mode.FULL)!!.dy['e' - 'a'], 0.06f)
     }
 
     @Test fun `each layout and mode is learned on its own`() {
