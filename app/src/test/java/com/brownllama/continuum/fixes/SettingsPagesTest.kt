@@ -30,7 +30,7 @@ class SettingsPagesTest {
 
     @Test fun everySettingsPageOpens() {
         val activity = Robolectric.buildActivity(SettingsActivity::class.java).setup().get()
-        for (name in listOf("root", "appearance", "size", "typing", "gestures", "shortcuts", "gifs", "guide")) {
+        for (name in listOf("root", "appearance", "size", "typing", "gestures", "shortcuts", "gifs", "stats", "guide")) {
             assertNotNull(name, page(activity, name).preferenceScreen)
         }
     }
@@ -54,5 +54,24 @@ class SettingsPagesTest {
         keep.value = "24"
         assertEquals("1 day", keep.summary.toString())
         assertEquals("24", typing.preferenceManager.sharedPreferences!!.getString(Prefs.CLIPBOARD_KEEP, null))
+    }
+
+    @Test fun statsPage_showsTheCounts_andResets() {
+        val activity = Robolectric.buildActivity(SettingsActivity::class.java).setup().get()
+        val stats = com.brownllama.continuum.stats.TypingStats.get(activity)
+        repeat(8) { stats.word(com.brownllama.continuum.prediction.Mode.MINI, com.brownllama.continuum.stats.TypingStats.Outcome.KEPT) }
+        repeat(2) { stats.word(com.brownllama.continuum.prediction.Mode.MINI, com.brownllama.continuum.stats.TypingStats.Outcome.FIXED) }
+        stats.prediction(com.brownllama.continuum.prediction.Mode.MINI)
+        val page = page(activity, "stats")
+        page.onResume()
+        val week = page.findPreference<androidx.preference.PreferenceGroup>("stats_week")!!
+        assertEquals(1, week.preferenceCount)
+        assertEquals("Mini mode · 10 words", week.getPreference(0).title.toString())
+        val summary = week.getPreference(0).summary.toString()
+        assertTrue(summary, summary.contains("Kept as typed 80%") && summary.contains("fixed 20%") && summary.contains("Next-word predictions used: 1"))
+        assertTrue(page.findPreference<androidx.preference.PreferenceGroup>("stats_all")!!.title.toString().startsWith("Since "))
+        stats.reset()
+        page.onResume()
+        assertEquals("Nothing counted yet.", week.getPreference(0).title.toString())
     }
 }

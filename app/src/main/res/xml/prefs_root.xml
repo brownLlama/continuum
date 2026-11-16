@@ -34,6 +34,11 @@
         app:title="@string/screen_gifs" />
     <Preference
         app:fragment="com.brownllama.continuum.SettingsActivity$ScreenFragment"
+        app:icon="@drawable/ic_stats"
+        app:key="stats"
+        app:title="@string/screen_stats" />
+    <Preference
+        app:fragment="com.brownllama.continuum.SettingsActivity$ScreenFragment"
         app:icon="@drawable/ic_tips"
         app:key="guide"
         app:title="@string/screen_guide" />
