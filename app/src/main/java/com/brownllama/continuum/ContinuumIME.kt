@@ -227,9 +227,10 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
     /**
      * A word that ended in an apostrophe or hyphen right before the cursor ("zazzy'"). The next word
      * typed is learned together with it ("zazzy's", key "zazzys"), replacing what was learned for
-     * [prefix] on its own; [absorbed] records that this was undone already.
+     * [prefix] on its own (the key [learnedKey]: "zazzy", or "m" for "mü"; null if nothing was);
+     * [absorbed] records that this was undone already.
      */
-    private class Glue(val prefix: String, val prevBefore: String?, val sentenceStart: Boolean) {
+    private class Glue(val prefix: String, val prevBefore: String?, val sentenceStart: Boolean, val learnedKey: String?) {
         var absorbed = false
     }
     /** The shortcut just expanded: [typed] ("##e") became [text]; a backspace right after undoes it. */
@@ -645,8 +646,8 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
             val last = lastCommit?.takeIf { !it.spaced }
             pendingGlue = when {
                 last != null -> glueAfter(last, text)
-                before != null -> Glue(before.prefix + text, before.prevBefore, before.sentenceStart)
-                else -> Glue(text, prevWord, atSentenceStart())
+                before != null -> Glue(before.prefix + text, before.prevBefore, before.sentenceStart, before.learnedKey)
+                else -> Glue(text, prevWord, atSentenceStart(), null)
             }
             ic.commitText(text, 1)
             autoSpace = false
@@ -1363,11 +1364,13 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
         val best = r.words.firstOrNull() ?: return literalText
         if (best.key == r.literal) {
             // The same letters with an apostrophe, hyphen or space ("dont" → "don't", "zazzys" →
-            // "zazzy's", "thankyou" → "thank you"), unless what was typed is a word as it stands
-            // ("its"; not a known misspelling like "ofthe", which the word list also holds).
+            // "zazzy's", "thankyou" → "thank you") or German letters ("munchen" → "münchen"),
+            // unless what was typed is a word as it stands ("its"; not a known misspelling like
+            // "ofthe", which the word list also holds).
             val typedIsWord = r.literalIsWord &&
                 r.words.any { it.key == r.literal && it.display.equals(r.literal, ignoreCase = true) }
-            return if (!typedIsWord && best.display.any { !it.isLetter() }) words.first() else literalText
+            val respelled = best.display.any { !it.isLetter() || it in GERMAN_LETTERS }
+            return if (!typedIsWord && respelled) words.first() else literalText
         }
         if (r.literalIsWord && best.score - r.literalScore < KEEP_REAL_WORD_MARGIN) return literalText
         if (taps.size == 1) return literalText
@@ -1387,7 +1390,7 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
         // A joined word replaces what was learned for its first part: "zazzy" + "'s" → "zazzy's".
         val g = wordGlue?.takeIf { Dictionary.keyOf(text) != null }
         if (g != null && !g.absorbed) {
-            if (learning) Dictionary.keyOf(g.prefix)?.let { user.unlearn(pairPrev(g.prevBefore, g.sentenceStart), it) }
+            if (learning) g.learnedKey?.let { user.unlearn(pairPrev(g.prevBefore, g.sentenceStart), it) }
             g.absorbed = true
         }
         if (g != null) prevWord = g.prevBefore
@@ -1445,8 +1448,9 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
             return
         }
         // An emoji (or anything without letters) is not learned, and the word before it no longer counts.
-        // Nor is a German word or one with digits ("some1"): its key would drop those and match other words.
-        val key = Dictionary.keyOf(word)?.takeIf { word.none { it in GERMAN_LETTERS || it.isDigit() } } ?: run { prevWord = null; return }
+        // Nor is a word with digits ("some1"): its key would drop those and match other words. A
+        // German word is learned under its base letters ("münchen" as "munchen", see keyOf).
+        val key = Dictionary.keyOf(word)?.takeIf { word.none { it.isDigit() } } ?: run { prevWord = null; return }
         // Fields that ask for no learning (incognito) only track the previous word, for predictions.
         if (!learning) {
             prevWord = key
@@ -1489,8 +1493,8 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
      */
     private fun glueAfter(last: LastCommit, text: String): Glue {
         val words = last.learned.split(' ')
-        if (words.size < 2) return Glue(last.learned + text, last.prevBefore, wordSentenceStart)
-        return Glue(words.last() + text, Dictionary.keyOf(words[words.size - 2]), false)
+        if (words.size < 2) return Glue(last.learned + text, last.prevBefore, wordSentenceStart, Dictionary.keyOf(last.learned))
+        return Glue(words.last() + text, Dictionary.keyOf(words[words.size - 2]), false, Dictionary.keyOf(words.last()))
     }
 
     /**
