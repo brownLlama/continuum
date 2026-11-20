@@ -135,7 +135,7 @@ class Decoder(private val dict: Dictionary, private val user: UserModel) {
             var b = c.plus(userBoost(count, user.bigramCount(userPrev, c.key)) + lift + userPenalty(extra) - dictPenalty(extra))
             // Show the word the way the user writes it ("tero"), not the dictionary's "Tero".
             val form = shownForm(c.key)
-            if (form != null && b.display.equals(form, ignoreCase = true)) b = b.shownAs(form)
+            if (form != null && Dictionary.sameWord(b.display, form)) b = b.shownAs(form)
             list[i] = b
         }
 
@@ -265,7 +265,7 @@ class Decoder(private val dict: Dictionary, private val user: UserModel) {
             val lift = maxOf(0f, NEW_WORD_LOG_FREQ - dict.logFreq[dict.indexOf(c.key)])
             var b = c.plus(userBoost(count, user.bigramCount(userPrev, c.key)) + lift)
             val form = shownForm(c.key)
-            if (form != null && b.display.equals(form, ignoreCase = true)) b = b.shownAs(form)
+            if (form != null && Dictionary.sameWord(b.display, form)) b = b.shownAs(form)
             out += b.edit()
         }
 
@@ -380,7 +380,7 @@ class Decoder(private val dict: Dictionary, private val user: UserModel) {
         val out = HashSet<String>()
         for (list in lists) for (c in list) {
             val form = user.formOf(c.key) ?: continue
-            if (c.display.equals(form, ignoreCase = true)) out += c.key
+            if (Dictionary.sameWord(c.display, form)) out += c.key
         }
         return out
     }
@@ -391,7 +391,7 @@ class Decoder(private val dict: Dictionary, private val user: UserModel) {
      */
     private fun isUsersForm(c: Candidate, spelled: Set<String>): Boolean {
         if (c.key !in spelled) return true
-        return c.display.equals(user.formOf(c.key) ?: return true, ignoreCase = true)
+        return Dictionary.sameWord(c.display, user.formOf(c.key) ?: return true)
     }
 
     /** The least a [len]-letter word can cost in edits against [n] taps. */
@@ -527,7 +527,7 @@ class Decoder(private val dict: Dictionary, private val user: UserModel) {
         val model = if (sentenceStart || prev == null) dict.startWords else dict.nextFor(prev)
         val defaults = if (sentenceStart || prev == null) START_WORDS else FOLLOW_WORDS
         val frequent = user.mostUsed(limit).map { shownForm(it) ?: dict.displayFor(it) }
-        for (d in model + defaults + frequent) if (out.size < limit && out.none { it.equals(d, ignoreCase = true) }) out += d
+        for (d in model + defaults + frequent) if (out.size < limit && out.none { Dictionary.sameWord(it, d) }) out += d
         out.removeAll { user.isBlocked(it) }
         return out
     }

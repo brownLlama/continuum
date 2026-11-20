@@ -641,11 +641,32 @@ class Dictionary private constructor(
             return b.build()
         }
 
-        /** Letters-only lowercase key for a word, or null if it has nothing typeable. */
+        /**
+         * Letters-only lowercase key for a word, or null if it has nothing typeable. German letters
+         * count as the letters they are typed with ("münchen" → "munchen", "straße" → "strasse"),
+         * so a German word is found from the taps of its base letters (mini mode has no ü).
+         */
         fun keyOf(word: String): String? {
-            val k = word.lowercase().filter { it in 'a'..'z' }
-            return k.ifEmpty { null }
+            val k = StringBuilder(word.length)
+            for (c in foldGerman(word.lowercase())) if (c in 'a'..'z') k.append(c)
+            return if (k.isEmpty()) null else k.toString()
         }
+
+        /** The same word but for capitals and German letters ("Für" and "fur", "Straße" and "strasse"). */
+        fun sameWord(a: String, b: String): Boolean =
+            a.equals(b, ignoreCase = true) || foldGerman(a).equals(foldGerman(b), ignoreCase = true)
+
+        /** German letters as the letters they are typed with: ä → a, ö → o, ü → u, ß → ss. */
+        private fun foldGerman(s: String): String {
+            if (s.none { it in GERMAN_FOLD }) return s
+            val out = StringBuilder(s.length + 2)
+            for (c in s) out.append(GERMAN_FOLD[c] ?: c.toString())
+            return out.toString()
+        }
+
+        private val GERMAN_FOLD = mapOf(
+            'ä' to "a", 'ö' to "o", 'ü' to "u", 'Ä' to "A", 'Ö' to "O", 'Ü' to "U", 'ß' to "ss", 'ẞ' to "SS",
+        )
 
         /** Spreads a key hash over the table's low bits. */
         private fun mix(h: Int): Int = h xor (h ushr 16) * 0x45d9f3b
