@@ -126,4 +126,20 @@ class Keyboard(prefs: Map<String, Any> = emptyMap()) {
         idle()
     }
     fun space() = ime.onSpace()
+
+    /** A swipe on the keys, from the middle of the view's lower half by ([dx], [dy]) pixels. */
+    fun swipe(dx: Float, dy: Float) {
+        val x0 = view.width / 2f
+        val y0 = view.height * 0.75f
+        val t = android.os.SystemClock.uptimeMillis()
+        fun event(action: Int, x: Float, y: Float, at: Long) = android.view.MotionEvent.obtain(t, at, action, x, y, 0)
+        val steps = 6
+        view.onTouchEvent(event(android.view.MotionEvent.ACTION_DOWN, x0, y0, t))
+        for (i in 1..steps) view.onTouchEvent(event(android.view.MotionEvent.ACTION_MOVE, x0 + dx * i / steps, y0 + dy * i / steps, t + i * 10L))
+        view.onTouchEvent(event(android.view.MotionEvent.ACTION_UP, x0 + dx, y0 + dy, t + steps * 10L + 10))
+        idle()
+    }
+
+    fun swipeUpLeft() = swipe(-140f, -140f)
+    fun swipeUpRight() = swipe(140f, -140f)
 }

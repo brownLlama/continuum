@@ -101,6 +101,15 @@ Swipe up to get a normal keyboard drawn the same way: flat keys, one font, line 
 - **Two pages** of numbers and symbols behind `123`, with a keypad-style number layout.
 - An **autocorrect switch** in the suggestion bar. On, typos like *teh* become *the*. Off, every letter is typed exactly as tapped, which is handy for names and new words.
 
+### 🌍 English and German
+
+Swipe **up and left** on the keys to switch between English and German (also Settings → Typing → Language). Each language has its own:
+
+- **word list and next-word model**, so suggestions, corrections and predictions are in the language you're typing: *für*, *über*, *schön* and *weiß* come from the plain letters, as in mini mode, which has no umlauts;
+- **learned words and word pairs**, kept apart: what you type in English stays in English and what you type in German stays in German. "Forget learned words" (Settings → Typing) clears both.
+
+English-only things (*don't* for *dont*, *thankyou* → *thank you*, *16th*, a capital *I*) are off in German, and German words keep their own spelling. Your finger-tap habits (*Learn how you tap*) are shared by both.
+
 ### 🧠 Word prediction that learns you
 
 - A **probabilistic decoder**: each tap is scored against every possible word, weighted by word frequency and your own history. It answers in a few milliseconds per tap, even with 10,000 learned words.
@@ -126,7 +135,8 @@ Swipe up to get a normal keyboard drawn the same way: flat keys, one font, line 
 | ↑ up (mini mode) | Open the full keyboard |
 | ↓ down | Switch between letters and numbers |
 | ↓ down from the suggestion bar (full keyboard) | Back to mini mode |
-| ↖ ↗ diagonally up | Enter |
+| ↗ up and right | Enter |
+| ↖ up and left | Switch between English and German |
 
 How sensitive swipes are (shortest swipe, flick speed, long swipe, straightness) is adjustable, with an explanation for each slider.
 

@@ -2,6 +2,13 @@
 <!-- Corrections, feedback, the clipboard history and learned words. -->
 <PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
+    <ListPreference
+        app:defaultValue="en"
+        app:entries="@array/language_names"
+        app:entryValues="@array/language_values"
+        app:key="language"
+        app:summary="@string/pref_language_summary"
+        app:title="@string/pref_language" />
     <SwitchPreferenceCompat
         app:defaultValue="false"
         app:key="autocorrect"

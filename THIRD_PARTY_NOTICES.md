@@ -9,12 +9,26 @@ Continuum includes the following third-party material. Everything not listed her
 - **Changes:** trimmed to the 45,000 most frequent words. At load time the app also raises the counts of common contractions ("don't", "I'm" …).
 - `words.txt` is shared under the same CC BY-SA 4.0 licence.
 
+## German word list: `app/src/main/assets/words_de.txt`
+
+- **Source:** [hermitdave/FrequencyWords](https://github.com/hermitdave/FrequencyWords), `content/2018/de/de_50k.txt`, by Hermit Dave, built from the [OpenSubtitles](https://opus.nlpl.eu/OpenSubtitles.php) corpus.
+- **Licence:** [Creative Commons Attribution-ShareAlike 4.0 International (CC BY-SA 4.0)](https://creativecommons.org/licenses/by-sa/4.0/). (FrequencyWords' code is MIT; its word lists are CC BY-SA 4.0.)
+- **Changes:** trimmed to the 45,000 most frequent words of two or more letters (and a few common hyphenated ones such as "e-mail").
+- `words_de.txt` is shared under the same CC BY-SA 4.0 licence.
+
 ## Next words: `app/src/main/assets/next_words.tsv`
 
 - **Source:** the [Google Books Ngram Corpus](https://storage.googleapis.com/books/ngrams/books/datasetsv3.html) (version 3, 2020), English Fiction 2-grams and 3-grams, by Google.
 - **Licence:** [Creative Commons Attribution 3.0 Unported (CC BY 3.0)](https://creativecommons.org/licenses/by/3.0/).
 - **Changes:** counts from 1970 on, lower-cased and summed; only pairs of words in `words.txt` were kept. From those, for each common word, its likeliest next words and how many times likelier each is after it than in general (as a natural logarithm), plus how much less likely the words not listed are. Contractions Google splits ("it 's") were put back together, their next words taken from 3-grams. No text from the books is included, only these numbers.
 - `next_words.tsv` is shared under the same CC BY 3.0 licence.
+
+## German next words: `app/src/main/assets/next_words_de.tsv`
+
+- **Source:** the [Google Books Ngram Corpus](https://storage.googleapis.com/books/ngrams/books/datasetsv3.html) (version 3, 2020), German 2-grams, by Google.
+- **Licence:** [Creative Commons Attribution 3.0 Unported (CC BY 3.0)](https://creativecommons.org/licenses/by/3.0/).
+- **Changes:** counts from 1970 on, lower-cased with ä, ö, ü and ß written as the letters they are typed with (a, o, u, ss) and summed; only pairs of words in `words_de.txt` were kept. From those, for each common word, its likeliest next words and how many times likelier each is after it than in general (as a natural logarithm), plus how much less likely the words not listed are. No text from the books is included, only these numbers.
+- `next_words_de.tsv` is shared under the same CC BY 3.0 licence.
 
 ## Common misspellings: `app/src/main/assets/misspellings.txt`
 
@@ -23,10 +37,10 @@ Continuum includes the following third-party material. Everything not listed her
 - **Changes:** converted to letters-only keys; entries whose correction is several words were left out.
 - `misspellings.txt` is shared under the same CC BY-SA 4.0 licence.
 
-## Emoji list and emoji suggestions: `app/src/main/assets/emoji.tsv`, `app/src/main/assets/emoji_keywords.tsv`
+## Emoji list and emoji suggestions: `app/src/main/assets/emoji.tsv`, `app/src/main/assets/emoji_keywords.tsv`, `app/src/main/assets/emoji_keywords_de.tsv`
 
-- **Source:** Unicode [emoji-test.txt](https://unicode.org/Public/emoji/16.0/emoji-test.txt) (Emoji 16.0), and the Unicode CLDR 48 English emoji annotations ([`annotations/en.xml`](https://github.com/unicode-org/cldr/blob/release-48/common/annotations/en.xml), [`annotationsDerived/en.xml`](https://github.com/unicode-org/cldr/blob/release-48/common/annotationsDerived/en.xml)).
-- **Changes:** `emoji.tsv` is reduced to fully-qualified emoji, one line per group. `emoji_keywords.tsv` picks one emoji per keyword (words of a single meaning; a few common words chosen by hand) and adds plurals.
+- **Source:** Unicode [emoji-test.txt](https://unicode.org/Public/emoji/16.0/emoji-test.txt) (Emoji 16.0), and the Unicode CLDR 48 English and German emoji annotations ([`annotations/en.xml`](https://github.com/unicode-org/cldr/blob/release-48/common/annotations/en.xml), [`annotationsDerived/en.xml`](https://github.com/unicode-org/cldr/blob/release-48/common/annotationsDerived/en.xml), and the same two files for [`de`](https://github.com/unicode-org/cldr/blob/release-48/common/annotations/de.xml)).
+- **Changes:** `emoji.tsv` is reduced to fully-qualified emoji, one line per group. `emoji_keywords.tsv` and `emoji_keywords_de.tsv` pick one emoji per keyword (words of a single meaning; a few common words chosen by hand); the English one also adds plurals, and the German one keeps the words that are in `words_de.txt`.
 - **Licence:** Unicode License V3:
 
 ```text

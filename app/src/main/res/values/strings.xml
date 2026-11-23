@@ -21,7 +21,7 @@
     <string name="summary_size">Mini %1$d%% · Full %2$d%% · Bar %3$d%%</string>
     <string name="summary_typing_on">Autocorrect on · Hold %1$d ms</string>
     <string name="summary_typing_off">Autocorrect off · Hold %1$d ms</string>
-    <string name="summary_gestures">← delete word · → space · ↓ numbers · ↑ full · ↖ ↗ enter</string>
+    <string name="summary_gestures">← delete word · → space · ↓ numbers · ↑ full · ↗ enter · ↖ English/German</string>
     <string name="version_title">Version</string>
     <string name="summary_guide">How to type, gestures, emoji, clipboard, privacy</string>
     <string name="screen_stats">Typing statistics</string>
@@ -76,6 +76,8 @@
     <string name="pref_hide_system_buttons_summary">Removes Android\'s keyboard-switch and hide-keyboard buttons from under the keys (Android 16+), giving the space back. Hold shift, or the space bar in the full keyboard, to switch keyboards.</string>
 
     <!-- Typing -->
+    <string name="pref_language">Language</string>
+    <string name="pref_language_summary">English or German, each with its own words and learned words. Also a swipe up and left on the keys.</string>
     <string name="pref_autocorrect">Autocorrect</string>
     <string name="pref_autocorrect_summary">Full keyboard only. Off: words are typed exactly and learned. Also the switch in the suggestion bar.</string>
     <string name="pref_autocaps">Auto-capitalisation</string>
@@ -103,7 +105,7 @@
     <!-- Gestures -->
     <string name="cat_swipe">Sensitivity</string>
     <string name="pref_swipe_min_dp">Shortest swipe (dp)</string>
-    <string name="gestures_intro">Every touch that moves is either a tap or a swipe (delete word, space, enter, numbers, full keyboard; see the Guide). A stroke is a swipe only if it\'s at least the shortest swipe, straight enough, and either fast enough or as long as a long swipe. Otherwise it counts as a tap where your finger first landed.</string>
+    <string name="gestures_intro">Every touch that moves is either a tap or a swipe (delete word, space, enter, numbers, full keyboard, language; see the Guide). A stroke is a swipe only if it\'s at least the shortest swipe, straight enough, and either fast enough or as long as a long swipe. Otherwise it counts as a tap where your finger first landed.</string>
     <string name="pref_swipe_min_dp_summary">The minimum distance for a swipe. Anything shorter is always a tap, however fast. Raise it if quick taps turn into swipes; lower it for shorter swipes.</string>
     <string name="pref_swipe_speed">Flick speed (dp / 100 ms)</string>
     <string name="pref_swipe_speed_summary">How fast a short swipe must be. Lower: gentle flicks count as swipes. Higher: only quick flicks do, so slow sliding stays a tap.</string>
@@ -168,7 +170,7 @@
     <string name="guide_swipe_ud_title">Swipe up or down</string>
     <string name="guide_swipe_ud">Swipe up in mini mode for the full keyboard. Swipe down to switch between letters and numbers; in the full keyboard, swipe down from the suggestion bar to go back to mini mode.</string>
     <string name="guide_swipe_diag_title">Swipe diagonally up</string>
-    <string name="guide_swipe_diag">Up-left or up-right acts as enter. If swipes are mistaken for taps or the other way round, adjust Gestures → Sensitivity.</string>
+    <string name="guide_swipe_diag">Up-right acts as enter. Up-left switches between English and German: each has its own words, and what you type in one is learned only there. If swipes are mistaken for taps or the other way round, adjust Gestures → Sensitivity.</string>
     <string name="guide_cat_3">Full keyboard</string>
     <string name="guide_full_title">Keys and hints</string>
     <string name="guide_full">A normal keyboard in the same style. The small character on each key is typed by holding it. Hold the full stop for , ! ?</string>
@@ -264,6 +266,15 @@
         <item>1</item>
         <item>24</item>
         <item>168</item>
+    </string-array>
+    <!-- Languages: names in the order of Language.entries, values are Language.code. -->
+    <string-array name="language_names">
+        <item>English</item>
+        <item>Deutsch</item>
+    </string-array>
+    <string-array name="language_values" translatable="false">
+        <item>en</item>
+        <item>de</item>
     </string-array>
     <!-- Visiting animals: names in the order of Species.ALL, values are Species.key. -->
     <string-array name="animal_names">
