@@ -103,7 +103,7 @@ Swipe up to get a normal keyboard drawn the same way: flat keys, one font, line 
 
 ### 🌍 English and German
 
-Swipe **up and left** on the keys to switch between English and German (also Settings → Typing → Language). Each language has its own:
+Swipe **up and left** on the keys to switch between English and German (also Settings → Typing → Language). Any diagonal in a wide sector counts, from a fairly flat one to a steep one; flatter is still delete-word and steeper the full keyboard. A small **en / de** label at the bottom right of the mini keys (and on the space bar of the full keyboard) shows which language you're in, and each change plays a short hint: a little pill over the suggestion bar slides a highlight from EN to DE (or back) and names the new language. Each language has its own:
 
 - **word list and next-word model**, so suggestions, corrections and predictions are in the language you're typing: *für*, *über*, *schön* and *weiß* come from the plain letters, as in mini mode, which has no umlauts;
 - **learned words and word pairs**, kept apart: what you type in English stays in English and what you type in German stays in German. "Forget learned words" (Settings → Typing) clears both.
@@ -136,7 +136,7 @@ English-only things (*don't* for *dont*, *thankyou* → *thank you*, *16th*, a c
 | ↓ down | Switch between letters and numbers |
 | ↓ down from the suggestion bar (full keyboard) | Back to mini mode |
 | ↗ up and right | Enter |
-| ↖ up and left | Switch between English and German |
+| ↖ up and left (anywhere between flat-ish and steep) | Switch between English and German |
 
 How sensitive swipes are (shortest swipe, flick speed, long swipe, straightness) is adjustable, with an explanation for each slider.
 

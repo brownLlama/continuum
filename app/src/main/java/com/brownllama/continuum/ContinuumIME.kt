@@ -347,6 +347,7 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
         }
         flushTouch()
         user.save()
+        val old = language
         language = wanted
         user = userFor(wanted)
         prevWord = null
@@ -362,6 +363,8 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
         loader.execute { loadDictionaryNow(wanted) }
         loader.shutdown()
         showPredictions()
+        // A small animated hint (and the language label) shows which language it is now.
+        view?.showLanguageHint(old, wanted)
     }
 
     /** The swipe up and left: the other language. */
@@ -369,7 +372,8 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
         val next = language.other
         prefs.edit { putString(Prefs.LANGUAGE, next.code) }
         applyLanguage()
-        Toast.makeText(this, next.label, Toast.LENGTH_SHORT).show()
+        // A screen reader says it (the hint on the keyboard is only drawn).
+        if (touchExploring()) Toast.makeText(this, next.label, Toast.LENGTH_SHORT).show()
     }
 
     override fun onDestroy() {
@@ -468,6 +472,7 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
         applyTouchPrefs()
         val v = view ?: return
         v.layout = layout
+        v.languageCode = language.code
         v.showGifs = prefs.getBoolean(Prefs.SHOW_GIFS, Prefs.SHOW_GIFS_DEFAULT)
         v.autocorrectOn = autocorrect
         val theme = KeyboardTheme.PRESETS[prefs.getString(Prefs.THEME, Prefs.THEME_CHAMELEON)]

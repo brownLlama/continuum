@@ -170,7 +170,7 @@
     <string name="guide_swipe_ud_title">Swipe up or down</string>
     <string name="guide_swipe_ud">Swipe up in mini mode for the full keyboard. Swipe down to switch between letters and numbers; in the full keyboard, swipe down from the suggestion bar to go back to mini mode.</string>
     <string name="guide_swipe_diag_title">Swipe diagonally up</string>
-    <string name="guide_swipe_diag">Up-right acts as enter. Up-left switches between English and German: each has its own words, and what you type in one is learned only there. If swipes are mistaken for taps or the other way round, adjust Gestures → Sensitivity.</string>
+    <string name="guide_swipe_diag">Up-right acts as enter. Up-left (any diagonal from fairly flat to steep) switches between English and German: a small pill slides from EN to DE, and a quiet en / de label by the keys shows which one is on. Each has its own words, and what you type in one is learned only there. If swipes are mistaken for taps or the other way round, adjust Gestures → Sensitivity.</string>
     <string name="guide_cat_3">Full keyboard</string>
     <string name="guide_full_title">Keys and hints</string>
     <string name="guide_full">A normal keyboard in the same style. The small character on each key is typed by holding it. Hold the full stop for , ! ?</string>
