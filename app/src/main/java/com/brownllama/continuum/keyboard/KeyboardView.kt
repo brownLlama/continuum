@@ -1351,6 +1351,7 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
             }
             dy > 0 -> if (mode == Mode.FULL && fromBar) listener.onModeToggle() else toggleNumbers()
             ax < ay * 0.6f -> if (mode == Mode.MINI) listener.onModeToggle()
+            dx < 0 -> listener.onLanguageToggle()
             else -> listener.onEnter()
         }
     }
