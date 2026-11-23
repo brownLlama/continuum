@@ -34,6 +34,7 @@ import androidx.core.graphics.withSave
 import androidx.core.graphics.withTranslation
 import com.brownllama.continuum.Prefs
 import com.brownllama.continuum.R
+import com.brownllama.continuum.prediction.Language
 import com.brownllama.continuum.prediction.Mode
 import com.brownllama.continuum.prediction.Tap
 import com.brownllama.continuum.theme.KeyboardTheme
@@ -99,7 +100,7 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
         fun onSpace()
         /** Enter key or swipe up and right. */
         fun onEnter()
-        /** Swipe up and left: switch between English and German. */
+        /** Swipe up and left (a wide sector, see [gesture]): switch between English and German. */
         fun onLanguageToggle()
         fun onShift()
         /** Suggestion [slot] (an index into the list given to [setSuggestions]) was tapped. */
@@ -1336,12 +1337,15 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
      * Horizontal (not from the bar): left deletes a word, right types a space.
      * Straight up: mini → full mode. Straight down: text ↔ numbers, except a swipe down that
      * starts on the suggestion bar in full mode, which goes back to mini mode.
-     * Diagonal up: to the right enter, to the left the other language (English ↔ German).
+     * Up and left: the other language (English ↔ German), in a wide sector (about 30° to 68° above
+     * flat, [LANGUAGE_MIN_SLOPE]..[LANGUAGE_MAX_SLOPE] across per up), so a natural thumb swipe lands in it:
+     * flatter is the delete-word swipe, steeper the full keyboard. Up and right: enter.
      */
     private fun gesture(dx: Float, dy: Float, fromBar: Boolean) {
         val ax = abs(dx)
         val ay = abs(dy)
         when {
+            dx < 0 && dy < 0 && ax >= ay * LANGUAGE_MIN_SLOPE && ax < ay * LANGUAGE_MAX_SLOPE -> listener.onLanguageToggle()
             ax >= ay * 1.2f -> if (!fromBar) {
                 if (dx < 0) listener.onDeleteWord() else listener.onSpace()
             }
@@ -1729,6 +1733,95 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
 
     private fun randomBetween(range: LongRange) = range.first + kotlin.random.Random.nextLong(range.last - range.first)
 
+    // ---- the language hint ------------------------------------------------------------------
+
+    /** The language typed in now ("en", "de"), shown quietly at the bottom right of the mini keys and on the space bar. */
+    internal var languageCode: String = Language.EN.code
+        set(value) {
+            if (field == value) return
+            field = value
+            invalidate()
+        }
+
+    private var langHintAt = 0L
+    private var langFrom: Language? = null
+    private var langTo: Language? = null
+
+    /** True while the hint after a language change is showing. */
+    internal val languageHintShowing: Boolean
+        get() = langTo != null && SystemClock.uptimeMillis() - langHintAt < LANG_HINT_MS
+
+    /**
+     * A change of language: a small pill over the suggestion bar slides its highlight from [from] to
+     * [to] and names the new language, then fades out; the language label next to the keys lights up
+     * meanwhile. With the system's animations off it just shows for the same time.
+     */
+    fun showLanguageHint(from: Language, to: Language) {
+        langFrom = from
+        langTo = to
+        langHintAt = SystemClock.uptimeMillis()
+        languageCode = to.code
+        invalidate()
+    }
+
+    /** The label's colour: the accent while the hint shows, else the quiet one. */
+    private fun languageLabelColor() = if (languageHintShowing) theme.accent else theme.dim
+
+    private fun drawLanguageHint(c: Canvas) {
+        val to = langTo ?: return
+        val from = langFrom ?: to
+        val elapsed = SystemClock.uptimeMillis() - langHintAt
+        if (elapsed >= LANG_HINT_MS) {
+            langTo = null
+            return
+        }
+        val t = theme
+        val moving = animating
+        val grow = if (moving) (elapsed / LANG_IN_MS.toFloat()).coerceIn(0f, 1f) else 1f
+        val fadeOut = if (moving) ((elapsed - (LANG_HINT_MS - LANG_OUT_MS)) / LANG_OUT_MS.toFloat()).coerceIn(0f, 1f) else 0f
+        val slide = if (moving) ((elapsed - LANG_SLIDE_DELAY_MS) / LANG_SLIDE_MS.toFloat()).coerceIn(0f, 1f) else 1f
+        val easedSlide = 1f - (1f - slide) * (1f - slide)
+        val alpha = (grow * (1f - fadeOut)).coerceIn(0f, 1f)
+        val langs = Language.entries
+        val chipW = dpu(46f)
+        val chipH = dpu(28f)
+        val pad = dpu(4f)
+        val nameSize = chipH * 0.5f
+        text.typeface = regular
+        text.textSize = nameSize
+        val nameW = text.measureText(to.label)
+        val gap = dpu(12f)
+        val w = pad * 2 + chipW * langs.size + gap + nameW + gap
+        val h = chipH + pad * 2
+        val cx = width / 2f
+        val cy = barH / 2f
+        val left = cx - w / 2
+        val top = cy - h / 2
+        val save = c.saveLayerAlpha(left - dpu(8f), top - dpu(8f), left + w + dpu(8f), top + h + dpu(8f), (255 * alpha).toInt())
+        // Grows in from a little smaller, easing out, round its centre.
+        val scale = 0.86f + 0.14f * (1f - (1f - grow) * (1f - grow))
+        c.scale(scale, scale, cx, cy)
+        tmp.set(left, top, left + w, top + h)
+        shadowOn()
+        fill.color = t.zoom
+        c.drawRoundRect(tmp, h / 2, h / 2, fill)
+        shadowOff()
+        // The highlight slides from the old language's chip to the new one's.
+        val at = langs.indexOf(from) + (langs.indexOf(to) - langs.indexOf(from)) * easedSlide
+        tmp.set(left + pad + at * chipW, top + pad, left + pad + (at + 1) * chipW, top + pad + chipH)
+        fill.color = t.accent
+        c.drawRoundRect(tmp, chipH / 2, chipH / 2, fill)
+        for ((i, l) in langs.withIndex()) {
+            val near = (1f - abs(i - at)).coerceIn(0f, 1f)
+            drawText(c, l.code.uppercase(), left + pad + (i + 0.5f) * chipW, top + h / 2, chipH * 0.46f,
+                ColorUtils.blendARGB(t.text, t.onAccent, near), regular)
+        }
+        drawText(c, to.label, left + pad + chipW * langs.size + gap + nameW / 2, top + h / 2, nameSize, t.text, regular)
+        c.restoreToCount(save)
+        // Keeps redrawing while it moves; with animations off, once more when it is over.
+        if (moving) postInvalidateOnAnimation() else postInvalidateDelayed(LANG_HINT_MS - elapsed + 16)
+    }
+
     private fun drawAnimal(c: Canvas) {
         if (!animal.visiting) return
         val next = animal.draw(c, width.toFloat(), SystemClock.uptimeMillis())
@@ -1903,10 +1996,11 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
         if (mode == Mode.MINI && panel == Panel.LETTERS) drawMiniLetters(canvas)
         for (k in keys) drawKey(canvas, k, false)
         if (mode == Mode.MINI) {
-            drawText(canvas, LANGUAGE, slotCenter(25), letterRect.bottom - miniRowH * 0.12f, miniRowH * 0.3f, t.dim, regular)
+            drawText(canvas, languageCode, slotCenter(25), letterRect.bottom - miniRowH * 0.12f, miniRowH * 0.3f, languageLabelColor(), regular)
         }
         drawAnimal(canvas)
         drawPreviews(canvas)
+        drawLanguageHint(canvas)
         drawZoom(canvas)
     }
 
@@ -1953,7 +2047,7 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
                 tmp.set(r.left + dpu(2.5f), cy - h / 2, r.right - dpu(2.5f), cy + h / 2)
                 fill.color = if (isPressed(k)) softPressedFill else softFill
                 c.drawRoundRect(tmp, h / 2, h / 2, fill)
-                drawText(c, LANGUAGE, cx, cy, h * 0.38f, t.dim, regular)
+                drawText(c, languageCode, cx, cy, h * 0.38f, languageLabelColor(), regular)
             }
             Kind.ENTER -> icons.enter(c, cx, cy, icon, if (gifSearching) EditorInfo.IME_ACTION_SEARCH else enterAction, t.text)
             Kind.SYMBOLS -> drawText(c, k.label, cx, cy, r.height() * 0.36f, t.text, regular)
@@ -2618,7 +2712,15 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
         private const val CLIP_LINES = 3
         private const val CLIP_PREVIEW_CHARS = 300
         /** Shown on the space bar. */
-        private const val LANGUAGE = "en"
+        /** The up-and-left swipe's sector, as across ÷ up: 0.4 is about 22° off vertical, 1.73 about 60° (see [gesture]). */
+        private const val LANGUAGE_MIN_SLOPE = 0.4f
+        private const val LANGUAGE_MAX_SLOPE = 1.73f
+        /** The language hint: grows in, the highlight slides, it stays a moment, and fades out. */
+        private const val LANG_HINT_MS = 1_300L
+        private const val LANG_IN_MS = 160L
+        private const val LANG_SLIDE_DELAY_MS = 90L
+        private const val LANG_SLIDE_MS = 260L
+        private const val LANG_OUT_MS = 320L
         /** Long-press choices on the period key. */
         private const val PERIOD_ALTS = ",!?"
         /** Radius of the emoji / GIF panels' floating ✕. */

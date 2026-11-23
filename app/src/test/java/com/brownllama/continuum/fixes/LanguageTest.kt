@@ -121,6 +121,68 @@ class LanguageTest {
         assertEquals("en", prefs.getString(Prefs.LANGUAGE, null))
     }
 
+    /** A swipe at [degrees] above flat towards the left (or right), 160 px long. */
+    private fun Keyboard.swipeAt(degrees: Double, left: Boolean = true) {
+        val r = Math.toRadians(degrees)
+        swipe((if (left) -1 else 1) * (160 * Math.cos(r)).toFloat(), (-160 * Math.sin(r)).toFloat())
+    }
+
+    @Test fun `a swipe up and left in a wide sector switches the language`() {
+        val k = Keyboard(mapOf(Prefs.MODE to "mini", Prefs.LAYOUT to "qwertz"))
+        k.waitReady()
+        val prefs = androidx.preference.PreferenceManager.getDefaultSharedPreferences(k.context)
+        k.focus()
+        var expected = "en"
+        // From a flat-ish diagonal to a steep one: every one switches (and the next switches back).
+        for (degrees in listOf(33.0, 38.0, 45.0, 52.0, 60.0, 66.0)) {
+            expected = if (expected == "en") "de" else "en"
+            k.swipeAt(degrees)
+            assertEquals("$degrees degrees", expected, prefs.getString(Prefs.LANGUAGE, null))
+            k.waitReady()
+        }
+    }
+
+    @Test fun `flat, steep, rightward and downward swipes don't switch the language`() {
+        val k = Keyboard(mapOf(Prefs.MODE to "mini", Prefs.LAYOUT to "qwertz"))
+        k.waitReady()
+        val prefs = androidx.preference.PreferenceManager.getDefaultSharedPreferences(k.context)
+        k.focus(text = "one two ")
+        // Flat left: delete a word, as before.
+        k.swipeAt(8.0)
+        assertEquals("one ", k.text)
+        k.swipeAt(20.0)
+        assertEquals("", k.text)
+        for (degrees in listOf(72.0, 80.0, 89.0)) { k.swipeAt(degrees); k.focus(text = "") } // steep: full keyboard
+        k.swipeAt(45.0, left = false)                  // up and right: enter
+        k.swipe(-140f, 140f)                           // down and left
+        k.swipe(140f, 140f)
+        k.swipe(0f, 140f)
+        assertEquals("en", prefs.getString(Prefs.LANGUAGE, "en"))
+    }
+
+    @Test fun `a language change shows a hint, and the label follows the language`() {
+        val k = Keyboard(mapOf(Prefs.MODE to "mini", Prefs.LAYOUT to "qwertz"))
+        k.waitReady()
+        k.focus()
+        assertEquals("en", k.view.languageCode)
+        assertFalse(k.view.languageHintShowing)
+        k.swipeUpLeft()
+        assertEquals("de", k.view.languageCode)
+        assertTrue(k.view.languageHintShowing)
+        // It draws (the pill and the label), in mini mode and in full mode.
+        fun draw() = k.view.draw(android.graphics.Canvas(android.graphics.Bitmap.createBitmap(1080, 600, android.graphics.Bitmap.Config.ARGB_8888)))
+        k.layoutView(); draw()
+        // And is gone after a moment.
+        org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(1600))
+        assertFalse(k.view.languageHintShowing)
+        draw()
+        k.waitReady()
+        k.swipeUpLeft()
+        assertEquals("en", k.view.languageCode)
+        assertTrue(k.view.languageHintShowing)
+        k.ime.onModeToggle(); k.idle(); k.layoutView(); draw()
+    }
+
     @Test fun `words typed in one language are learned there only`() {
         val k = Keyboard(mapOf(Prefs.MODE to "full", Prefs.LAYOUT to "qwertz"))
         k.waitReady()
