@@ -12,7 +12,7 @@ object TextContext {
     /**
      * The key of the word the next word follows, or null if it starts afresh: at the start of the
      * text or a line, after a sentence end, or after something that isn't a plain word (a number,
-     * an emoji, a word with letters outside a-z, which has no usable key).
+     * an emoji, a word with letters outside a-z and the German ä ö ü ß, which has no usable key).
      *
      * Spaces, commas, brackets, quotes and dashes between the two words are looked past:
      * in "hello, (wor" the word before "wor" is still "hello".
@@ -27,7 +27,7 @@ object TextContext {
             if (start == end) return null
             val token = before.subSequence(start, end)
             if (token.any { it.isLetterOrDigit() }) {
-                val plain = token.all { it in 'a'..'z' || it in 'A'..'Z' || it in JOINERS }
+                val plain = token.all { it in 'a'..'z' || it in 'A'..'Z' || it in GERMAN_LETTERS || it in JOINERS }
                 return if (plain) Dictionary.keyOf(token.toString()) else null
             }
             // A dash or quote standing on its own ("word - next"): look past it.
@@ -41,6 +41,8 @@ object TextContext {
 
     /** Characters that are part of a word ("don't", "self-aware"). */
     private const val JOINERS = "'’-"
+    /** German letters count as the letters they are typed with ([Dictionary.keyOf]). */
+    private const val GERMAN_LETTERS = "äöüÄÖÜß"
     /** Punctuation that doesn't end the sentence. */
     private const val SOFT_PUNCTUATION = ",;:\"“”„()[]{}"
 }

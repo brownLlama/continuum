@@ -48,6 +48,7 @@ import com.brownllama.continuum.keyboard.Species
 import com.brownllama.continuum.prediction.DecodeResult
 import com.brownllama.continuum.prediction.Decoder
 import com.brownllama.continuum.prediction.Dictionary
+import com.brownllama.continuum.prediction.Language
 import com.brownllama.continuum.prediction.Mode
 import com.brownllama.continuum.prediction.Tap
 import com.brownllama.continuum.prediction.TextContext
@@ -60,6 +61,7 @@ import com.brownllama.continuum.stats.TypingStats
 import com.brownllama.continuum.theme.AppThemes
 import com.brownllama.continuum.theme.KeyboardTheme
 import java.io.File
+import java.util.EnumMap
 import java.util.Locale
 import java.util.concurrent.Executors
 import kotlin.math.roundToInt
@@ -110,6 +112,13 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
     // ---- services and data ------------------------------------------------------------------
 
     private lateinit var prefs: SharedPreferences
+    /**
+     * The language typed in now (the swipe up and left, or Settings → Typing → Language): its word
+     * list ([dict]) and its own learned words ([user]). What is typed in one language is never
+     * learned in the other, and each keeps its own words.
+     */
+    private var language = Language.EN
+    private val users = EnumMap<Language, UserModel>(Language::class.java)
     private lateinit var user: UserModel
     private lateinit var touch: TouchModel
     /** Setting "Learn how you tap": the decoder reads taps by [touch], and it keeps learning. */
@@ -282,8 +291,9 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
         prefs = PreferenceManager.getDefaultSharedPreferences(this)
         Prefs.migrateAnimals(prefs)
         prefs.registerOnSharedPreferenceChangeListener(this)
-        // The three files are read in the background; whoever needs one first waits for the rest of it.
-        user = UserModel(File(filesDir, "user_model.tsv"), background = true)
+        // The files are read in the background; whoever needs one first waits for the rest of it.
+        language = Language.named(prefs.getString(Prefs.LANGUAGE, null))
+        user = userFor(language)
         touch = TouchModel(File(filesDir, "touch_model.tsv"), DiskIo.executor)
         stats = TypingStats.get(this)
         emojiHistory = EmojiHistory(File(filesDir, "emoji_usage.tsv"), DiskIo.executor)
@@ -295,13 +305,7 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
         gifs = GifFeed(this, prefs)
         val loader = Executors.newSingleThreadExecutor()
         loader.execute {
-            val d = Dictionary.load(this)
-            main.post {
-                dict = d
-                decoder = Decoder(d, user)
-                applyTouchPrefs()
-                if (taps.isNotEmpty()) redecode() else showPredictions()
-            }
+            loadDictionaryNow(language)
             val groups = Emoji.groups(this)
             val drawable = groups.flatMapTo(HashSet()) { it.emoji }
             main.post {
@@ -314,6 +318,60 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
         loader.shutdown()
     }
 
+    /** The learned words of [l], read on first use. */
+    private fun userFor(l: Language): UserModel = users.getOrPut(l) { UserModel(File(filesDir, l.userFile), background = true) }
+
+    /** Reads the word list of [l] (on the loading thread) and, if that is still the language, starts using it. */
+    private fun loadDictionaryNow(l: Language) {
+        val d = Dictionary.load(this, l)
+        main.post {
+            if (l != language) return@post
+            dict = d
+            decoder = Decoder(d, user)
+            applyTouchPrefs()
+            if (taps.isNotEmpty()) redecode() else showPredictions()
+        }
+    }
+
+    /**
+     * The language was changed: from here on words are read from, and learned in, the new one. A word
+     * in progress is finished in the language it was typed in. Only the language in use is kept in
+     * memory; the other loads from its saved copy when it is next switched to.
+     */
+    private fun applyLanguage() {
+        val wanted = Language.named(prefs.getString(Prefs.LANGUAGE, null))
+        if (wanted == language) return
+        if (taps.isNotEmpty()) {
+            finishComposing()
+            taps.clear()
+        }
+        flushTouch()
+        user.save()
+        language = wanted
+        user = userFor(wanted)
+        prevWord = null
+        lastCommit = null
+        pendingGlue = null
+        wordGlue = null
+        afterNumber = null
+        deletedTaps.clear()
+        result = null
+        decoder = null
+        dict = null
+        val loader = Executors.newSingleThreadExecutor()
+        loader.execute { loadDictionaryNow(wanted) }
+        loader.shutdown()
+        showPredictions()
+    }
+
+    /** The swipe up and left: the other language. */
+    override fun onLanguageToggle() {
+        val next = language.other
+        prefs.edit { putString(Prefs.LANGUAGE, next.code) }
+        applyLanguage()
+        Toast.makeText(this, next.label, Toast.LENGTH_SHORT).show()
+    }
+
     override fun onDestroy() {
         prefs.unregisterOnSharedPreferenceChangeListener(this)
         getSystemService(ClipboardManager::class.java)?.removePrimaryClipChangedListener(clipListener)
@@ -323,7 +381,7 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
         flushTouch()
         touch.save()
         stats.save()
-        user.flush()
+        users.values.forEach { it.flush() }
         super.onDestroy()
     }
 
@@ -392,7 +450,7 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
     /** Settings changed (the settings screen writes them while the keyboard may be open). */
     override fun onSharedPreferenceChanged(p: SharedPreferences?, key: String?) {
         if (key == Prefs.CLEAR_LEARNED) {
-            user.clear()
+            Language.entries.forEach { userFor(it).clear() }
             pendingTouch = null
             touch.clear()
         }
@@ -401,6 +459,7 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
 
     /** Reads every setting and pushes the visual ones to the view. */
     private fun applyPrefs() {
+        applyLanguage()
         prefMode = if (prefs.getString(Prefs.MODE, "mini") == "full") Mode.FULL else Mode.MINI
         autocorrect = prefs.getBoolean(Prefs.AUTOCORRECT, Prefs.AUTOCORRECT_DEFAULT)
         autoCaps = prefs.getBoolean(Prefs.AUTOCAPS, Prefs.AUTOCAPS_DEFAULT)
@@ -1273,7 +1332,7 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
         val d = decoder
         // The end of a joined word ("zazzy'" + "s") or of a number ("16" + "th") is not two words.
         val r = d?.decode(
-            taps, tapMode, layout, prevWord, splits = wordGlue == null && afterNumber == null,
+            taps, tapMode, layout, prevWord, splits = wordGlue == null && afterNumber == null && language.english,
             start = prevWord == null && wordSentenceStart,
         )
         result = r
@@ -1308,7 +1367,7 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
         lastEditTime = SystemClock.uptimeMillis()
 
         // A number spelling of the best word ("someone" → "some1") is offered next to it.
-        val speak = TEXT_SPEAK[best.lowercase()]?.let { v -> if (best.first().isUpperCase()) v.replaceFirstChar { it.uppercaseChar() } else v }
+        val speak = if (!language.english) null else TEXT_SPEAK[best.lowercase()]?.let { v -> if (best.first().isUpperCase()) v.replaceFirstChar { it.uppercaseChar() } else v }
         val others = (listOfNotNull(best, ordinal, speak) + more).distinct().filter { it != composing }
         // The bar shows as many words as fit and scrolls sideways to the rest.
         var list = when {
@@ -1590,7 +1649,7 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
      */
     private fun plainCase(word: String): String = word.split(' ')
         .joinToString(" ") { w -> if (w.drop(1).any { it.isUpperCase() }) w else w.lowercase(Locale.ROOT) }
-        .replace(LONE_I, "I")
+        .let { if (language.english) it.replace(LONE_I, "I") else it }
 
     /** The letter (0..25) closest to a tap, ignoring word likelihood. */
     private fun nearestLetter(t: Tap): Int {
@@ -1673,6 +1732,7 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
 
     /** The ordinal ending for the number right before the cursor ("1" → "st", "12" → "th"), or null. */
     private fun ordinalAfterCursor(): String? {
+        if (!language.english) return null
         val before = editor()?.getTextBeforeCursor(8, 0)?.toString() ?: return null
         val digits = before.takeLastWhile { it.isDigit() }
         if (digits.isEmpty()) return null

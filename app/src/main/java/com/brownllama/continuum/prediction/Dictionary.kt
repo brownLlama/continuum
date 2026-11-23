@@ -73,6 +73,9 @@ class Dictionary private constructor(
 ) {
     val size: Int get() = logFreq.size
 
+    /** The language of the word list; English unless [load] says otherwise. */
+    var language: Language = Language.EN
+
     private val byLength: Array<IntArray>
     /** [byLength] with each bucket most frequent first, for scans that can stop at the first rare word. */
     private val byFrequency: Array<IntArray>
@@ -179,7 +182,7 @@ class Dictionary private constructor(
 
     fun displayFor(key: String): String {
         val i = indexOf(key)
-        return if (i >= 0) display(i) else DISPLAY_OVERRIDES[key] ?: key
+        return if (i >= 0) display(i) else displayOverrides(language)[key] ?: key
     }
 
     /** Likely next words after the word with this key (from the word list's next-word model). */
@@ -295,6 +298,8 @@ class Dictionary private constructor(
         var emoji: Map<String, String> = emptyMap()
         /** The next-word model by previous key ([readNext]), and for the start of a sentence. */
         var nextModel: Map<String, NextRow> = emptyMap()
+        /** Two words often written as one, by their letters ([JOINED] for English). */
+        var joined: Map<String, List<String>> = emptyMap()
 
         fun add(text: String, count: Double, next: List<String>?) {
             val key = keyOf(text) ?: return
@@ -309,7 +314,7 @@ class Dictionary private constructor(
             val known = keys.toHashSet()
             // Also two words written as one ("thankyou"), where the list knows both of them.
             val wrong = (0 until n).filter { i ->
-                misspellings[keys[i]]?.any { it in known } == true || JOINED[keys[i]]?.all { it in known } == true
+                misspellings[keys[i]]?.any { it in known } == true || joined[keys[i]]?.all { it in known } == true
             }
             for (i in wrong) counts[i] *= MISSPELLING_FACTOR
             val total = counts.sum()
@@ -474,31 +479,42 @@ class Dictionary private constructor(
             "iPhone", "iPad", "iPod", "eBay", "YouTube", "WhatsApp", "PowerPoint", "PlayStation", "McDonald", "McDonald's",
         ).associateBy { w -> w.lowercase().filter { it in 'a'..'z' } }
 
-        private val DISPLAY_OVERRIDES: Map<String, String> =
+        private val ENGLISH_OVERRIDES: Map<String, String> =
             CONTRACTIONS.filterKeys { it !in ALSO_WORDS }.mapValues { it.value.first } + mapOf("i" to "I") + MIXED_CASE
+
+        /** How words are spelled other than by their letters: the contractions and "I" in English, brand names in any. */
+        private fun displayOverrides(language: Language): Map<String, String> = if (language.english) ENGLISH_OVERRIDES else MIXED_CASE
 
         /**
          * Prefers the local word list when it is present (see the class comment). The parsed
          * dictionary is kept in binary form under noBackupFilesDir, tagged with the app's install
          * time, so later starts read arrays instead of parsing text.
          */
-        fun load(context: Context): Dictionary {
+        fun load(context: Context, language: Language = Language.EN): Dictionary {
             val assets = context.assets
-            val asset = if (assets.list("")?.contains(PRIVATE_ASSET) == true) PRIVATE_ASSET else OPEN_ASSET
+            val asset = when {
+                language.english && assets.list("")?.contains(PRIVATE_ASSET) == true -> PRIVATE_ASSET
+                else -> language.wordsAsset
+            }
             val installed = runCatching {
                 context.packageManager.getPackageInfo(context.packageName, 0).lastUpdateTime
             }.getOrDefault(0L)
-            val cache = File(context.noBackupFilesDir, "dict-$asset-$installed.bin")
-            runCatching { if (cache.exists()) return fromBytes(cache.readBytes()) }
-            val wrong = runCatching { assets.open(MISSPELLINGS_ASSET).use(::readMisspellings) }.getOrDefault(emptyMap())
-            val emoji = runCatching { assets.open(EMOJI_ASSET).use(::readEmoji) }.getOrDefault(emptyMap())
+            val prefix = "dict-$asset-"
+            val cache = File(context.noBackupFilesDir, "$prefix$installed.bin")
+            runCatching { if (cache.exists()) return fromBytes(cache.readBytes()).also { it.language = language } }
+            val wrong = language.misspellingsAsset?.let { a ->
+                runCatching { assets.open(a).use(::readMisspellings) }.getOrNull()
+            }.orEmpty()
+            val emoji = language.emojiAsset?.let { a -> runCatching { assets.open(a).use(::readEmoji) }.getOrNull() }.orEmpty()
             val next = if (asset == PRIVATE_ASSET) emptyMap() else
-                runCatching { assets.open(NEXT_ASSET).use(::readNext) }.getOrDefault(emptyMap())
+                runCatching { assets.open(language.nextAsset).use(::readNext) }.getOrDefault(emptyMap())
             val dict = assets.open(asset).use {
-                if (asset == PRIVATE_ASSET) loadPrivate(it, wrong, emoji) else loadOpen(it, wrong, emoji, next)
+                if (asset == PRIVATE_ASSET) loadPrivate(it, wrong, emoji) else loadOpen(it, wrong, emoji, next, language)
             }
+            dict.language = language
             runCatching {
-                context.noBackupFilesDir.listFiles { f -> f.name.startsWith("dict-") }?.forEach { it.delete() }
+                // Older copies of this language's list go; the other language's stay.
+                context.noBackupFilesDir.listFiles { f -> f.name.startsWith(prefix) }?.forEach { it.delete() }
                 val tmp = File(cache.path + ".tmp")
                 tmp.writeBytes(dict.toBytes())
                 tmp.renameTo(cache)
@@ -572,6 +588,7 @@ class Dictionary private constructor(
             val b = Builder()
             b.misspellings = misspellings
             b.emoji = emoji
+            b.joined = JOINED
             input.bufferedReader().useLines { lines ->
                 for (line in lines) {
                     val p = line.split('\t')
@@ -620,6 +637,7 @@ class Dictionary private constructor(
             misspellings: Map<String, List<String>> = emptyMap(),
             emoji: Map<String, String> = emptyMap(),
             next: Map<String, NextRow> = emptyMap(),
+            language: Language = Language.EN,
         ): Dictionary {
             val counts = LinkedHashMap<String, Long>(50_000)
             input.bufferedReader().useLines { lines ->
@@ -629,15 +647,17 @@ class Dictionary private constructor(
                     counts[line.substring(0, sp)] = line.substring(sp + 1).trim().toLongOrNull() ?: continue
                 }
             }
-            for ((key, v) in CONTRACTIONS) {
+            if (language.english) for ((key, v) in CONTRACTIONS) {
                 if (key !in ALSO_WORDS) counts[key] = maxOf(counts[key] ?: 0L, v.second.toLong())
             }
             val b = Builder()
             b.misspellings = misspellings
             b.emoji = emoji
             b.nextModel = next
-            for ((key, count) in counts) b.add(DISPLAY_OVERRIDES[key] ?: key, count.toDouble(), null)
-            for (key in ALSO_WORDS) CONTRACTIONS[key]?.let { (form, count) -> b.add(form, count.toDouble(), null) }
+            if (language.english) b.joined = JOINED
+            val overrides = displayOverrides(language)
+            for ((key, count) in counts) b.add(overrides[key] ?: key, count.toDouble(), null)
+            if (language.english) for (key in ALSO_WORDS) CONTRACTIONS[key]?.let { (form, count) -> b.add(form, count.toDouble(), null) }
             return b.build()
         }
 

@@ -525,7 +525,7 @@ class Decoder(private val dict: Dictionary, private val user: UserModel) {
         // With no word before, the words the user starts with ("ok", "hi").
         for (k in user.following(prev ?: UserModel.START, limit)) out += shownForm(k) ?: dict.displayFor(k)
         val model = if (sentenceStart || prev == null) dict.startWords else dict.nextFor(prev)
-        val defaults = if (sentenceStart || prev == null) START_WORDS else FOLLOW_WORDS
+        val defaults = if (sentenceStart || prev == null) dict.language.startWords else dict.language.followWords
         val frequent = user.mostUsed(limit).map { shownForm(it) ?: dict.displayFor(it) }
         for (d in model + defaults + frequent) if (out.size < limit && out.none { Dictionary.sameWord(it, d) }) out += d
         out.removeAll { user.isBlocked(it) }
@@ -736,7 +736,5 @@ class Decoder(private val dict: Dictionary, private val user: UserModel) {
         private const val SHORT_WORD_TAPS = 5
 
         /** Fallback predictions when the model has none (sentence start / after a word). */
-        private val START_WORDS = listOf("I", "The", "In", "It", "What")
-        private val FOLLOW_WORDS = listOf("the", "to", "and", "a", "is")
     }
 }

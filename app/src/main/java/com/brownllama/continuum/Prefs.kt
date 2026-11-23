@@ -34,6 +34,10 @@ object Prefs {
     /** Now and then an animal walks across the keys (see keyboard/Animals.kt): whether, and which. */
     const val ANIMALS = "animals"
     const val ANIMALS_DEFAULT = true
+    /** The language typed in, a [com.brownllama.continuum.prediction.Language.code]: "en" or "de". */
+    const val LANGUAGE = "language"
+    const val LANGUAGE_DEFAULT = "en"
+
     /** Species keys (Species.key); every one by default. */
     const val ANIMAL_KINDS = "animal_kinds"
 
@@ -78,7 +82,7 @@ object Prefs {
      */
     val RESETTABLE = listOf(
         THEME, LAYOUT, MINI_HEIGHT, FULL_HEIGHT, BAR_HEIGHT, BOTTOM_SPACE, HIDE_SYSTEM_BUTTONS,
-        AUTOCORRECT, AUTOCAPS, ANIMALS, ANIMAL_KINDS, ANIMAL_FREQUENCY, HOLD_MS, VIBRATE, VIBRATE_STRENGTH, SWIPE_MIN, SWIPE_LONG, SWIPE_SPEED, SWIPE_STRAIGHTNESS, SHOW_GIFS,
+        LANGUAGE, AUTOCORRECT, AUTOCAPS, ANIMALS, ANIMAL_KINDS, ANIMAL_FREQUENCY, HOLD_MS, VIBRATE, VIBRATE_STRENGTH, SWIPE_MIN, SWIPE_LONG, SWIPE_SPEED, SWIPE_STRAIGHTNESS, SHOW_GIFS,
         CLIPBOARD, CLIPBOARD_KEEP, TOUCH_ADAPT,
         "haptics", "previews", "llama",
     )

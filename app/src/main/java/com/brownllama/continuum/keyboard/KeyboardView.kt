@@ -97,8 +97,10 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
         fun onDeleteWord()
         /** Space key or swipe right. */
         fun onSpace()
-        /** Enter key or diagonal swipe up. */
+        /** Enter key or swipe up and right. */
         fun onEnter()
+        /** Swipe up and left: switch between English and German. */
+        fun onLanguageToggle()
         fun onShift()
         /** Suggestion [slot] (an index into the list given to [setSuggestions]) was tapped. */
         fun onSuggestion(slot: Int)
@@ -1334,7 +1336,7 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
      * Horizontal (not from the bar): left deletes a word, right types a space.
      * Straight up: mini → full mode. Straight down: text ↔ numbers, except a swipe down that
      * starts on the suggestion bar in full mode, which goes back to mini mode.
-     * Diagonal up (left or right): enter.
+     * Diagonal up: to the right enter, to the left the other language (English ↔ German).
      */
     private fun gesture(dx: Float, dy: Float, fromBar: Boolean) {
         val ax = abs(dx)
@@ -1345,6 +1347,7 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
             }
             dy > 0 -> if (mode == Mode.FULL && fromBar) listener.onModeToggle() else toggleNumbers()
             ax < ay * 0.6f -> if (mode == Mode.MINI) listener.onModeToggle()
+            dx < 0 -> listener.onLanguageToggle()
             else -> listener.onEnter()
         }
     }

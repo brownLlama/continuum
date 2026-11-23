@@ -40,10 +40,15 @@ class TextContextTest {
         assertEquals("said", prev("she said, “"))
     }
 
+    @Test fun `German letters are read as the letters they are typed with`() {
+        assertEquals("fur", prev("für "))
+        assertEquals("strasse", prev("die Straße "))
+        assertEquals("munchen", prev("in München, "))
+    }
+
     @Test fun `what isn't a plain word gives nothing rather than a wrong key`() {
         assertNull(prev("at 16 "))
         assertNull(prev("see some1 "))
-        assertNull(prev("für "))
         assertNull(prev("café "))
         assertNull(prev("hello 😀 "))
         assertNull(prev("mail me@example.com/"))
