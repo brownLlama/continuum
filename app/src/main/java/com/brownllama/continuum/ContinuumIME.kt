@@ -280,6 +280,7 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
     override fun onCreate() {
         super.onCreate()
         prefs = PreferenceManager.getDefaultSharedPreferences(this)
+        Prefs.migrateAnimals(prefs)
         prefs.registerOnSharedPreferenceChangeListener(this)
         // The three files are read in the background; whoever needs one first waits for the rest of it.
         user = UserModel(File(filesDir, "user_model.tsv"), background = true)
@@ -428,7 +429,7 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
             prefs.getInt(Prefs.VIBRATE_STRENGTH, Prefs.VIBRATE_STRENGTH_DEFAULT)
         v.animalFrequency = AnimalFrequency.named(prefs.getString(Prefs.ANIMAL_FREQUENCY, null))
         v.animals = if (!prefs.getBoolean(Prefs.ANIMALS, Prefs.ANIMALS_DEFAULT)) emptyList() else {
-            prefs.getStringSet(Prefs.ANIMAL_KINDS, null)?.mapNotNull(Species::named) ?: Species.ALL
+            Species.picked(prefs.getStringSet(Prefs.ANIMAL_KINDS, null))
         }
     }
 
