@@ -49,6 +49,7 @@ class SettingsActivity : AppCompatActivity(), PreferenceFragmentCompat.OnPrefere
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        Prefs.migrateAnimals(androidx.preference.PreferenceManager.getDefaultSharedPreferences(this))
         setContentView(R.layout.activity_settings)
         toolbar = findViewById(R.id.toolbar)
         toolbar.setNavigationOnClickListener { onBackPressedDispatcher.onBackPressed() }

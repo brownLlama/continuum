@@ -1,5 +1,9 @@
 package com.brownllama.continuum
 
+import android.content.SharedPreferences
+import androidx.core.content.edit
+import com.brownllama.continuum.keyboard.Species
+
 /** SharedPreferences keys (the settings pages are res/xml/prefs_*.xml). */
 object Prefs {
     /** The last mode switched to by gesture, "mini" (the default) or "full"; not a setting. */
@@ -32,6 +36,16 @@ object Prefs {
     const val ANIMALS_DEFAULT = true
     /** Species keys (Species.key); every one by default. */
     const val ANIMAL_KINDS = "animal_kinds"
+
+    /**
+     * Older versions saved other animals' names ([Species.picked]): saves the ones that took their
+     * place, so the settings list shows them ticked and the keyboard keeps showing the same choice.
+     */
+    fun migrateAnimals(prefs: SharedPreferences) {
+        val saved = prefs.getStringSet(ANIMAL_KINDS, null) ?: return
+        if (saved.all { Species.named(it) != null }) return
+        prefs.edit { putStringSet(ANIMAL_KINDS, Species.picked(saved).map { it.key }.toSet()) }
+    }
     /** AnimalFrequency.key: "always" (the default), "sometimes" or "rarely". */
     const val ANIMAL_FREQUENCY = "animal_frequency"
     const val AUTOCORRECT = "autocorrect"

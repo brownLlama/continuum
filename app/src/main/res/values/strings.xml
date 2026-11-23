@@ -267,20 +267,18 @@
     </string-array>
     <!-- Visiting animals: names in the order of Species.ALL, values are Species.key. -->
     <string-array name="animal_names">
-        <item>Llama</item>
-        <item>Dog</item>
-        <item>Cat</item>
-        <item>Turtle</item>
-        <item>Sheep</item>
-        <item>Snow leopard</item>
+        <item>Schibu (llama)</item>
+        <item>Alex (dog)</item>
+        <item>Schimba (leopard)</item>
+        <item>Nibu (sheep with the bell)</item>
+        <item>Scheepu (sheep in the green shirt)</item>
     </string-array>
     <string-array name="animal_values" translatable="false">
-        <item>llama</item>
-        <item>dog</item>
-        <item>cat</item>
-        <item>turtle</item>
-        <item>sheep</item>
-        <item>snow_leopard</item>
+        <item>schibu</item>
+        <item>alex</item>
+        <item>schimba</item>
+        <item>nibu</item>
+        <item>scheepu</item>
     </string-array>
     <!-- Values are AnimalFrequency.key. -->
     <string-array name="animal_frequency_names">
