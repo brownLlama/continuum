@@ -69,15 +69,35 @@ class LanguageTest {
         assertTrue(de.predict("in", sentenceStart = false, limit = 3).all { GERMAN.contains(Dictionary.keyOf(it)!!) })
     }
 
+    @Test fun `the German next-word model file is sound and reads as German`() {
+        val rows = File(ASSETS, Language.DE.nextAsset).inputStream().use(Dictionary::readNext)
+        assertTrue("rows: ${rows.size}", rows.size > 10_000)
+        assertTrue("<s>" in rows)
+        for ((prev, row) in rows) {
+            assertTrue(prev, prev == "<s>" || GERMAN.contains(prev))
+            assertTrue(prev, row.backoff <= 0f)
+            for ((next, lift) in row.next) {
+                assertTrue("$prev $next", GERMAN.contains(next))
+                assertTrue("$prev $next", lift > 0f && lift < 16f)
+            }
+        }
+        // What follows "ich" and "ist" is what a German speaker expects.
+        assertTrue(rows.getValue("ich").next.any { it.first == "habe" })
+        assertTrue(rows.getValue("ich").next.any { it.first == "bin" })
+        assertTrue(rows.getValue("ist").next.any { it.first == "nicht" })
+        assertTrue(rows.getValue("<s>").next.any { it.first == "ich" })
+    }
+
     @Test fun `German words come with their emoji`() {
-        val d = Decoder(GERMAN, user())
-        fun emojiFor(w: String) = d.decode(mini(Dictionary.keyOf(w)!!), Mode.MINI, layout, null).words.first().emoji
-        assertEquals("👋", emojiFor("hallo"))
-        assertEquals("❤️", emojiFor("herz"))
-        assertEquals("🙏", emojiFor("danke"))
-        assertEquals("🎂", emojiFor("geburtstag"))
-        // And English ones still have theirs.
-        assertEquals("👋", Decoder(ENGLISH, user()).decode(mini("hello"), Mode.MINI, layout, null).words.first().emoji)
+        fun emojiFor(d: Dictionary, w: String) = d.indexOf(Dictionary.keyOf(w)!!).let { if (it >= 0) d.emojiFor(it) else null }
+        assertEquals("👋", emojiFor(GERMAN, "hallo"))
+        assertEquals("❤️", emojiFor(GERMAN, "herz"))
+        assertEquals("🙏", emojiFor(GERMAN, "danke"))
+        assertEquals("🎂", emojiFor(GERMAN, "geburtstag"))
+        assertEquals("🍕", emojiFor(GERMAN, "pizza"))
+        // And English ones still have theirs, and don't leak into German.
+        assertEquals("👋", emojiFor(ENGLISH, "hi"))
+        assertEquals(null, emojiFor(GERMAN, "hello"))
     }
 
     @Test fun `a swipe up and left switches the language, and the same swipe goes back`() {
