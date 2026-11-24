@@ -33,24 +33,14 @@
     </PreferenceCategory>
     <PreferenceCategory app:title="@string/cat_position">
         <SeekBarPreference
-            android:max="30"
-            app:defaultValue="8"
+            android:max="60"
+            app:defaultValue="30"
             app:key="bottom_space_dp"
             app:min="0"
             app:seekBarIncrement="1"
             app:showSeekBarValue="true"
             app:summary="@string/pref_bottom_space_dp_summary"
             app:title="@string/pref_bottom_space_dp"
-            app:updatesContinuously="true" />
-        <SeekBarPreference
-            android:max="40"
-            app:defaultValue="24"
-            app:key="grass_dp"
-            app:min="0"
-            app:seekBarIncrement="1"
-            app:showSeekBarValue="true"
-            app:summary="@string/pref_grass_dp_summary"
-            app:title="@string/pref_grass_dp"
             app:updatesContinuously="true" />
         <SwitchPreferenceCompat
             app:defaultValue="true"

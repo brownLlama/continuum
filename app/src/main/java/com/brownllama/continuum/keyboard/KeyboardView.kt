@@ -33,6 +33,7 @@ import com.brownllama.continuum.prediction.Mode
 import com.brownllama.continuum.prediction.Tap
 import com.brownllama.continuum.theme.KeyboardTheme
 import kotlin.math.max
+import kotlin.math.min
 import kotlin.math.roundToInt
 
 /**
@@ -190,17 +191,17 @@ class KeyboardView(context: Context, internal val listener: Listener) : View(con
     var barScale = 1f
         set(value) { if (field != value) { field = value; requestLayout(); relayout() } }
     /**
-     * Space between the keys and whatever system bar is under them (settings slider). From Android 15
-     * the IME window is edge-to-edge, so the bars' own height is added separately ([systemBottom]).
+     * The ground under the keys, in dp (settings slider "Space below keyboard"); 0 is nothing at all.
+     * It is a small, fixed layer of soil ([SOIL_DP]) with the grass on top, which grows as the value
+     * does. The soil carries on under Android's navigation bar (see [systemBottom]), which is added
+     * separately because from Android 15 the IME window is edge-to-edge.
      */
     var bottomSpaceDp = Prefs.BOTTOM_SPACE_DEFAULT.toFloat()
-        set(value) { if (field != value) { field = value; requestLayout() } }
-    /**
-     * Height of the grass, the touchable top of the space under the keys (settings slider). The strip
-     * under the keys is at least this tall; whatever is below the grass, and under Android's bars, is soil.
-     */
-    var grassDp = Prefs.GRASS_HEIGHT_DEFAULT.toFloat()
         set(value) { if (field != value) { field = value; requestLayout(); invalidate() } }
+    /** The soil under the grass: a small, fixed layer (or all of the space, while that is smaller than it). */
+    internal val soilDp get() = min(bottomSpaceDp, SOIL_DP)
+    /** The grass: whatever the space has above the soil. It is the touchable layer under the keys. */
+    internal val grassDp get() = max(0f, bottomSpaceDp - SOIL_DP)
     /**
      * Height in px kept clear under the keyboard: the system bars still showing (the gesture handle or
      * navigation buttons, and Android 16's keyboard buttons unless "Hide system buttons" hid them). With
@@ -208,7 +209,7 @@ class KeyboardView(context: Context, internal val listener: Listener) : View(con
      * is clear of it; with neither, only the bars' own height, so nothing more than Android needs is
      * kept. The keys sit above it, so nothing overlaps them.
      */
-    internal val systemBottom get() = if (grassDp > 0f || bottomSpaceDp > 0f) max(navBottom, gestureBottom) else navBottom
+    internal val systemBottom get() = if (bottomSpaceDp > 0f) max(navBottom, gestureBottom) else navBottom
     /** The navigation bar's (and Android 16's keyboard buttons') height, in px. */
     internal var navBottom = 0
     /** That, or the taller strip at the bottom where Android reads its home and app-switch swipes, in px. */
@@ -610,7 +611,7 @@ class KeyboardView(context: Context, internal val listener: Listener) : View(con
     }
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-        val height = overlayH + gifHeaderH + keyboardHeight + dpu(grassDp) + dpu(bottomSpaceDp) + systemBottom
+        val height = overlayH + gifHeaderH + keyboardHeight + dpu(bottomSpaceDp) + systemBottom
         setMeasuredDimension(MeasureSpec.getSize(widthMeasureSpec), height.roundToInt())
     }
 
