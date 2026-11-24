@@ -81,7 +81,7 @@ internal class Grass(private val unit: Float) {
 
         // Blades stand on the ground line (row [ground]) and grow up, at most [ground] pixels tall:
         // tufts of one to three, the middle one tallest, with stubble between.
-        val lowest = min(ground, max(2, ground * 2 / 5))
+        val lowest = min(ground, max(2, ground * 11 / 20))
         fun blade(col: Int, h: Int, peak: Boolean) {
             cell(blades, col, ground - h, 1, h)
             cell(bases, col, ground - 1)
@@ -139,11 +139,19 @@ internal class Grass(private val unit: Float) {
     }
 }
 
+/** From this height (dp) up, the grass reaches the keys; below it, it grows into Android's bar zone gradually. */
+private const val GRASS_FULL_DP = 20f
+
 /** The bottom of the grass: the bottom of the view, in keyboard coordinates. */
 internal fun KeyboardView.grassBottom() = height - overlayH - gifHeaderH
 
-/** Where the blades start growing: the grass is [bottomSpaceDp] tall, standing on the bottom of the view. */
-private fun KeyboardView.grassTop() = grassBottom() - dpu(bottomSpaceDp)
+/**
+ * Where the tallest blades reach: the setting's height above Android's bar, standing on the bottom of the
+ * view. The grass grows up through the bar's zone as the setting goes from 0 to [GRASS_FULL_DP], so a small
+ * value is a thin line and a value from there up reaches the keys, with no gap.
+ */
+private fun KeyboardView.grassTop() =
+    grassBottom() - dpu(bottomSpaceDp) - systemBottom * (bottomSpaceDp / GRASS_FULL_DP).coerceIn(0f, 1f)
 
 /** The grass at the bottom of the view (drawn before the keys and the animals). */
 internal fun KeyboardView.drawGrass(c: Canvas) {
