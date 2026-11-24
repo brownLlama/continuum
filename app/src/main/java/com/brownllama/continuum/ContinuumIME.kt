@@ -134,9 +134,6 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
     internal var typingActive = false
     /** Saves what was learned, a moment after the last new word (see [SAVE_DELAY_MS]). */
     internal val saveLearned = Runnable { user.save() }
-    /** Where the app says the cursor (or the ends of the selection) is, as the position in its text; -1 when unknown. */
-    internal var selStart = -1
-    internal var selEnd = -1
     @Volatile internal var decoder: Decoder? = null
     internal var dict: Dictionary? = null
     internal lateinit var emojiHistory: EmojiHistory
@@ -394,8 +391,6 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
         privateField = isPrivate(info)
         captureClip() // something may have been copied while the keyboard wasn't running
         currentPackage = info.packageName
-        selStart = info.initialSelStart
-        selEnd = info.initialSelEnd
         typingActive = true
         applyPrefs()
         ensureDictionary()
@@ -471,8 +466,6 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
         super.onUpdateSelection(oldSelStart, oldSelEnd, newSelStart, newSelEnd, candidatesStart, candidatesEnd)
         // While searching GIFs the word being typed is in the query, not the app's field.
         if (queryEditor != null) return
-        selStart = newSelStart
-        selEnd = newSelEnd
         if (taps.isEmpty()) {
             // The cursor may have been put somewhere else: once it rests, the bar's predictions follow it.
             if (predictionsShown && (newSelStart != oldSelStart || newSelEnd != oldSelEnd)) {
@@ -509,10 +502,6 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
     override fun onBackspace() = handleBackspace()
 
     /** Swipe left: drops the word being typed, or deletes the word before the cursor. */
-    override fun onCursorMove(steps: Int) = handleCursorMove(steps)
-
-    override fun onEditAction(action: KeyboardView.EditAction) = handleEditAction(action)
-
     override fun onDeleteWord() = handleDeleteWord()
 
     /** Commits the word being typed, or types a space; a second space after a word makes a full stop. */

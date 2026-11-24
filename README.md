@@ -146,17 +146,6 @@ Settings → **Check for updates** asks GitHub for the newest release. If it is 
 
 The app deliberately does not download or install anything itself: that needs Android's "install unknown apps" permission, which Google Play Protect treats as a warning sign (an earlier version asked for it and was flagged as harmful).
 
-### 🌱 Grass, cursor and copy / cut / paste
-
-Under the keys is pixel-art **grass** (quiet, dim greens under a dark theme): tufts of blades of every height, a few flowers, standing on the very bottom edge of the screen. The visiting animals always come, even with the space at 0, walking along the grass with the blades in front of their feet. The grass is also a touch strip for editing the text:
-
-- **Slide** a finger sideways on the grass, **starting in the bottom right** (the right 40% of the grass), to move the cursor: one character for about every 4 dp, so a short slide goes a long way. It stays inside the text: the cursor never goes past the first or last character, so it can't jump into another field. A word you are typing is finished as typed first. A swipe or tap anywhere else on the grass is what it always was (a swipe left deletes a word, a tap types the letter above it).
-- **Hold** on the grass for a small menu above it: **Word · All · Cut · Copy · Paste**. Slide up onto an item and lift to use it; lifting on the grass does nothing. *Word* selects the word the cursor is in (or just after), with its apostrophes and hyphens, by exact position where the app reports where its cursor is, and with shifted arrow keys where it does not; *All*, *Cut*, *Copy* and *Paste* work through the field's own menu actions.
-- **With text selected** (after *Word* or *All*), sliding stretches or shrinks the selection instead of moving the cursor: right extends it forward, left shrinks it. Tap in the text to clear it.
-- **One setting, Space below keyboard** (Settings → Size & position, 30 dp by default, up to 60), is the height of the grass: **0 is nothing at all**, and every dp makes the grass taller (it grows upward and pushes the keys up). The blades stand on the bottom edge of the screen, behind Android's navigation bar or gesture handle, and there is no flat ground: a small value is a thin line of grass, which grows up through the bar's zone until, from 20 dp up, the tallest blades reach the keys. The strip under the keys, as tall as the setting, is the part you touch for the cursor and the edit menu (Android keeps the touches on its own bar for itself, so a finger never reaches the keyboard there). With 0, only the height of Android's own bar is kept clear (a keyboard can't remove that); with any grass, the whole gesture zone Android reads its swipes in is kept clear, so the grass sits above it.
-- No glow, key highlight or preview shows under a finger on the grass; only the menu does.
-- The back swipe from the screen edges is switched off over the keys and the grass, so the keyboard's own swipes work there. Not while searching GIFs, and the menu is not offered over the emoji, GIF, clipboard and sticker panels.
-
 ### 😀 Emoji, 📋 clipboard and GIFs
 
 <p>
@@ -186,7 +175,7 @@ Under the keys is pixel-art **grass** (quiet, dim greens under a dark theme): tu
 <img src="docs/screenshots/settings.png" width="32%" align="right" alt="Settings home page">
 
 - **Appearance:** theme and layout (QWERTZ or QWERTY).
-- **Size & position:** separate heights for the mini keyboard, the full keyboard and the suggestion bar, plus the space below the keyboard (the grass). The keys always sit above Android's navigation bar or gesture handle. On Android 16+ you can hide Android's own keyboard buttons to get that space back. The pale gesture line is Android's own and can't be hidden by a keyboard; the keyboard keeps its keys above Android's gesture area instead.
+- **Size & position:** separate heights for the mini keyboard, the full keyboard and the suggestion bar, plus the space under the keys. The keys always sit above Android's navigation bar or gesture handle. On Android 16+ you can hide Android's own keyboard buttons to get that space back. The pale gesture line is Android's own and can't be hidden by a keyboard; the keyboard keeps its keys above Android's gesture area instead.
 - **Typing:** autocorrect, auto-capitalisation, press-and-hold time, key vibration (on or off, and its strength), and *Forget learned words*.
 - **Gestures:** swipe sensitivity, each slider explained.
 - **GIFs:** show or hide the emoji panel's GIF tab, and your KLIPY key.

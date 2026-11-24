@@ -59,5 +59,3 @@ internal val ADDRESS_VARIATIONS = setOf(
     InputType.TYPE_TEXT_VARIATION_WEB_EMAIL_ADDRESS,
     InputType.TYPE_TEXT_VARIATION_URI,
 )
-/** Selecting a word: how many characters each side of the cursor are looked at. */
-internal const val WORD_SCAN = 60

@@ -28,7 +28,7 @@ object Prefs {
 
     /** Space between the keys and the bottom of the screen, in dp. */
     const val BOTTOM_SPACE = "bottom_space_dp"
-    const val BOTTOM_SPACE_DEFAULT = 30
+    const val BOTTOM_SPACE_DEFAULT = 15
     /** Hide the system's keyboard-switch / hide-keyboard buttons under the keys (Android 16+). */
     const val HIDE_SYSTEM_BUTTONS = "hide_system_buttons"
     /** Now and then an animal walks across the keys (see keyboard/Animals.kt): whether, and which. */
