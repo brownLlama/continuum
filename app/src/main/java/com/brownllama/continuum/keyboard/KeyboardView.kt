@@ -191,22 +191,17 @@ class KeyboardView(context: Context, internal val listener: Listener) : View(con
     var barScale = 1f
         set(value) { if (field != value) { field = value; requestLayout(); relayout() } }
     /**
-     * The ground under the keys, in dp (settings slider "Space below keyboard"); 0 is nothing at all.
-     * It is a small, fixed layer of soil ([SOIL_DP]) with the grass on top, which grows as the value
-     * does. The soil carries on under Android's navigation bar (see [systemBottom]), which is added
-     * separately because from Android 15 the IME window is edge-to-edge.
+     * The grass under the keys, in dp (settings slider "Space below keyboard"); 0 is nothing at all. It is
+     * the touchable layer. The grass's own dark ground carries on under Android's navigation bar (see
+     * [systemBottom]), which is added separately because from Android 15 the IME window is edge-to-edge.
      */
     var bottomSpaceDp = Prefs.BOTTOM_SPACE_DEFAULT.toFloat()
         set(value) { if (field != value) { field = value; requestLayout(); invalidate() } }
-    /** The soil under the grass: a small, fixed layer (or all of the space, while that is smaller than it). */
-    internal val soilDp get() = min(bottomSpaceDp, SOIL_DP)
-    /** The grass: whatever the space has above the soil. It is the touchable layer under the keys. */
-    internal val grassDp get() = max(0f, bottomSpaceDp - SOIL_DP)
     /**
      * Height in px kept clear under the keyboard: the system bars still showing (the gesture handle or
      * navigation buttons, and Android 16's keyboard buttons unless "Hide system buttons" hid them). With
-     * grass or soil under the keys it is the taller gesture zone Android reads its swipes in, so the grass
-     * is clear of it; with neither, only the bars' own height, so nothing more than Android needs is
+     * grass under the keys it is the taller gesture zone Android reads its swipes in, so the grass
+     * is clear of it; with none, only the bars' own height, so nothing more than Android needs is
      * kept. The keys sit above it, so nothing overlaps them.
      */
     internal val systemBottom get() = if (bottomSpaceDp > 0f) max(navBottom, gestureBottom) else navBottom
