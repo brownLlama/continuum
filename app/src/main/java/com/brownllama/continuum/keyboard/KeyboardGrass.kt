@@ -34,22 +34,29 @@ internal class Grass(private val unit: Float) {
     private val pebbles = Path()
     private var builtWidth = -1f
     private var builtRows = -1
+    private var builtSoil = -1
 
     /** Where an animal's feet go, measured down from the top of the grass. */
     fun feetOffset(strip: Float) = min(FEET_ROWS * unit, strip)
 
     /** Draws the grass in a strip [top]..[bottom] (keyboard coordinates), [light] for a light keyboard. */
-    fun draw(c: Canvas, paint: Paint, width: Float, top: Float, bottom: Float, light: Boolean, background: Int, tint: Int? = null) {
+    fun draw(
+        c: Canvas, paint: Paint, width: Float, top: Float, bottom: Float, light: Boolean, background: Int,
+        tint: Int? = null, soilFrom: Float? = null,
+    ) {
         val strip = bottom - top
         if (strip < 1f || width < 1f) return
-        build(width, ceil(strip / unit).toInt())
+        // The soil starts at [soilFrom] (measured from [top]) when given: under Android's navigation
+        // bar, which a finger can't reach, so the grass itself is the part that can be touched.
+        val soilRow = if (soilFrom != null) max(0, (soilFrom / unit).toInt()) else SOIL_ROW
+        build(width, ceil(strip / unit).toInt(), soilRow)
         val p = palette(light, background)
         c.withTranslation(0f, top) {
             clipRect(0f, 0f, width, strip)
             // Soil first, then the green body over its top, with the roots reaching down into it.
-            if (strip > SOIL_ROW * unit) {
+            if (strip > soilRow * unit) {
                 paint.color = p.soil
-                drawRect(0f, SOIL_ROW * unit, width, strip, paint)
+                drawRect(0f, soilRow * unit, width, strip, paint)
                 paint.color = p.clod
                 drawPath(clods, paint)
                 paint.color = p.dirt
@@ -58,7 +65,7 @@ internal class Grass(private val unit: Float) {
                 drawPath(pebbles, paint)
             }
             paint.color = p.body
-            drawRect(0f, TOP_ROWS * unit, width, min(strip, SOIL_ROW * unit), paint)
+            if (soilRow > TOP_ROWS) drawRect(0f, TOP_ROWS * unit, width, min(strip, soilRow * unit), paint)
             drawPath(roots, paint)
             paint.color = p.inner
             drawPath(inner, paint)
@@ -85,10 +92,11 @@ internal class Grass(private val unit: Float) {
         }
     }
 
-    private fun build(width: Float, rows: Int) {
-        if (width == builtWidth && rows == builtRows) return
+    private fun build(width: Float, rows: Int, soilRow: Int) {
+        if (width == builtWidth && rows == builtRows && soilRow == builtSoil) return
         builtWidth = width
         builtRows = rows
+        builtSoil = soilRow
         for (p in listOf(blades, tips, flowers, inner, specks, tall, tallTips, roots, clods, dirt, pebbles)) p.reset()
         val columns = ceil(width / unit).toInt()
 
@@ -127,7 +135,7 @@ internal class Grass(private val unit: Float) {
         }
 
         // The body: lighter blades (one pixel wide, two tall) and darker specks, scattered.
-        for (row in TOP_ROWS until min(rows, SOIL_ROW)) {
+        for (row in TOP_ROWS until min(rows, soilRow)) {
             for (col in 0 until columns) {
                 val h = hash(col, 100 + row)
                 if (h % 22 == 0) cell(inner, col, row, 1, min(2, rows - row))
@@ -139,11 +147,11 @@ internal class Grass(private val unit: Float) {
         while (col < columns) {
             val w = 1 + hash(col, 8) % 3
             val depth = hash(col, 9) % 3 // 0, 1 or 2 extra rows
-            if (depth > 0) for (k in 0 until w) cell(roots, col + k, SOIL_ROW, 1, depth - (if (k == w - 1 && w > 1) 1 else 0))
+            if (depth > 0 && soilRow >= TOP_ROWS) for (k in 0 until w) cell(roots, col + k, soilRow, 1, depth - (if (k == w - 1 && w > 1) 1 else 0))
             col += w + hash(col, 10) % 3
         }
         // The soil: lighter clods and darker specks, and the odd pebble (two pixels wide, one tall).
-        for (row in SOIL_ROW until min(rows, MAX_TEXTURE_ROWS)) {
+        for (row in soilRow until min(rows, soilRow + MAX_TEXTURE_ROWS)) {
             for (c in 0 until columns) {
                 val h = hash(c, 300 + row)
                 when {
@@ -205,8 +213,12 @@ internal class Grass(private val unit: Float) {
 internal fun KeyboardView.grassBottom() = height - overlayH - gifHeaderH
 
 /** The grass under the keyboard (drawn before the keys and the animals). */
-internal fun KeyboardView.drawGrass(c: Canvas) =
-    grass.draw(c, fill, width.toFloat(), keyboardHeight, grassBottom(), theme.isLight, theme.background, if (selecting) theme.accent else null)
+internal fun KeyboardView.drawGrass(c: Canvas) {
+    val bottom = grassBottom()
+    // Under Android's navigation bar (where touches never arrive) is soil; the grass is above it.
+    val soilFrom = if (systemBottom > 0) bottom - keyboardHeight - systemBottom else null
+    grass.draw(c, fill, width.toFloat(), keyboardHeight, bottom, theme.isLight, theme.background, if (selecting) theme.accent else null, soilFrom)
+}
 
 /** The tallest blades over an animal's feet. */
 internal fun KeyboardView.drawGrassFront(c: Canvas) =

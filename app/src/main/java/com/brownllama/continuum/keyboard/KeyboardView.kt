@@ -200,7 +200,7 @@ class KeyboardView(context: Context, internal val listener: Listener) : View(con
      * navigation buttons, and Android 16's keyboard buttons unless "Hide system buttons" hid them.
      * The keys sit above it, so nothing overlaps them.
      */
-    private var systemBottom = 0
+    internal var systemBottom = 0
     var layout = KeyLayout.QWERTZ
         set(value) { if (field != value) { field = value; relayout() } }
     /** Whether the emoji panel has the GIF tab (setting "Show GIFs"). */

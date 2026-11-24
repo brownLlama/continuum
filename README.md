@@ -150,7 +150,7 @@ The space under the keys is a strip of pixel-art **grass** (quiet, dim greens un
 
 - **Slide** a finger sideways on the grass to move the cursor, one character for about every 10 dp. A bubble above the grass shows the words around the cursor with the caret in the middle (selected text highlighted), so you see exactly where it is. A word you are typing is finished as typed first. A tap on the grass still types the letter above it.
 - **Hold** on the grass for a small menu above it: **Select · All · Cut · Copy · Paste**. Slide up onto an item and lift to use it; lifting on the grass does nothing. *Select* makes sliding stretch a selection instead of moving the cursor (the grass turns the accent colour while it is on), and it ends on any key tap or after cut, copy or paste. *All*, *Cut*, *Copy* and *Paste* work through the field's own menu actions.
-- The strip is the "space under the keys" setting plus Android's navigation bar, so it needs a few dp of that space; at 0 and no navigation bar there is no grass and no strip.
+- The strip you can touch is the grass above Android's navigation bar, which is the "space under the keys" setting (24 dp by default, up to 30). The soil is drawn under the navigation bar, where Android keeps the touches for itself (its gesture handle), so a finger there never reaches the keyboard. At 0 dp there is nothing to touch.
 - Not while searching GIFs, and the menu is not offered over the emoji, GIF, clipboard and sticker panels.
 
 ### 😀 Emoji, 📋 clipboard and GIFs
