@@ -40,6 +40,11 @@ class UserModel(
     /** Day (since 1970) each word was last typed. */
     private val lastUsed = HashMap<String, Int>()
     private var dirty = 0
+    /**
+     * Set by an owner that would rather batch the write for a brand-new word (a burst of new words
+     * is then one write, see [learn]); it must call [save] soon after. Without it the word is saved at once.
+     */
+    var onNewWord: (() -> Unit)? = null
     /** The last write handed to [WRITER], so [flush] can wait for it. */
     private var pending: Future<*>? = null
 
@@ -83,8 +88,11 @@ class UserModel(
             m[key] = (m[key] ?: 0) + 1
         }
         if (words.size > MAX_WORDS * COMPACT_AT || pairCount() > MAX_PAIRS * COMPACT_AT) prune()
-        // A brand-new word is saved right away so it survives the keyboard being killed or reinstalled.
-        if (++dirty >= 10 || count == 1) save()
+        // A brand-new word is saved at once (or by [onNewWord] a moment later) so it survives the
+        // keyboard being killed or reinstalled; anything else every tenth change.
+        dirty++
+        if (dirty >= 10) save()
+        else if (count == 1) onNewWord?.invoke() ?: save()
     }
 
     /** The user picked the word from the suggestion bar: that's as good as typing it a second time. */
