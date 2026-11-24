@@ -25,6 +25,8 @@ internal const val FOLLOW_CURSOR_MS = 150L
 internal const val HOUR_MS = 60L * 60 * 1000
 /** A newly learned word is saved this long after the last one, so typing a few new words is one write. */
 internal const val SAVE_DELAY_MS = 3_000L
+/** Sliding the cursor: how many characters each side of it the bubble shows. */
+internal const val CURSOR_CONTEXT = 40
 /** GIF search: how long typing must pause before the results update. */
 internal const val LIVE_SEARCH_MS = 600L
 /** Punctuation that sticks to the previous word, taking the space before it. */

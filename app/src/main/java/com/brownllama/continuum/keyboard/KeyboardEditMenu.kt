@@ -4,6 +4,8 @@ package com.brownllama.continuum.keyboard
 import android.graphics.Canvas
 import android.graphics.RectF
 import android.os.SystemClock
+import androidx.core.graphics.ColorUtils
+import androidx.core.graphics.withClip
 import com.brownllama.continuum.R
 import com.brownllama.continuum.keyboard.KeyboardView.EditAction
 import kotlin.math.min
@@ -96,5 +98,52 @@ internal fun KeyboardView.drawEditMenu(c: Canvas, p: Pointer) {
             val size = dpu(14f) * min(1f, (cell - dpu(8f)) / text.measureText(label))
             drawText(c, label, l + cell / 2, r.centerY(), size, color, regular)
         }
+    }
+}
+
+/**
+ * While a finger slides the cursor along the grass: a bubble above the grass with the words around
+ * the cursor. The caret stays in the middle and the text moves under it, so you see exactly where
+ * the cursor is; selected text is highlighted.
+ */
+internal fun KeyboardView.drawCursorText(c: Canvas) {
+    val t = cursorText ?: return
+    if (pointers.values.none { it.cursoring }) return
+    val theme = theme
+    val h = dpu(44f)
+    val w = min(width - dpu(8f), dpu(340f))
+    val r = RectF()
+    val left = (width - w) / 2
+    val bottom = keyboardHeight - dpu(8f)
+    r.set(left, bottom - h, left + w, bottom)
+    fill.color = theme.zoom
+    shadowOn()
+    c.drawRoundRect(r, popupRadius, popupRadius, fill)
+    shadowOff()
+    val size = dpu(17f)
+    text.typeface = regular
+    text.textSize = size
+    fun shown(s: String) = s.replace('\n', '\u21B5')
+    val before = shown(t.before)
+    val selected = shown(t.selected)
+    val after = shown(t.after)
+    val caret = width / 2f
+    val cy = r.centerY()
+    val selW = if (selected.isEmpty()) 0f else text.measureText(selected)
+    c.withClip(r.left + dpu(6f), r.top, r.right - dpu(6f), r.bottom) {
+        val beforeW = text.measureText(before)
+        drawText(c, before, caret - beforeW / 2, cy, size, theme.text, regular)
+        if (selected.isNotEmpty()) {
+            fill.color = ColorUtils.setAlphaComponent(theme.accent, 90)
+            tmp.set(caret, cy - dpu(13f), caret + selW, cy + dpu(13f))
+            c.drawRect(tmp, fill)
+            drawText(c, selected, caret + selW / 2, cy, size, theme.text, regular)
+        }
+        val afterW = text.measureText(after)
+        drawText(c, after, caret + selW + afterW / 2, cy, size, theme.text, regular)
+        // The caret (at the start of a selection).
+        fill.color = theme.accent
+        tmp.set(caret - dpu(1f), cy - dpu(14f), caret + dpu(1f), cy + dpu(14f))
+        c.drawRect(tmp, fill)
     }
 }

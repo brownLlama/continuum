@@ -48,6 +48,11 @@
         app:summary="@string/reset_summary"
         app:title="@string/reset_title" />
     <Preference
+        app:icon="@drawable/ic_update"
+        app:key="update"
+        app:summary="@string/update_summary"
+        app:title="@string/update_title" />
+    <Preference
         app:icon="@drawable/ic_info"
         app:key="version"
         app:persistent="false"

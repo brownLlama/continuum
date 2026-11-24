@@ -23,6 +23,24 @@
     <string name="summary_typing_off">Autocorrect off · Hold %1$d ms</string>
     <string name="summary_gestures">← delete word · → space · ↓ numbers · ↑ full · ↗ enter · ↖ English/German</string>
     <string name="version_title">Version</string>
+    <string name="update_title">Check for updates</string>
+    <string name="update_summary">Looks for a newer version on GitHub and installs it. Only when you tap here.</string>
+    <string name="update_checking">Looking for a newer version…</string>
+    <string name="update_latest_title">You\'re up to date</string>
+    <string name="update_latest_message">Continuum %1$s is the newest version.</string>
+    <string name="update_available_title">Version %1$s is available</string>
+    <string name="update_available_message">You have %1$s. The update is about %2$s. Android will ask you to confirm the install.</string>
+    <string name="update_now">Update</string>
+    <string name="update_later">Not now</string>
+    <string name="update_whats_new">What\'s new</string>
+    <string name="update_downloading">Downloading the update…</string>
+    <string name="update_progress">Downloading… %1$s of %2$s</string>
+    <string name="update_installing">Android will ask you to confirm the update.</string>
+    <string name="update_failed_title">Update didn\'t work</string>
+    <string name="update_check_failed">Couldn\'t reach GitHub. Check your connection and try again.</string>
+    <string name="update_download_failed">The download didn\'t finish. Check your connection and try again.</string>
+    <string name="update_damaged">The download didn\'t match its checksum, so it was not installed. Try again.</string>
+    <string name="update_install_failed">Android didn\'t install the update. It must be signed with the same key as the installed app.</string>
     <string name="summary_guide">How to type, gestures, emoji, clipboard, privacy</string>
     <string name="screen_stats">Typing statistics</string>
     <string name="summary_stats_empty">How often words are kept as typed, picked or fixed</string>
@@ -73,7 +91,7 @@
     <string name="pref_bottom_space_dp">Space below keyboard (dp)</string>
     <string name="pref_bottom_space_dp_summary">Extra space between the keys and Android\'s navigation bar or gesture handle. The keys never overlap it.</string>
     <string name="pref_hide_system_buttons">Hide system buttons</string>
-    <string name="pref_hide_system_buttons_summary">Removes Android\'s keyboard-switch and hide-keyboard buttons from under the keys (Android 16+), giving the space back. Hold shift, or the space bar in the full keyboard, to switch keyboards.</string>
+    <string name="pref_hide_system_buttons_summary">Removes Android\'s keyboard-switch and hide-keyboard buttons from under the keys (Android 16+) and, where Android allows it, the gesture line, giving the space back. Hold shift, or the space bar in the full keyboard, to switch keyboards.</string>
 
     <!-- Typing -->
     <string name="pref_language">Language</string>

@@ -30,6 +30,7 @@ import com.google.android.material.snackbar.Snackbar
 import com.google.android.material.textfield.TextInputLayout
 import com.brownllama.continuum.prediction.Mode
 import com.brownllama.continuum.stats.TypingStats
+import com.brownllama.continuum.update.UpdateFlow
 import java.text.DateFormat
 import java.text.NumberFormat
 import java.util.Date
@@ -122,6 +123,10 @@ class SettingsActivity : AppCompatActivity(), PreferenceFragmentCompat.OnPrefere
                 ROOT -> {
                     findPreference<Preference>("reset")?.setOnPreferenceClickListener {
                         confirmReset()
+                        true
+                    }
+                    findPreference<Preference>("update")?.setOnPreferenceClickListener {
+                        UpdateFlow(requireActivity() as AppCompatActivity).start()
                         true
                     }
                     findPreference<Preference>("version")?.summary = runCatching {
