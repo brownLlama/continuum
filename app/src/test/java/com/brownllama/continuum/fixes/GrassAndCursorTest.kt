@@ -155,7 +155,7 @@ class GrassAndCursorTest {
         class Look(val height: Int, val soilDepth: Float?)
         fun look(space: Int, grass: Int, bar: Int = 0): Look {
             val k = Keyboard(mapOf(Prefs.BOTTOM_SPACE to space, Prefs.GRASS_HEIGHT to grass))
-            k.waitReady(); k.focus(); k.view.systemBottom = bar; k.view.requestLayout(); k.layoutView()
+            k.waitReady(); k.focus(); k.view.navBottom = bar; k.view.gestureBottom = bar; k.view.requestLayout(); k.layoutView()
             val soil = grassOf(k).tops.firstOrNull { isBrown(it.first) }?.second
             return Look(k.view.height, soil?.let { k.view.height - it })
         }
@@ -329,7 +329,8 @@ class GrassAndCursorTest {
         // In the view (soil 40, grass 24, a 40 px bar): the soil starts under the grass, 40 + 40 px above the bottom.
         val k = keyboard()
         k.focus()
-        k.view.systemBottom = 40
+        k.view.navBottom = 40
+        k.view.gestureBottom = 40
         k.view.requestLayout()
         val rec = grassOf(k)
         assertEquals(k.view.height - 40f - 40f, rec.tops.first { isBrown(it.first) }.second, 2.5f)
@@ -356,14 +357,15 @@ class GrassAndCursorTest {
         assertEquals(k.view.width, rects[0].right)
         assertEquals("down to the end of the grass, not the soil", grassEnd, rects[0].bottom)
         // A bar under the soil changes nothing.
-        k.view.systemBottom = 40
+        k.view.navBottom = 40
+        k.view.gestureBottom = 40
         k.view.requestLayout()
         k.layoutView()
         assertEquals(grassEnd, k.view.systemGestureExclusionRects[0].bottom)
         assertTrue("never more than 200 dp", k.view.systemGestureExclusionRects[0].height() <= 200f * k.context.resources.displayMetrics.density + 1)
     }
 
-    @Test fun `android's whole bottom gesture zone is kept clear, even when it is taller than the bar`() {
+    @Test fun `android's whole bottom gesture zone is kept clear when there is grass or soil, and only the bar's height when there is neither`() {
         val k = keyboard()
         k.focus()
         val insets = android.view.WindowInsets.Builder()
@@ -371,11 +373,34 @@ class GrassAndCursorTest {
             .setInsets(android.view.WindowInsets.Type.mandatorySystemGestures(), android.graphics.Insets.of(0, 0, 0, 60))
             .build()
         k.view.dispatchApplyWindowInsets(insets)
-        assertEquals(60, k.view.systemBottom)
+        assertEquals(24, k.view.navBottom)
+        assertEquals("with grass and soil, the grass stays clear of the whole gesture zone", 60, k.view.systemBottom)
         k.layoutView()
         // The grass above is the touchable part, the soil under it covers the zone.
         val rec = grassOf(k)
         assertEquals(k.view.height - 60f - 40f, rec.tops.first { isBrown(it.first) }.second, 2.5f)
+        // With neither grass nor soil only the bar's own height is kept: no more gap than Android needs.
+        k.view.grassDp = 0f
+        k.view.bottomSpaceDp = 0f
+        assertEquals(24, k.view.systemBottom)
+    }
+
+    @Test fun `with no grass and no soil there is nothing under the keys but android's bar, and no grass shows, even when an animal visits`() {
+        val k = Keyboard(mapOf(Prefs.BOTTOM_SPACE to 0, Prefs.GRASS_HEIGHT to 0, Prefs.ANIMALS to true))
+        k.waitReady(); k.focus(); k.layoutView()
+        assertEquals("no gap: just the keys and the space for popups", Math.round(k.view.overlayH + k.view.keyboardHeight), k.view.height)
+        val plain = grassOf(k)
+        assertTrue("nothing green", plain.paths.none { isGreen(it) } && plain.rects.none { isGreen(it.first) && it.third >= k.view.width.toFloat() })
+        assertTrue("no soil", plain.tops.none { isBrown(it.first) })
+        // An animal in the middle of a visit: still no blades in front of it.
+        val species = com.brownllama.continuum.keyboard.Species.ALL.first()
+        k.view.animal.start(species, k.view.width.toFloat(), k.view.keyboardHeight, android.os.SystemClock.uptimeMillis())
+        val visit = grassOf(k)
+        assertTrue("no blades in front of its feet", visit.paths.none { isGreen(it) })
+        // A bar: the plain bar's height only, not the gesture zone.
+        k.view.navBottom = 24
+        k.view.gestureBottom = 60
+        assertEquals(24, k.view.systemBottom)
     }
 
     // ---- where the cursor slide starts, and the soil setting ----------------------------------------

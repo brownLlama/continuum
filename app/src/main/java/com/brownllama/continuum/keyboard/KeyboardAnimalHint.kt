@@ -33,7 +33,8 @@ internal fun KeyboardView.endAnimal(cancel: Boolean = false) {
  * (no finger down, no zoom, no GIF search, and the IME agrees).
  */
 internal fun KeyboardView.maybeStartAnimal() {
-    if (animals.isEmpty() || !animating || animal.visiting) return
+    // They walk on the grass: with none there is nowhere for them to walk.
+    if (animals.isEmpty() || !animating || animal.visiting || grassDp <= 0f) return
     val now = SystemClock.uptimeMillis()
     // "Every time" and this opening's visit is over: nothing to wait for until the keyboard opens again.
     if (nextAnimalAt == Long.MAX_VALUE) return
