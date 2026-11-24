@@ -159,9 +159,9 @@ class UpdateFlowTest {
     private fun text(d: AlertDialog) = d.findViewById<TextView>(androidx.appcompat.R.id.alertTitle)?.text.toString() + " | " +
         (d.findViewById<TextView>(android.R.id.message)?.text ?: "")
 
-    private fun flow(net: FakeNet, installed: String, installs: MutableList<File>): UpdateFlow {
+    private fun flow(net: FakeNet, installed: String, installs: MutableList<File>, allowed: Boolean = true, opened: MutableList<Boolean> = ArrayList()): UpdateFlow {
         val activity = Robolectric.buildActivity(SettingsActivity::class.java).setup().get()
-        return UpdateFlow(activity, UpdateClient(net), now, installed) { installs += it }
+        return UpdateFlow(activity, UpdateClient(net), now, installed, { allowed }, { opened += true }) { installs += it }
     }
 
     @Test fun aNewerVersionIsOfferedDownloadedAndHandedToTheInstaller() {
@@ -177,6 +177,21 @@ class UpdateFlowTest {
         assertEquals(1, installs.size)
         assertEquals("the apk", installs[0].readText())
         assertEquals(listOf(UpdateClient.LATEST_URL, "$BASE/SHA256SUMS.txt", "$BASE/Continuum.apk"), net.asked)
+    }
+
+    @Test fun androidIsAskedToAllowInstallingFirst_andNothingIsDownloadedUntilItIsAllowed() {
+        val installs = ArrayList<File>()
+        val opened = ArrayList<Boolean>()
+        val net = FakeNet()
+        flow(net, "0.0.37", installs, allowed = false, opened = opened).start()
+        dialog().getButton(AlertDialog.BUTTON_POSITIVE).performClick() // Update
+        val ask = dialog()
+        assertTrue(text(ask), text(ask).contains("Allow installing updates"))
+        assertTrue("nothing downloaded yet", net.asked.none { it.endsWith(".apk") })
+        ask.getButton(AlertDialog.BUTTON_POSITIVE).performClick() // Open settings
+        idle()
+        assertEquals(listOf(true), opened)
+        assertTrue(installs.isEmpty())
     }
 
     @Test fun nothingIsDownloadedWhenYouAreUpToDateOrSayNotNow() {

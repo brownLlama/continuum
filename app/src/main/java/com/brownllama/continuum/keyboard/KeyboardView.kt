@@ -583,7 +583,11 @@ class KeyboardView(context: Context, internal val listener: Listener) : View(con
 
     override fun onApplyWindowInsets(insets: WindowInsets): WindowInsets {
         val bottom = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            insets.getInsets(WindowInsets.Type.navigationBars() or WindowInsets.Type.captionBar()).bottom
+            // The bars, and the strip at the bottom where Android reads its home and app-switch swipes
+            // (which can be taller than the bar itself): nothing of ours goes there.
+            insets.getInsets(
+                WindowInsets.Type.navigationBars() or WindowInsets.Type.captionBar() or WindowInsets.Type.mandatorySystemGestures(),
+            ).bottom
         } else {
             0
         }
@@ -600,6 +604,11 @@ class KeyboardView(context: Context, internal val listener: Listener) : View(con
     }
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) = relayout()
+
+    override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
+        super.onLayout(changed, left, top, right, bottom)
+        updateGestureExclusion()
+    }
 
     // Mini mode slots: slot i holds the i-th letter of KeyLayout.miniOrder and the i-th strip symbol.
     internal val slotW get() = letterRect.width() / 26f

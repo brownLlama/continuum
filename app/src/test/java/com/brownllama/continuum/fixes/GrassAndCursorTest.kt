@@ -305,4 +305,38 @@ class GrassAndCursorTest {
     @Test fun `there is more room for the grass by default`() {
         assertTrue(Prefs.BOTTOM_SPACE_DEFAULT >= 20)
     }
+
+    // ---- Android's gesture zones -----------------------------------------------------------------
+
+    @Test fun `the back swipe is kept off the keys and the grass`() {
+        val k = keyboard()
+        k.focus()
+        k.layoutView()
+        val rects = k.view.systemGestureExclusionRects
+        assertEquals(1, rects.size)
+        assertEquals(0, rects[0].left)
+        assertEquals(k.view.width, rects[0].right)
+        assertEquals("down to the bottom of the view when there is no bar", k.view.height, rects[0].bottom)
+        // With a bar, the grass above it is covered and the bar is not.
+        k.view.systemBottom = 40
+        k.view.requestLayout()
+        k.layoutView()
+        assertEquals(k.view.height - 40, k.view.systemGestureExclusionRects[0].bottom)
+        assertTrue("never more than 200 dp", k.view.systemGestureExclusionRects[0].height() <= 200f * k.context.resources.displayMetrics.density + 1)
+    }
+
+    @Test fun `android's whole bottom gesture zone is kept clear, even when it is taller than the bar`() {
+        val k = keyboard()
+        k.focus()
+        val insets = android.view.WindowInsets.Builder()
+            .setInsets(android.view.WindowInsets.Type.navigationBars(), android.graphics.Insets.of(0, 0, 0, 24))
+            .setInsets(android.view.WindowInsets.Type.mandatorySystemGestures(), android.graphics.Insets.of(0, 0, 0, 60))
+            .build()
+        k.view.dispatchApplyWindowInsets(insets)
+        assertEquals(60, k.view.systemBottom)
+        k.layoutView()
+        // The grass above is the touchable part, the soil under it covers the zone.
+        val rec = grassOf(k)
+        assertEquals(k.view.height - 60f, rec.tops.first { isBrown(it.first) }.second, 2.5f)
+    }
 }

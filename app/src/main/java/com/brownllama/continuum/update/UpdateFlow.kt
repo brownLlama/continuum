@@ -28,6 +28,8 @@ class UpdateFlow(
     private val client: UpdateClient = UpdateClient(),
     private val io: Executor = Executor { Thread(it, "update").apply { isDaemon = true }.start() },
     private val installed: String? = Updater.installedVersion(activity),
+    private val canInstall: () -> Boolean = { Updater.canInstall(activity) },
+    private val openInstallSettings: () -> Unit = { Updater.openInstallSettings(activity) },
     private val install: (File) -> Unit = { Updater.install(activity, it) },
 ) {
     private val main = Handler(Looper.getMainLooper())
@@ -64,10 +66,25 @@ class UpdateFlow(
         MaterialAlertDialogBuilder(activity)
             .setTitle(activity.getString(R.string.update_available_title, release.version))
             .setMessage(activity.getString(R.string.update_available_message, installed ?: "?", size))
-            .setPositiveButton(R.string.update_now) { _, _ -> download(release) }
+            .setPositiveButton(R.string.update_now) { _, _ -> if (canInstall()) download(release) else askToAllow() }
             .setNegativeButton(R.string.update_later, null)
             .setNeutralButton(R.string.update_whats_new) { _, _ ->
                 runCatching { activity.startActivity(Intent(Intent.ACTION_VIEW, release.pageUrl.toUri())) }
+            }
+            .show().also { dialog = it }
+    }
+
+    /**
+     * Android installs an app's downloads only once it is allowed to ("Install unknown apps"). Say so,
+     * and open the page for it; after switching it on, the user taps Update again.
+     */
+    private fun askToAllow() {
+        MaterialAlertDialogBuilder(activity)
+            .setTitle(R.string.update_allow_title)
+            .setMessage(R.string.update_allow_message)
+            .setNegativeButton(android.R.string.cancel, null)
+            .setPositiveButton(R.string.update_allow_open) { _, _ ->
+                runCatching { openInstallSettings() }
             }
             .show().also { dialog = it }
     }
