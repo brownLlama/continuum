@@ -394,33 +394,53 @@ internal fun ContinuumIME.handleEmoji(emoji: String) {
 }
 
 /**
- * The finger slid along the grass: the cursor moves [steps] characters, as arrow keys would move it
- * (with shift held when [select], which stretches the selection instead). A word in progress is
- * finished first, as it stands. Not while the GIF search has the keyboard.
+ * The finger slid along the grass: the cursor moves [steps] characters, as arrow keys would move it,
+ * but only within the text (an arrow key at the end of a text can leave the field for another one).
+ * With text selected, it stretches the selection instead (shift held). A word in progress is finished
+ * first, as it stands. Not while the GIF search has the keyboard.
  */
-internal fun ContinuumIME.handleCursorMove(steps: Int, select: Boolean) {
-    if (queryEditor != null) return
+internal fun ContinuumIME.handleCursorMove(steps: Int) {
+    if (queryEditor != null || steps == 0) return
     val ic = editor() ?: return
     finishComposing()
     lastExpansion = null
     autoSpace = false
     deletedSlots = null
-    val key = if (steps < 0) KeyEvent.KEYCODE_DPAD_LEFT else KeyEvent.KEYCODE_DPAD_RIGHT
-    val meta = if (select) KeyEvent.META_SHIFT_ON or KeyEvent.META_SHIFT_LEFT_ON else 0
+    val left = steps < 0
+    val n = abs(steps)
+    val selected = ic.getSelectedText(0)?.length ?: 0
+    // How many characters are left in that direction (a selection can also be shrunk from the other side).
+    val room = if (left) {
+        (ic.getTextBeforeCursor(n, 0)?.length ?: n) + selected
+    } else {
+        ic.getTextAfterCursor(n, 0)?.length ?: n
+    }
+    arrows(ic, right = !left, times = minOf(n, room), shift = selected > 0)
+}
+
+/** Selects the word the cursor is in or at the end of (letters, digits, apostrophes and hyphens). */
+private fun ContinuumIME.selectWordAtCursor(ic: InputConnection) {
+    fun inWord(c: Char) = c.isLetterOrDigit() || c == '\'' || c == '\u2019' || c == '-'
+    val back = ic.getTextBeforeCursor(WORD_SCAN, 0)?.takeLastWhile(::inWord)?.length ?: 0
+    val ahead = ic.getTextAfterCursor(WORD_SCAN, 0)?.takeWhile(::inWord)?.length ?: 0
+    if (back + ahead == 0) return
+    // To the start of the word, then over it with shift held: the selection then grows to the right
+    // when the finger slides right, and shrinks when it slides left.
+    arrows(ic, right = false, times = back, shift = false)
+    arrows(ic, right = true, times = back + ahead, shift = true)
+}
+
+private fun arrows(ic: InputConnection, right: Boolean, times: Int, shift: Boolean) {
+    val key = if (right) KeyEvent.KEYCODE_DPAD_RIGHT else KeyEvent.KEYCODE_DPAD_LEFT
+    val meta = if (shift) KeyEvent.META_SHIFT_ON or KeyEvent.META_SHIFT_LEFT_ON else 0
     val now = SystemClock.uptimeMillis()
-    repeat(abs(steps)) {
+    repeat(times) {
         ic.sendKeyEvent(KeyEvent(now, now, KeyEvent.ACTION_DOWN, key, 0, meta))
         ic.sendKeyEvent(KeyEvent(now, now, KeyEvent.ACTION_UP, key, 0, meta))
     }
-    // Shows where the cursor is now, in the bubble above the grass.
-    view?.showCursorText(
-        ic.getTextBeforeCursor(CURSOR_CONTEXT, 0)?.toString().orEmpty(),
-        ic.getSelectedText(0)?.toString().orEmpty(),
-        ic.getTextAfterCursor(CURSOR_CONTEXT, 0)?.toString().orEmpty(),
-    )
 }
 
-/** An item of the grass's hold menu: select all, cut, copy or paste, as the field's own menu would. */
+/** An item of the grass's hold menu: select the word or everything, cut, copy or paste. */
 internal fun ContinuumIME.handleEditAction(action: KeyboardView.EditAction) {
     if (queryEditor != null) return
     val ic = editor() ?: return
@@ -429,12 +449,11 @@ internal fun ContinuumIME.handleEditAction(action: KeyboardView.EditAction) {
     lastExpansion = null
     autoSpace = false
     deletedSlots = null
-    ic.performContextMenuAction(
-        when (action) {
-            KeyboardView.EditAction.SELECT_ALL -> android.R.id.selectAll
-            KeyboardView.EditAction.CUT -> android.R.id.cut
-            KeyboardView.EditAction.COPY -> android.R.id.copy
-            KeyboardView.EditAction.PASTE -> android.R.id.paste
-        },
-    )
+    when (action) {
+        KeyboardView.EditAction.SELECT_WORD -> selectWordAtCursor(ic)
+        KeyboardView.EditAction.SELECT_ALL -> ic.performContextMenuAction(android.R.id.selectAll)
+        KeyboardView.EditAction.CUT -> ic.performContextMenuAction(android.R.id.cut)
+        KeyboardView.EditAction.COPY -> ic.performContextMenuAction(android.R.id.copy)
+        KeyboardView.EditAction.PASTE -> ic.performContextMenuAction(android.R.id.paste)
+    }
 }

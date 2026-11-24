@@ -90,10 +90,10 @@ class KeyboardView(context: Context, internal val listener: Listener) : View(con
         fun onEmoji(emoji: String)
         fun onBackspace()
         /**
-         * A finger slid along the grass: move the cursor by [steps] characters (negative: left), or
-         * stretch the selection by that many when [select].
+         * A finger slid along the grass: move the cursor by [steps] characters (negative: left), never
+         * past the ends of the text. With text selected, it stretches the selection instead.
          */
-        fun onCursorMove(steps: Int, select: Boolean)
+        fun onCursorMove(steps: Int)
         /** An item of the grass's hold menu: act on the selection (or the whole text). */
         fun onEditAction(action: EditAction)
         /** Swipe left. */
@@ -148,7 +148,7 @@ class KeyboardView(context: Context, internal val listener: Listener) : View(con
     enum class Shift { OFF, ON, LOCK }
 
     /** What the grass's hold menu asks of the text field. */
-    enum class EditAction { SELECT_ALL, CUT, COPY, PASTE }
+    enum class EditAction { SELECT_WORD, SELECT_ALL, CUT, COPY, PASTE }
 
     /** What fills the keyboard below the bar. SYMBOLS / SYMBOLS2 are the two number pages. */
     enum class Panel {
@@ -195,6 +195,9 @@ class KeyboardView(context: Context, internal val listener: Listener) : View(con
      */
     var bottomSpaceDp = Prefs.BOTTOM_SPACE_DEFAULT.toFloat()
         set(value) { if (field != value) { field = value; requestLayout() } }
+    /** Soil under the grass, in dp, on top of what shows under Android's gesture area (see [systemBottom]); not touchable. */
+    var soilDp = Prefs.SOIL_SPACE_DEFAULT.toFloat()
+        set(value) { if (field != value) { field = value; requestLayout(); invalidate() } }
     /**
      * Height in px of the system bars still showing under the keyboard: the gesture handle or
      * navigation buttons, and Android 16's keyboard buttons unless "Hide system buttons" hid them.
@@ -259,8 +262,6 @@ class KeyboardView(context: Context, internal val listener: Listener) : View(con
     }
 
     fun keyboardHidden() {
-        selecting = false
-        cursorText = null
         endAnimal(cancel = true)
     }
     /** The editor's action (EditorInfo.IME_ACTION_*), drawn on the enter key; NONE = plain enter arrow. */
@@ -599,7 +600,7 @@ class KeyboardView(context: Context, internal val listener: Listener) : View(con
     }
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-        val height = overlayH + gifHeaderH + keyboardHeight + dpu(bottomSpaceDp) + systemBottom
+        val height = overlayH + gifHeaderH + keyboardHeight + dpu(bottomSpaceDp) + dpu(soilDp) + systemBottom
         setMeasuredDimension(MeasureSpec.getSize(widthMeasureSpec), height.roundToInt())
     }
 
@@ -685,16 +686,6 @@ class KeyboardView(context: Context, internal val listener: Listener) : View(con
     internal val animal = Animal(max(1f, (2f * density).roundToInt().toFloat()))
     /** The strip under the keyboard, in the same pixels as the animals that walk on it. */
     internal val grass = Grass(max(1f, (2f * density).roundToInt().toFloat()))
-    /** Sliding on the grass stretches a selection instead of moving the cursor (the menu's Select); the grass shows it. */
-    internal var selecting = false
-    /** The text around the cursor while a finger slides it along the grass, shown in a bubble above it. */
-    internal var cursorText: CursorText? = null
-
-    /** The service tells where the cursor is after each slide step: the text before it, the selected text and the text after it. */
-    internal fun showCursorText(before: String, selected: String, after: String) {
-        cursorText = CursorText(before, selected, after)
-        invalidate()
-    }
     internal val animalCheck = Runnable { maybeStartAnimal() }
     internal var lastTouchAt = 0L
 
@@ -817,16 +808,12 @@ class KeyboardView(context: Context, internal val listener: Listener) : View(con
         // After a switch (letters / numbers / emoji / GIF) the new content fades in; after a switch
         // between mini and full mode it also rises a little into place, easing out.
         val fade = progress(panelChangedAt, fadeMs)
-        if (fade >= 1f) {
-            drawContent(canvas)
-            return drawCursorText(canvas)
-        }
+        if (fade >= 1f) return drawContent(canvas)
         val eased = 1f - (1f - fade) * (1f - fade)
         val save = canvas.saveLayerAlpha(null, (255 * eased).toInt())
         canvas.translate(0f, (1f - eased) * fadeSlide)
         drawContent(canvas)
         canvas.restoreToCount(save)
-        drawCursorText(canvas)
     }
 
     /** The bar's two edge fades (left, right), built once per position and colour rather than every frame. */

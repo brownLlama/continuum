@@ -44,7 +44,7 @@ internal class Grass(private val unit: Float) {
     /** Draws the grass in a strip [top]..[bottom] (keyboard coordinates), [light] for a light keyboard. */
     fun draw(
         c: Canvas, paint: Paint, width: Float, top: Float, bottom: Float, light: Boolean, background: Int,
-        tint: Int? = null, soilFrom: Float? = null,
+        soilFrom: Float? = null,
     ) {
         val strip = bottom - top
         if (strip < 1f || width < 1f) return
@@ -73,9 +73,9 @@ internal class Grass(private val unit: Float) {
             drawPath(inner, paint)
             paint.color = p.speck
             drawPath(specks, paint)
-            paint.color = tint ?: p.blade
+            paint.color = p.blade
             drawPath(blades, paint)
-            paint.color = tint ?: p.tip
+            paint.color = p.tip
             drawPath(tips, paint)
             paint.color = p.flower
             drawPath(flowers, paint)
@@ -83,13 +83,13 @@ internal class Grass(private val unit: Float) {
     }
 
     /** The tallest blades again, over whatever stands in the grass. */
-    fun drawFront(c: Canvas, paint: Paint, width: Float, top: Float, bottom: Float, light: Boolean, background: Int, tint: Int? = null) {
+    fun drawFront(c: Canvas, paint: Paint, width: Float, top: Float, bottom: Float, light: Boolean, background: Int) {
         if (bottom - top < 1f || width < 1f || builtWidth != width) return
         val p = palette(light, background)
         c.withTranslation(0f, top) {
-            paint.color = tint ?: p.blade
+            paint.color = p.blade
             drawPath(tall, paint)
-            paint.color = tint ?: p.tip
+            paint.color = p.tip
             drawPath(tallTips, paint)
         }
     }
@@ -217,14 +217,15 @@ internal fun KeyboardView.grassBottom() = height - overlayH - gifHeaderH
 /** The grass under the keyboard (drawn before the keys and the animals). */
 internal fun KeyboardView.drawGrass(c: Canvas) {
     val bottom = grassBottom()
-    // Under Android's navigation bar (where touches never arrive) is soil; the grass is above it.
-    val soilFrom = if (systemBottom > 0) bottom - keyboardHeight - systemBottom else null
-    grass.draw(c, fill, width.toFloat(), keyboardHeight, bottom, theme.isLight, theme.background, if (selecting) theme.accent else null, soilFrom)
+    // Under Android's navigation bar (where touches never arrive), and as far down as the soil setting says, is soil; the grass is above it.
+    val below = systemBottom + dpu(soilDp)
+    val soilFrom = if (below > 0) bottom - keyboardHeight - below else null
+    grass.draw(c, fill, width.toFloat(), keyboardHeight, bottom, theme.isLight, theme.background, soilFrom)
 }
 
 /** The tallest blades over an animal's feet. */
 internal fun KeyboardView.drawGrassFront(c: Canvas) =
-    grass.drawFront(c, fill, width.toFloat(), keyboardHeight, grassBottom(), theme.isLight, theme.background, if (selecting) theme.accent else null)
+    grass.drawFront(c, fill, width.toFloat(), keyboardHeight, grassBottom(), theme.isLight, theme.background)
 
 /**
  * Android's "back" swipe starts at the left and right edges of the screen, where this keyboard's
@@ -235,7 +236,8 @@ internal fun KeyboardView.drawGrassFront(c: Canvas) =
  */
 internal fun KeyboardView.updateGestureExclusion() {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q || width == 0) return
-    val bottom = (height - systemBottom).coerceAtLeast(0)
+    // The grass and the keys; the soil under it needs no gestures of its own.
+    val bottom = (height - systemBottom - dpu(soilDp)).toInt().coerceAtLeast(0)
     val top = max(overlayH + gifHeaderH, bottom - dpu(200f)).toInt()
     systemGestureExclusionRects = if (bottom > top) listOf(Rect(0, top, width, bottom)) else emptyList()
 }

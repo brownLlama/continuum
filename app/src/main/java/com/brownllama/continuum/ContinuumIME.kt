@@ -502,7 +502,7 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
     override fun onBackspace() = handleBackspace()
 
     /** Swipe left: drops the word being typed, or deletes the word before the cursor. */
-    override fun onCursorMove(steps: Int, select: Boolean) = handleCursorMove(steps, select)
+    override fun onCursorMove(steps: Int) = handleCursorMove(steps)
 
     override fun onEditAction(action: KeyboardView.EditAction) = handleEditAction(action)
 

@@ -97,9 +97,7 @@ internal fun KeyboardView.down(id: Int, x: Float, y: Float) {
     } ?: return
     pointers[id] = p
     // Below the keys is the grass; a sideways slide from there moves the cursor (not while searching GIFs).
-    p.grass = y >= keyboardHeight && !gifSearching
-    // Typing or tapping a key ends selecting by sliding.
-    if (!p.grass) selecting = false
+    p.grass = y >= keyboardHeight && y < keyboardHeight + dpu(bottomSpaceDp) && !gifSearching
     // A tick for a key or the letter row; not for the emoji / GIF / sticker grids, which scroll.
     if (p.area != Area.GRID) keyVibration.tap()
     if (p.area == Area.LETTERS || p.area == Area.STRIP) glows += Glow(p)
@@ -196,12 +194,14 @@ internal fun KeyboardView.move(p: Pointer, x: Float, y: Float) {
 
 /**
  * A finger on the grass sliding sideways moves the cursor, one character for each [CURSOR_STRIDE_DP]
- * it travels. Returns whether this finger is sliding the cursor; a tap on the grass, or a finger
+ * it travels, when it went down in the bottom right (the right [CURSOR_ZONE] of the grass). Returns whether this finger is sliding the cursor; a tap on the grass, or a finger
  * that goes up and down there, is handled as before.
  */
 internal fun KeyboardView.cursorSlide(p: Pointer, x: Float, y: Float): Boolean {
     if (!p.cursoring) {
         val dx = x - p.downX
+        // Only from the bottom right of the keyboard, so a swipe anywhere else is the swipe it always was.
+        if (p.downX < width * (1f - CURSOR_ZONE)) return false
         if (p.longPressed || p.zooming || p.scrolling || abs(dx) <= slop || abs(dx) <= abs(y - p.downY)) return false
         p.cursoring = true
         p.consumed = true
@@ -213,7 +213,7 @@ internal fun KeyboardView.cursorSlide(p: Pointer, x: Float, y: Float): Boolean {
     val steps = ((x - p.cursorX) / stride).toInt()
     if (steps != 0) {
         p.cursorX += steps * stride
-        listener.onCursorMove(steps, selecting)
+        listener.onCursorMove(steps)
         keyVibration.tap()
     }
     invalidate()
@@ -289,10 +289,6 @@ internal fun KeyboardView.onLongPress(p: Pointer) {
 /** A finger lifted: finish a scroll or zoom, or decide between a swipe gesture and a tap. */
 internal fun KeyboardView.release(p: Pointer) {
     pointers.remove(p.id)
-    if (p.cursoring) {
-        cursorText = null
-        invalidate()
-    }
     timer.removeCallbacks(p.longPress)
     p.repeat?.let(timer::removeCallbacks)
     when {

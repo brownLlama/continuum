@@ -119,6 +119,7 @@ internal fun ContinuumIME.applyPrefs() {
     v.fullScale = prefs.getInt(Prefs.FULL_HEIGHT, Prefs.FULL_HEIGHT_DEFAULT) / 100f
     v.barScale = prefs.getInt(Prefs.BAR_HEIGHT, Prefs.BAR_HEIGHT_DEFAULT) / 100f
     v.bottomSpaceDp = prefs.getInt(Prefs.BOTTOM_SPACE, Prefs.BOTTOM_SPACE_DEFAULT).toFloat()
+    v.soilDp = prefs.getInt(Prefs.SOIL_SPACE, Prefs.SOIL_SPACE_DEFAULT).toFloat()
     v.swipeMinDp = prefs.getInt(Prefs.SWIPE_MIN, Prefs.SWIPE_MIN_DEFAULT).toFloat()
     v.swipeLongDp = prefs.getInt(Prefs.SWIPE_LONG, Prefs.SWIPE_LONG_DEFAULT).toFloat()
     v.swipeSpeed = prefs.getInt(Prefs.SWIPE_SPEED, Prefs.SWIPE_SPEED_DEFAULT) / 100f

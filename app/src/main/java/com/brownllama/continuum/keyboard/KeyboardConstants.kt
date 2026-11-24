@@ -75,8 +75,10 @@ internal const val GERMAN_WAIT_MS = 700L
 internal const val REPEAT_DELAY_MS = 400L
 internal const val REPEAT_MS = 55L
 /** Sliding on the grass: the finger travels this far (dp) for each character the cursor moves. */
-internal const val CURSOR_STRIDE_DP = 10f
-/** The grass's hold menu, left to right: start or stop selecting by sliding, select all, cut, copy, paste. */
+internal const val CURSOR_STRIDE_DP = 4f
+/** The cursor slide only starts in the right part of the grass (this share of the width, from the right edge). */
+internal const val CURSOR_ZONE = 0.4f
+/** The grass's hold menu, left to right: select the word at the cursor, select all, cut, copy, paste. */
 internal const val EDIT_SELECT = 0
 internal const val EDIT_ALL = 1
 internal const val EDIT_CUT = 2
