@@ -195,8 +195,11 @@ class KeyboardView(context: Context, internal val listener: Listener) : View(con
      */
     var bottomSpaceDp = Prefs.BOTTOM_SPACE_DEFAULT.toFloat()
         set(value) { if (field != value) { field = value; requestLayout() } }
-    /** Soil under the grass, in dp, on top of what shows under Android's gesture area (see [systemBottom]); not touchable. */
-    var soilDp = Prefs.SOIL_SPACE_DEFAULT.toFloat()
+    /**
+     * Height of the grass, the touchable top of the space under the keys (settings slider). The strip
+     * under the keys is at least this tall; whatever is below the grass, and under Android's bars, is soil.
+     */
+    var grassDp = Prefs.GRASS_HEIGHT_DEFAULT.toFloat()
         set(value) { if (field != value) { field = value; requestLayout(); invalidate() } }
     /**
      * Height in px of the system bars still showing under the keyboard: the gesture handle or
@@ -600,7 +603,7 @@ class KeyboardView(context: Context, internal val listener: Listener) : View(con
     }
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-        val height = overlayH + gifHeaderH + keyboardHeight + dpu(bottomSpaceDp) + dpu(soilDp) + systemBottom
+        val height = overlayH + gifHeaderH + keyboardHeight + dpu(max(bottomSpaceDp, grassDp)) + systemBottom
         setMeasuredDimension(MeasureSpec.getSize(widthMeasureSpec), height.roundToInt())
     }
 

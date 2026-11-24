@@ -97,10 +97,11 @@ internal fun KeyboardView.down(id: Int, x: Float, y: Float) {
     } ?: return
     pointers[id] = p
     // Below the keys is the grass; a sideways slide from there moves the cursor (not while searching GIFs).
-    p.grass = y >= keyboardHeight && y < keyboardHeight + dpu(bottomSpaceDp) && !gifSearching
+    p.grass = y >= keyboardHeight && y < keyboardHeight + dpu(grassDp) && !gifSearching
     // A tick for a key or the letter row; not for the emoji / GIF / sticker grids, which scroll.
     if (p.area != Area.GRID) keyVibration.tap()
-    if (p.area == Area.LETTERS || p.area == Area.STRIP) glows += Glow(p)
+    // The grass has no glow under the finger (nor key highlights or previews): only the edit menu shows there.
+    if ((p.area == Area.LETTERS || p.area == Area.STRIP) && !p.grass) glows += Glow(p)
     if (p.key?.kind == Kind.BACKSPACE) {
         backspace()
         val r = object : Runnable {

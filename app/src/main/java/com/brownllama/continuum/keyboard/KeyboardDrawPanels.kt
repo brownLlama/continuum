@@ -38,7 +38,7 @@ internal fun KeyboardView.drawClipboard(c: Canvas) {
             drawText(c, message, clipRect.centerX(), clipRect.centerY(), size, t.dim, regular)
             return@withClip
         }
-        val pressed = pointers.values.firstOrNull { it.area == Area.GRID && !it.moved && !it.consumed }
+        val pressed = pointers.values.firstOrNull { it.area == Area.GRID && !it.grass && !it.moved && !it.consumed }
             ?.let { clipAt(it.downX, it.downY) }
         val radius = dpu(10f)
         val inset = dpu(10f)
@@ -73,7 +73,7 @@ internal fun KeyboardView.drawStickers(c: Canvas) {
     val t = theme
     drawText(c, resources.getString(R.string.sticker_title), width / 2f, barH / 2, barH * 0.42f, t.text, medium)
     c.withClip(stickerRect) {
-        val pressed = pointers.values.firstOrNull { it.area == Area.GRID && !it.moved && !it.consumed }
+        val pressed = pointers.values.firstOrNull { it.area == Area.GRID && !it.grass && !it.moved && !it.consumed }
             ?.let { stickerAt(it.downX, it.downY) }
         val radius = dpu(10f)
         val inset = stickerCell * 0.06f
@@ -95,7 +95,7 @@ internal fun KeyboardView.drawStickers(c: Canvas) {
 internal fun KeyboardView.drawEmojiGrid(c: Canvas) = c.withClip(emojiRect) {
     val t = theme
     for (p in pointers.values) {
-        if (p.area != Area.GRID || p.moved || emojiAt(p.downX, p.downY) == null) continue
+        if (p.area != Area.GRID || p.grass || p.moved || emojiAt(p.downX, p.downY) == null) continue
         val row = floor((p.downY - emojiRect.top + emojiScroll) / emojiRowH)
         val col = floor(p.downX / emojiCellW)
         val top = emojiRect.top + row * emojiRowH - emojiScroll
@@ -130,7 +130,7 @@ internal fun KeyboardView.drawGifGrid(c: Canvas) = c.withClip(gifRect) {
         return@withClip
     }
     val radius = dpu(10f)
-    val pressed = pointers.values.firstOrNull { it.area == Area.GRID && !it.moved }?.let { gifAt(it.downX, it.downY) }
+    val pressed = pointers.values.firstOrNull { it.area == Area.GRID && !it.grass && !it.moved }?.let { gifAt(it.downX, it.downY) }
     for ((i, tile) in gifTiles.withIndex()) {
         gifTileRect(i, tmp)
         val anim = tile.image as? Animatable

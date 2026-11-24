@@ -29,9 +29,9 @@ object Prefs {
     /** Space between the keys and the bottom of the screen, in dp. */
     const val BOTTOM_SPACE = "bottom_space_dp"
     const val BOTTOM_SPACE_DEFAULT = 24
-    /** Extra soil under the grass, in dp (below the part you can touch). */
-    const val SOIL_SPACE = "soil_dp"
-    const val SOIL_SPACE_DEFAULT = 0
+    /** Height of the grass you can touch, in dp; the rest of the space under the keys, and what is under Android's bar, is soil. */
+    const val GRASS_HEIGHT = "grass_dp"
+    const val GRASS_HEIGHT_DEFAULT = 24
     /** Hide the system's keyboard-switch / hide-keyboard buttons under the keys (Android 16+). */
     const val HIDE_SYSTEM_BUTTONS = "hide_system_buttons"
     /** Now and then an animal walks across the keys (see keyboard/Animals.kt): whether, and which. */
@@ -84,10 +84,10 @@ object Prefs {
      * don't linger.
      */
     val RESETTABLE = listOf(
-        THEME, LAYOUT, MINI_HEIGHT, FULL_HEIGHT, BAR_HEIGHT, BOTTOM_SPACE, SOIL_SPACE, HIDE_SYSTEM_BUTTONS,
+        THEME, LAYOUT, MINI_HEIGHT, FULL_HEIGHT, BAR_HEIGHT, BOTTOM_SPACE, GRASS_HEIGHT, HIDE_SYSTEM_BUTTONS,
         LANGUAGE, AUTOCORRECT, AUTOCAPS, ANIMALS, ANIMAL_KINDS, ANIMAL_FREQUENCY, HOLD_MS, VIBRATE, VIBRATE_STRENGTH, SWIPE_MIN, SWIPE_LONG, SWIPE_SPEED, SWIPE_STRAIGHTNESS, SHOW_GIFS,
         CLIPBOARD, CLIPBOARD_KEEP, TOUCH_ADAPT,
-        "haptics", "previews", "llama",
+        "haptics", "previews", "llama", "soil_dp",
     )
 
     /** Whether copied text is kept for the clipboard panel; switching it off also deletes what was kept. */
