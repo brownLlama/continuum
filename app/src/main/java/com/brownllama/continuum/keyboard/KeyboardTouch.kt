@@ -96,6 +96,10 @@ internal fun KeyboardView.down(id: Int, x: Float, y: Float) {
         else -> hitKey(keys, x, y)?.let { Pointer(this, id, x, y, Area.KEY, it) }
     } ?: return
     pointers[id] = p
+    // Below the keys is the grass; a sideways slide from there moves the cursor (not while searching GIFs).
+    p.grass = y >= keyboardHeight && !gifSearching
+    // Typing or tapping a key ends selecting by sliding.
+    if (!p.grass) selecting = false
     // A tick for a key or the letter row; not for the emoji / GIF / sticker grids, which scroll.
     if (p.area != Area.GRID) keyVibration.tap()
     if (p.area == Area.LETTERS || p.area == Area.STRIP) glows += Glow(p)
@@ -121,6 +125,13 @@ internal fun KeyboardView.move(p: Pointer, x: Float, y: Float) {
     p.pathLen += hypot(x - p.x, y - p.y)
     p.x = x
     p.y = y
+    if (p.grass && cursorSlide(p, x, y)) return
+    if (p.grass && p.longPressed) {
+        // The hold menu is open: the finger picks an item by sliding up onto it.
+        p.alt = editMenuChoice(p)
+        invalidate()
+        return
+    }
     val k = p.key
     if (p.area == Area.GRID) {
         // The emoji / GIF grid scrolls vertically (the search header's strip sideways); any real
@@ -184,6 +195,32 @@ internal fun KeyboardView.move(p: Pointer, x: Float, y: Float) {
 }
 
 /**
+ * A finger on the grass sliding sideways moves the cursor, one character for each [CURSOR_STRIDE_DP]
+ * it travels. Returns whether this finger is sliding the cursor; a tap on the grass, or a finger
+ * that goes up and down there, is handled as before.
+ */
+internal fun KeyboardView.cursorSlide(p: Pointer, x: Float, y: Float): Boolean {
+    if (!p.cursoring) {
+        val dx = x - p.downX
+        if (p.longPressed || p.zooming || p.scrolling || abs(dx) <= slop || abs(dx) <= abs(y - p.downY)) return false
+        p.cursoring = true
+        p.consumed = true
+        p.moved = true
+        timer.removeCallbacks(p.longPress)
+        p.cursorX = p.downX
+    }
+    val stride = dpu(CURSOR_STRIDE_DP)
+    val steps = ((x - p.cursorX) / stride).toInt()
+    if (steps != 0) {
+        p.cursorX += steps * stride
+        listener.onCursorMove(steps, selecting)
+        keyVibration.tap()
+    }
+    invalidate()
+    return true
+}
+
+/**
  * Still holding a letter after its long press: its German form ("ß" for s) joins the popup after
  * the hint ("#"). The hint stays selected; slide onto the German letter to pick it.
  */
@@ -201,6 +238,8 @@ internal fun KeyboardView.onLongerPress(p: Pointer) {
 /** The hold timer ([holdMs]) fired while the finger is still down and hasn't moved. */
 internal fun KeyboardView.onLongPress(p: Pointer) {
     if (pointers[p.id] !== p || p.moved) return
+    // A hold on the grass opens the edit menu, whatever letter row it is under.
+    if (p.grass) return openEditMenu(p)
     when (p.area) {
         Area.STRIP, Area.LETTERS -> startZoom(p)
         Area.GRID -> if (panel == Panel.CLIPBOARD) {
@@ -254,6 +293,7 @@ internal fun KeyboardView.release(p: Pointer) {
     p.repeat?.let(timer::removeCallbacks)
     when {
         p.consumed || p.key?.kind == Kind.BACKSPACE -> {}
+        p.grass && p.longPressed -> applyEditMenu(p)
         p.scrolling && p.area == Area.GRID -> {
             val max = maxGridScroll.roundToInt()
             if (gifSearching) gridScroller.fling(gridScroll.roundToInt(), 0, (-p.vx).roundToInt(), 0, 0, max, 0, 0)

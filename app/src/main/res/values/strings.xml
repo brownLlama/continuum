@@ -227,6 +227,11 @@
     <string name="sticker_shared">This app doesn\'t take stickers here, so pick where to send it</string>
     <string name="autocorrect_on">Autocorrect on</string>
     <string name="autocorrect_off">Autocorrect off: words are typed and learned as written</string>
+    <string name="edit_select">Select</string>
+    <string name="edit_all">All</string>
+    <string name="edit_cut">Cut</string>
+    <string name="edit_copy">Copy</string>
+    <string name="edit_paste">Paste</string>
     <string name="mode_locked">This field needs the full keyboard</string>
 
     <!-- What screen readers (TalkBack) call the keys that show an icon. -->

@@ -7,11 +7,13 @@ import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputConnection
 import android.widget.Toast
 import androidx.core.content.edit
+import com.brownllama.continuum.keyboard.KeyboardView
 import com.brownllama.continuum.keyboard.KeyboardView.Shift
 import com.brownllama.continuum.prediction.Dictionary
 import com.brownllama.continuum.prediction.Mode
 import com.brownllama.continuum.prediction.Tap
 import com.brownllama.continuum.stats.TypingStats
+import kotlin.math.abs
 
 internal fun ContinuumIME.handleLetterTap(tap: Tap) {
     val upper = shift != Shift.OFF
@@ -389,4 +391,44 @@ internal fun ContinuumIME.handleEmoji(emoji: String) {
     onText(emoji)
     if (learning) emojiHistory.use(emoji)
     view?.frequentEmoji = emojiHistory.top(FREQUENT_EMOJI)
+}
+
+/**
+ * The finger slid along the grass: the cursor moves [steps] characters, as arrow keys would move it
+ * (with shift held when [select], which stretches the selection instead). A word in progress is
+ * finished first, as it stands. Not while the GIF search has the keyboard.
+ */
+internal fun ContinuumIME.handleCursorMove(steps: Int, select: Boolean) {
+    if (queryEditor != null) return
+    val ic = editor() ?: return
+    finishComposing()
+    lastExpansion = null
+    autoSpace = false
+    deletedSlots = null
+    val key = if (steps < 0) KeyEvent.KEYCODE_DPAD_LEFT else KeyEvent.KEYCODE_DPAD_RIGHT
+    val meta = if (select) KeyEvent.META_SHIFT_ON or KeyEvent.META_SHIFT_LEFT_ON else 0
+    val now = SystemClock.uptimeMillis()
+    repeat(abs(steps)) {
+        ic.sendKeyEvent(KeyEvent(now, now, KeyEvent.ACTION_DOWN, key, 0, meta))
+        ic.sendKeyEvent(KeyEvent(now, now, KeyEvent.ACTION_UP, key, 0, meta))
+    }
+}
+
+/** An item of the grass's hold menu: select all, cut, copy or paste, as the field's own menu would. */
+internal fun ContinuumIME.handleEditAction(action: KeyboardView.EditAction) {
+    if (queryEditor != null) return
+    val ic = editor() ?: return
+    finishComposing()
+    lastCommit = null
+    lastExpansion = null
+    autoSpace = false
+    deletedSlots = null
+    ic.performContextMenuAction(
+        when (action) {
+            KeyboardView.EditAction.SELECT_ALL -> android.R.id.selectAll
+            KeyboardView.EditAction.CUT -> android.R.id.cut
+            KeyboardView.EditAction.COPY -> android.R.id.copy
+            KeyboardView.EditAction.PASTE -> android.R.id.paste
+        },
+    )
 }

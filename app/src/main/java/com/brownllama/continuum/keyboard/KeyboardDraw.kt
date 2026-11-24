@@ -91,6 +91,7 @@ internal fun KeyboardView.drawContent(canvas: Canvas) {
         drawText(canvas, languageCode, slotCenter(25), letterRect.bottom - miniRowH * 0.12f, miniRowH * 0.3f, languageLabelColor(), regular)
     }
     drawAnimal(canvas)
+    if (animal.visiting) drawGrassFront(canvas)
     drawPreviews(canvas)
     drawLanguageHint(canvas)
     drawZoom(canvas)

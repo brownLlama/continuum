@@ -89,6 +89,13 @@ class KeyboardView(context: Context, internal val listener: Listener) : View(con
         /** An emoji picked from the emoji panel. */
         fun onEmoji(emoji: String)
         fun onBackspace()
+        /**
+         * A finger slid along the grass: move the cursor by [steps] characters (negative: left), or
+         * stretch the selection by that many when [select].
+         */
+        fun onCursorMove(steps: Int, select: Boolean)
+        /** An item of the grass's hold menu: act on the selection (or the whole text). */
+        fun onEditAction(action: EditAction)
         /** Swipe left. */
         fun onDeleteWord()
         /** Space key or swipe right. */
@@ -139,6 +146,9 @@ class KeyboardView(context: Context, internal val listener: Listener) : View(con
     }
 
     enum class Shift { OFF, ON, LOCK }
+
+    /** What the grass's hold menu asks of the text field. */
+    enum class EditAction { SELECT_ALL, CUT, COPY, PASTE }
 
     /** What fills the keyboard below the bar. SYMBOLS / SYMBOLS2 are the two number pages. */
     enum class Panel {
@@ -248,7 +258,10 @@ class KeyboardView(context: Context, internal val listener: Listener) : View(con
         scheduleAnimal(randomBetween(animalFrequency.openMs))
     }
 
-    fun keyboardHidden() = endAnimal(cancel = true)
+    fun keyboardHidden() {
+        selecting = false
+        endAnimal(cancel = true)
+    }
     /** The editor's action (EditorInfo.IME_ACTION_*), drawn on the enter key; NONE = plain enter arrow. */
     var enterAction = EditorInfo.IME_ACTION_NONE
         set(value) { field = value; invalidate(); accessibility.changed() }
@@ -660,6 +673,10 @@ class KeyboardView(context: Context, internal val listener: Listener) : View(con
 
     /** 2 dp per sprite pixel, in whole screen pixels so it stays crisp. */
     internal val animal = Animal(max(1f, (2f * density).roundToInt().toFloat()))
+    /** The strip under the keyboard, in the same pixels as the animals that walk on it. */
+    internal val grass = Grass(max(1f, (2f * density).roundToInt().toFloat()))
+    /** Sliding on the grass stretches a selection instead of moving the cursor (the menu's Select); the grass shows it. */
+    internal var selecting = false
     internal val animalCheck = Runnable { maybeStartAnimal() }
     internal var lastTouchAt = 0L
 
@@ -778,6 +795,7 @@ class KeyboardView(context: Context, internal val listener: Listener) : View(con
         canvas.translate(0f, overlayH + header)
         fill.color = theme.background
         canvas.drawRect(0f, -header, width.toFloat(), height - overlayH - header, fill)
+        drawGrass(canvas)
         // After a switch (letters / numbers / emoji / GIF) the new content fades in; after a switch
         // between mini and full mode it also rises a little into place, easing out.
         val fade = progress(panelChangedAt, fadeMs)
