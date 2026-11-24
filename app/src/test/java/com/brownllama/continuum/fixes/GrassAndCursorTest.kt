@@ -99,10 +99,11 @@ class GrassAndCursorTest {
 
     private class Recorder(bmp: Bitmap) : Canvas(bmp) {
         val rects = ArrayList<Triple<Int, Float, Float>>() // colour, bottom, width
+        val tops = ArrayList<Pair<Int, Float>>() // colour, top
         val paths = ArrayList<Int>()
         var offset = 0f
         override fun translate(dx: Float, dy: Float) { offset += dy; super.translate(dx, dy) }
-        override fun drawRect(l: Float, t: Float, r: Float, b: Float, paint: Paint) { rects += Triple(paint.color, b + offset, r - l); super.drawRect(l, t, r, b, paint) }
+        override fun drawRect(l: Float, t: Float, r: Float, b: Float, paint: Paint) { rects += Triple(paint.color, b + offset, r - l); tops += paint.color to t + offset; super.drawRect(l, t, r, b, paint) }
         override fun drawPath(path: Path, paint: Paint) { paths += paint.color; super.drawPath(path, paint) }
     }
 
@@ -274,5 +275,34 @@ class GrassAndCursorTest {
         k.slide(-50f, lift = false)
         val words = k.wordsDrawn()
         assertTrue(words.toString(), words.any { it == "world".takeLast(5) } || words.any { it.trim() == "world" })
+    }
+
+    // ---- the navigation bar ---------------------------------------------------------------------
+
+    @Test fun `the soil lies under android's navigation bar, so the grass above it is the part to touch`() {
+        // Without a bar, the soil starts a few pixels under the grass's blades.
+        val plain = Recorder(Bitmap.createBitmap(1000, 100, Bitmap.Config.ARGB_8888))
+        com.brownllama.continuum.keyboard.Grass(2f).draw(plain, Paint(), 1000f, 0f, 100f, true, 0xFFFFFFFF.toInt())
+        assertEquals(16f, plain.tops.first { isBrown(it.first) }.second, 0.5f)
+        // With the bar's last 40 px given, it starts there.
+        val withBar = Recorder(Bitmap.createBitmap(1000, 100, Bitmap.Config.ARGB_8888))
+        com.brownllama.continuum.keyboard.Grass(2f).draw(withBar, Paint(), 1000f, 0f, 100f, true, 0xFFFFFFFF.toInt(), null, 60f)
+        assertEquals(60f, withBar.tops.first { isBrown(it.first) }.second, 0.5f)
+        // In the view: the soil starts where the bar does (the bottom 40 px).
+        val k = keyboard()
+        k.focus()
+        k.view.systemBottom = 40
+        val rec = grassOf(k)
+        val soilTop = rec.tops.first { isBrown(it.first) }.second
+        assertEquals(k.view.height - 40f, soilTop, 2.5f)
+        // A slide on the grass just above the bar still moves the cursor.
+        k.focus(text = "hello world")
+        k.layoutView()
+        k.slide(-60f, y = k.view.height - 40f - 6f)
+        assertEquals(5, k.edit.selectionStart)
+    }
+
+    @Test fun `there is more room for the grass by default`() {
+        assertTrue(Prefs.BOTTOM_SPACE_DEFAULT >= 20)
     }
 }

@@ -89,7 +89,7 @@
     <string name="pref_bar_height">Suggestion bar (%)</string>
     <string name="cat_position">Position</string>
     <string name="pref_bottom_space_dp">Space below keyboard (dp)</string>
-    <string name="pref_bottom_space_dp_summary">Extra space between the keys and Android\'s navigation bar or gesture handle. The keys never overlap it.</string>
+    <string name="pref_bottom_space_dp_summary">Extra space between the keys and Android\'s navigation bar or gesture handle: the strip of grass you can touch to move the cursor (hold it for the edit menu). The keys never overlap the bar.</string>
     <string name="pref_hide_system_buttons">Hide system buttons</string>
     <string name="pref_hide_system_buttons_summary">Removes Android\'s keyboard-switch and hide-keyboard buttons from under the keys (Android 16+) and, where Android allows it, the gesture line, giving the space back. Hold shift, or the space bar in the full keyboard, to switch keyboards.</string>
 
