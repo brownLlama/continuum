@@ -107,15 +107,26 @@ class GrassAndCursorTest {
         val rects = ArrayList<Triple<Int, Float, Float>>() // colour, bottom, width
         val tops = ArrayList<Pair<Int, Float>>() // colour, top
         val paths = ArrayList<Int>()
+        val bounds = ArrayList<android.graphics.RectF>() // of each path, in view coordinates
         var offset = 0f
         override fun translate(dx: Float, dy: Float) { offset += dy; super.translate(dx, dy) }
         override fun drawRect(l: Float, t: Float, r: Float, b: Float, paint: Paint) { rects += Triple(paint.color, b + offset, r - l); tops += paint.color to t + offset; super.drawRect(l, t, r, b, paint) }
-        override fun drawPath(path: Path, paint: Paint) { paths += paint.color; super.drawPath(path, paint) }
+        override fun drawPath(path: Path, paint: Paint) {
+            paths += paint.color
+            bounds += android.graphics.RectF().also { path.computeBounds(it, true); it.offset(0f, offset) }
+            super.drawPath(path, paint)
+        }
     }
 
     private fun isGreen(c: Int) = ((c shr 8) and 0xff) > ((c shr 16) and 0xff) + 10 && ((c shr 8) and 0xff) > (c and 0xff) + 10
 
-    /** The tops of the green rectangles that span the whole width: the grass's dark ground under Android's bar. */
+    /** The top and bottom of all the green blades drawn, in view coordinates (null when there are none). */
+    private fun Recorder.blades(): Pair<Float, Float>? {
+        val green = paths.indices.filter { isGreen(paths[it]) && !bounds[it].isEmpty }
+        return if (green.isEmpty()) null else green.minOf { bounds[it].top } to green.maxOf { bounds[it].bottom }
+    }
+
+    /** The tops of the green rectangles that span the whole width: a flat ground, which there is none of any more. */
     private fun Recorder.groundTops(width: Int) = rects.indices.filter { isGreen(rects[it].first) && rects[it].third >= width.toFloat() }.map { tops[it].second }
 
     /** A keyboard with a navigation bar of [bar] px under the keys, laid out. */
@@ -138,35 +149,36 @@ class GrassAndCursorTest {
                 k.view.showPanel(panel)
                 val rec = grassOf(k)
                 assertTrue("$mode/$panel blades", rec.paths.any { isGreen(it) })
-                // The grass's ground under it reaches down to the bottom of the view (under Android's bar).
-                val ground = rec.rects.indices.filter { isGreen(rec.rects[it].first) && rec.rects[it].third >= k.view.width.toFloat() }
-                assertTrue("$mode/$panel ground", ground.isNotEmpty())
-                assertEquals("$mode/$panel: down to the bottom of the view", k.view.height.toFloat(), ground.maxOf { rec.rects[it].second }, 1f)
+                // The blades stand on the bottom of the view (behind Android's bar), with no flat ground.
+                assertEquals("$mode/$panel: standing on the bottom of the view", k.view.height.toFloat(), rec.blades()!!.second, 1f)
+                assertTrue("$mode/$panel: no flat ground", rec.groundTops(k.view.width).isEmpty())
             }
         }
     }
 
-    @Test fun `nothing at 0, then grass, and as it grows the keys go up and the ground under Android's bar stays the same`() {
-        class Look(val height: Int, val blades: Boolean, val groundDepth: Float?)
+    @Test fun `nothing at 0, then grass, and as it grows the keys go up and the blades get taller from the bottom edge`() {
+        class Look(val height: Int, val blades: Boolean, val top: Float?, val bottom: Float?)
         // (Measured at once: all keyboards of a test share the settings, so a later one would restyle an earlier one.)
         fun look(space: Int, bar: Int = 40): Look {
             val k = Keyboard(mapOf(Prefs.BOTTOM_SPACE to space)).withBar(bar)
             val rec = grassOf(k)
-            return Look(k.view.height, rec.paths.any { isGreen(it) }, rec.groundTops(k.view.width).minOrNull()?.let { k.view.height - it })
+            return Look(k.view.height, rec.paths.any { isGreen(it) }, rec.blades()?.first?.let { k.view.height - it }, rec.blades()?.second)
         }
         val none = look(0)
         assertFalse("0: no blades", none.blades)
-        assertNull("0: no ground either", none.groundDepth)
+        assertNull("0: no blades at all", none.top)
         val small = look(2)
         assertTrue("a little: a little grass", small.blades)
+        assertTrue("a little: no taller than that, not the whole bar", small.top!! <= 2.5f)
         val base = look(24)
         assertTrue(base.blades)
-        assertEquals("the ground under Android's bar is the bar's height", 40f, base.groundDepth!!, 2.5f)
-        // More space: the view is taller by that (the keys go up), and the ground under the bar is the same.
+        // The blades stand on the bottom of the view, whatever the bar's height, and are at most as tall as the space.
+        assertEquals(base.height.toFloat(), base.bottom!!, 1f)
+        assertTrue("at most 24 px tall, not the 40 px bar: ${base.top}", base.top!! <= 24f + 2.5f && base.top > 12f)
+        // More space: the view is taller by that (the keys go up), and the grass is taller.
         val more = look(40)
         assertEquals(base.height + 16, more.height)
-        assertEquals(40f, more.groundDepth!!, 2.5f)
-        assertEquals(40f, look(60).groundDepth!!, 2.5f)
+        assertTrue("taller: ${more.top}", more.top!! in 36f..42.5f)
         // The grass you can touch is all of it: a slide just inside its bottom edge works, under it does not.
         val inside = Keyboard(mapOf(Prefs.BOTTOM_SPACE to 24)).also { it.waitReady(); it.focus(text = "hello world") }
         inside.layoutView()
@@ -307,18 +319,16 @@ class GrassAndCursorTest {
 
     // ---- the navigation bar ---------------------------------------------------------------------
 
-    @Test fun `the ground starts where the grass ends, and carries on under android's navigation bar`() {
-        // Without being told, the ground starts a few pixels under the blades.
-        val plain = Recorder(Bitmap.createBitmap(1000, 100, Bitmap.Config.ARGB_8888))
-        com.brownllama.continuum.keyboard.Grass(2f).draw(plain, Paint(), 1000f, 0f, 100f, true, 0xFFFFFFFF.toInt())
-        assertEquals(16f, plain.groundTops(1000).first(), 0.5f)
-        // Given where the grass ends, the ground starts there.
-        val given = Recorder(Bitmap.createBitmap(1000, 100, Bitmap.Config.ARGB_8888))
-        com.brownllama.continuum.keyboard.Grass(2f).draw(given, Paint(), 1000f, 0f, 100f, true, 0xFFFFFFFF.toInt(), 60f)
-        assertEquals(60f, given.groundTops(1000).first(), 0.5f)
-        // In the view (grass 24, a 40 px bar): the ground is the 40 px of the bar.
+    @Test fun `the blades stand on the bottom edge, behind android's navigation bar`() {
+        // A strip 100 px tall: blades standing on its bottom, the tallest reaching its top, and no flat ground.
+        val strip = Recorder(Bitmap.createBitmap(1000, 100, Bitmap.Config.ARGB_8888))
+        com.brownllama.continuum.keyboard.Grass(2f).draw(strip, Paint(), 1000f, 0f, 100f, true, 0xFFFFFFFF.toInt())
+        assertEquals(100f, strip.blades()!!.second, 0.5f)
+        assertEquals(0f, strip.blades()!!.first, 2.5f)
+        assertTrue(strip.groundTops(1000).isEmpty())
+        // In the view (grass 24, a 40 px bar): the blades are on the bottom of the view, behind the bar.
         val k = keyboard().withBar(40)
-        assertEquals(k.view.height - 40f, grassOf(k).groundTops(k.view.width).first(), 2.5f)
+        assertEquals(k.view.height.toFloat(), grassOf(k).blades()!!.second, 1f)
         // A slide on the grass just above it still moves the cursor.
         k.focus(text = "hello world")
         k.layoutView()
@@ -360,9 +370,9 @@ class GrassAndCursorTest {
         assertEquals(24, k.view.navBottom)
         assertEquals("with grass, it stays clear of the whole gesture zone", 60, k.view.systemBottom)
         k.layoutView()
-        // The grass above is the touchable part, its ground covers the zone.
+        // The blades stand on the bottom of the view, behind the whole zone.
         val rec = grassOf(k)
-        assertEquals(k.view.height - 60f, rec.groundTops(k.view.width).first(), 2.5f)
+        assertEquals(k.view.height.toFloat(), rec.blades()!!.second, 1f)
         // With no space at all only the bar's own height is kept: no more gap than Android needs.
         k.view.bottomSpaceDp = 0f
         assertEquals(24, k.view.systemBottom)
@@ -485,25 +495,24 @@ class GrassAndCursorTest {
         assertFalse("a glow under a finger on the letters", k.view.glows.isEmpty())
     }
 
-    @Test fun `the grass is blades standing on a ground line, not a green slab`() {
+    @Test fun `the grass is blades, not a green slab, and the tallest reach the height of the setting`() {
         val k = Keyboard(mapOf(Prefs.BOTTOM_SPACE to 40)).withBar(40)
         val rec = grassOf(k)
-        // The only wide green rectangle is the ground, which starts at the grass height, 40 dp down from the keys.
-        val wide = rec.groundTops(k.view.width)
-        assertEquals("one ground", 1, wide.size)
-        assertEquals(k.view.overlayH + k.view.keyboardHeight + 40f, wide.first(), 2.5f)
-        // The blades are drawn as shapes of their own.
+        assertTrue("no wide flat rectangle", rec.groundTops(k.view.width).isEmpty())
+        // The blades are drawn as shapes of their own, the tallest 40 dp up from the bottom of the view.
         assertTrue(rec.paths.count { isGreen(it) } >= 2)
+        assertEquals(k.view.height - 40f, rec.blades()!!.first, 2.5f)
     }
 
-    @Test fun `the ground carries on under android's bar all the way to the bottom, and with 0 space there is nothing`() {
-        val k = Keyboard(mapOf(Prefs.BOTTOM_SPACE to 10)).withBar(40)
+    @Test fun `a small value is a thin line of grass, not a block the size of android's bar`() {
+        val k = Keyboard(mapOf(Prefs.BOTTOM_SPACE to 1)).withBar(60)
         val rec = grassOf(k)
-        val down = rec.rects.indices.filter { isGreen(rec.rects[it].first) && rec.rects[it].third >= k.view.width.toFloat() }.maxOf { rec.rects[it].second }
-        assertEquals(k.view.height.toFloat(), down, 1f)
+        val (top, bottom) = rec.blades()!!
+        assertEquals(k.view.height.toFloat(), bottom, 1f)
+        assertTrue("only about 1 dp of blades: ${bottom - top}", bottom - top <= 4f)
+        assertTrue(rec.groundTops(k.view.width).isEmpty())
         val bare = Keyboard(mapOf(Prefs.BOTTOM_SPACE to 0)).withBar(40)
         val plain = grassOf(bare)
-        assertTrue(plain.groundTops(bare.view.width).isEmpty())
-        assertTrue(plain.paths.none { isGreen(it) })
+        assertTrue(plain.blades() == null && plain.groundTops(bare.view.width).isEmpty())
     }
 }
