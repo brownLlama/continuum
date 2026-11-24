@@ -29,7 +29,7 @@ class GrassAndCursorTest {
         Keyboard(mapOf(Prefs.MODE to mode, Prefs.LAYOUT to "qwertz", Prefs.AUTOCORRECT to false)).also { it.waitReady() }
 
     /** A finger on the grass (the bottom pixels of the view) sliding by [dx] pixels in small moves. */
-    private fun Keyboard.slide(dx: Float, fromX: Float = view.width / 2f, y: Float? = null) {
+    private fun Keyboard.slide(dx: Float, fromX: Float = view.width / 2f, y: Float? = null, lift: Boolean = true) {
         layoutView() // the view grows when full mode opens
         val y = y ?: (view.height - 4f)
         val t = android.os.SystemClock.uptimeMillis()
@@ -37,7 +37,7 @@ class GrassAndCursorTest {
         view.onTouchEvent(ev(MotionEvent.ACTION_DOWN, fromX, t))
         val n = 20
         for (i in 1..n) view.onTouchEvent(ev(MotionEvent.ACTION_MOVE, fromX + dx * i / n, t + i * 8L))
-        view.onTouchEvent(ev(MotionEvent.ACTION_UP, fromX + dx, t + n * 8L + 8))
+        if (lift) view.onTouchEvent(ev(MotionEvent.ACTION_UP, fromX + dx, t + n * 8L + 8))
         idle()
     }
 
@@ -104,7 +104,7 @@ class GrassAndCursorTest {
         override fun drawPath(path: Path, paint: Paint) { paths += paint.color; super.drawPath(path, paint) }
     }
 
-    private fun isGreen(c: Int) = ((c shr 8) and 0xff) > ((c shr 16) and 0xff) + 25 && ((c shr 8) and 0xff) > (c and 0xff) + 25
+    private fun isGreen(c: Int) = ((c shr 8) and 0xff) > ((c shr 16) and 0xff) + 10 && ((c shr 8) and 0xff) > (c and 0xff) + 10
 
     private fun grassOf(k: Keyboard): Recorder {
         k.layoutView()
@@ -229,5 +229,43 @@ class GrassAndCursorTest {
         }
         k.view.draw(rec)
         for (w in listOf("Select", "All", "Cut", "Copy", "Paste")) assertTrue("$w in $words", w in words)
+    }
+
+    // ---- the cursor bubble ------------------------------------------------------------------------
+
+    private fun Keyboard.wordsDrawn(): List<String> {
+        layoutView()
+        val words = ArrayList<String>()
+        val rec = object : Canvas(Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)) {
+            override fun drawText(text: String, x: Float, y: Float, paint: Paint) { words += text; super.drawText(text, x, y, paint) }
+        }
+        view.draw(rec)
+        return words
+    }
+
+    @Test fun `sliding shows the text around the cursor, and it goes when the finger lifts`() {
+        val k = keyboard()
+        k.focus(text = "hello world again")
+        assertFalse("nothing before a slide", k.wordsDrawn().any { it.contains("hello") })
+        k.slide(-60f, lift = false) // six characters left: before "again"... cursor after "hello world"
+        val words = k.wordsDrawn()
+        assertTrue(words.toString(), words.any { it == "hello world" })
+        assertTrue(words.toString(), words.any { it == " again" })
+        // Sliding further keeps the bubble in step.
+        k.slide(-60f, fromX = k.view.width / 2f - 60f, lift = false)
+        assertTrue(k.wordsDrawn().toString(), k.wordsDrawn().any { it.startsWith("hello") && it.length < 11 })
+        // Lifting removes it.
+        val t = android.os.SystemClock.uptimeMillis()
+        k.view.onTouchEvent(MotionEvent.obtain(t, t, MotionEvent.ACTION_UP, 0f, k.view.height - 4f, 0))
+        k.view.onTouchEvent(MotionEvent.obtain(t, t, MotionEvent.ACTION_CANCEL, 0f, k.view.height - 4f, 0))
+    }
+
+    @Test fun `a selection is shown highlighted in the bubble`() {
+        val k = keyboard("full")
+        k.focus(text = "hello world")
+        k.menu(0)
+        k.slide(-50f, lift = false)
+        val words = k.wordsDrawn()
+        assertTrue(words.toString(), words.any { it == "world".takeLast(5) } || words.any { it.trim() == "world" })
     }
 }

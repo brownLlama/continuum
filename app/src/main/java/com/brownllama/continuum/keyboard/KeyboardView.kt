@@ -260,6 +260,7 @@ class KeyboardView(context: Context, internal val listener: Listener) : View(con
 
     fun keyboardHidden() {
         selecting = false
+        cursorText = null
         endAnimal(cancel = true)
     }
     /** The editor's action (EditorInfo.IME_ACTION_*), drawn on the enter key; NONE = plain enter arrow. */
@@ -677,6 +678,14 @@ class KeyboardView(context: Context, internal val listener: Listener) : View(con
     internal val grass = Grass(max(1f, (2f * density).roundToInt().toFloat()))
     /** Sliding on the grass stretches a selection instead of moving the cursor (the menu's Select); the grass shows it. */
     internal var selecting = false
+    /** The text around the cursor while a finger slides it along the grass, shown in a bubble above it. */
+    internal var cursorText: CursorText? = null
+
+    /** The service tells where the cursor is after each slide step: the text before it, the selected text and the text after it. */
+    internal fun showCursorText(before: String, selected: String, after: String) {
+        cursorText = CursorText(before, selected, after)
+        invalidate()
+    }
     internal val animalCheck = Runnable { maybeStartAnimal() }
     internal var lastTouchAt = 0L
 
@@ -799,12 +808,16 @@ class KeyboardView(context: Context, internal val listener: Listener) : View(con
         // After a switch (letters / numbers / emoji / GIF) the new content fades in; after a switch
         // between mini and full mode it also rises a little into place, easing out.
         val fade = progress(panelChangedAt, fadeMs)
-        if (fade >= 1f) return drawContent(canvas)
+        if (fade >= 1f) {
+            drawContent(canvas)
+            return drawCursorText(canvas)
+        }
         val eased = 1f - (1f - fade) * (1f - fade)
         val save = canvas.saveLayerAlpha(null, (255 * eased).toInt())
         canvas.translate(0f, (1f - eased) * fadeSlide)
         drawContent(canvas)
         canvas.restoreToCount(save)
+        drawCursorText(canvas)
     }
 
     /** The bar's two edge fades (left, right), built once per position and colour rather than every frame. */

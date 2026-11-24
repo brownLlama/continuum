@@ -412,6 +412,12 @@ internal fun ContinuumIME.handleCursorMove(steps: Int, select: Boolean) {
         ic.sendKeyEvent(KeyEvent(now, now, KeyEvent.ACTION_DOWN, key, 0, meta))
         ic.sendKeyEvent(KeyEvent(now, now, KeyEvent.ACTION_UP, key, 0, meta))
     }
+    // Shows where the cursor is now, in the bubble above the grass.
+    view?.showCursorText(
+        ic.getTextBeforeCursor(CURSOR_CONTEXT, 0)?.toString().orEmpty(),
+        ic.getSelectedText(0)?.toString().orEmpty(),
+        ic.getTextAfterCursor(CURSOR_CONTEXT, 0)?.toString().orEmpty(),
+    )
 }
 
 /** An item of the grass's hold menu: select all, cut, copy or paste, as the field's own menu would. */

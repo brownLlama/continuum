@@ -289,6 +289,10 @@ internal fun KeyboardView.onLongPress(p: Pointer) {
 /** A finger lifted: finish a scroll or zoom, or decide between a swipe gesture and a tap. */
 internal fun KeyboardView.release(p: Pointer) {
     pointers.remove(p.id)
+    if (p.cursoring) {
+        cursorText = null
+        invalidate()
+    }
     timer.removeCallbacks(p.longPress)
     p.repeat?.let(timer::removeCallbacks)
     when {

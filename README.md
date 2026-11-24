@@ -140,11 +140,15 @@ English-only things (*don't* for *dont*, *thankyou* → *thank you*, *16th*, a c
 
 How sensitive swipes are (shortest swipe, flick speed, long swipe, straightness) is adjustable, with an explanation for each slider.
 
+### 🔄 Updating from the app
+
+Settings → **Check for updates** asks GitHub for the newest release. If it is newer than the installed version it shows the size, and **Update** downloads it (with a progress bar and Cancel), checks its SHA-256 against the release's `SHA256SUMS.txt`, and hands it to Android's installer, which asks you to confirm. The first time, Android also asks you to allow Continuum to install apps ("Install unknown apps"). Android installs the update only if it is signed with the same key as the installed app, so a swapped file is refused. It only runs when you tap the row; nothing is checked in the background.
+
 ### 🌱 Grass, cursor and copy / cut / paste
 
-The space under the keys is a strip of pixel-art **grass**, and the visiting animals walk on it (their feet in the blades). It is also a touch strip for editing the text:
+The space under the keys is a strip of pixel-art **grass** (quiet, dim greens under a dark theme), and the visiting animals walk on it (their feet in the blades). It is also a touch strip for editing the text:
 
-- **Slide** a finger sideways on the grass to move the cursor, one character for about every 10 dp. A word you are typing is finished as typed first. A tap on the grass still types the letter above it.
+- **Slide** a finger sideways on the grass to move the cursor, one character for about every 10 dp. A bubble above the grass shows the words around the cursor with the caret in the middle (selected text highlighted), so you see exactly where it is. A word you are typing is finished as typed first. A tap on the grass still types the letter above it.
 - **Hold** on the grass for a small menu above it: **Select · All · Cut · Copy · Paste**. Slide up onto an item and lift to use it; lifting on the grass does nothing. *Select* makes sliding stretch a selection instead of moving the cursor (the grass turns the accent colour while it is on), and it ends on any key tap or after cut, copy or paste. *All*, *Cut*, *Copy* and *Paste* work through the field's own menu actions.
 - The strip is the "space under the keys" setting plus Android's navigation bar, so it needs a few dp of that space; at 0 and no navigation bar there is no grass and no strip.
 - Not while searching GIFs, and the menu is not offered over the emoji, GIF, clipboard and sticker panels.
@@ -178,11 +182,12 @@ The space under the keys is a strip of pixel-art **grass**, and the visiting ani
 <img src="docs/screenshots/settings.png" width="32%" align="right" alt="Settings home page">
 
 - **Appearance:** theme and layout (QWERTZ or QWERTY).
-- **Size & position:** separate heights for the mini keyboard, the full keyboard and the suggestion bar, plus the space under the keys. The keys always sit above Android's navigation bar or gesture handle. On Android 16+ you can hide Android's own keyboard buttons to get that space back.
+- **Size & position:** separate heights for the mini keyboard, the full keyboard and the suggestion bar, plus the space under the keys. The keys always sit above Android's navigation bar or gesture handle. On Android 16+ you can hide Android's own keyboard buttons to get that space back; the same setting also asks Android to hide the gesture line under the keys, which Android may not allow a keyboard to do.
 - **Typing:** autocorrect, auto-capitalisation, press-and-hold time, key vibration (on or off, and its strength), and *Forget learned words*.
 - **Gestures:** swipe sensitivity, each slider explained.
 - **GIFs:** show or hide the emoji panel's GIF tab, and your KLIPY key.
 - **Guide:** everything about using the keyboard, right in the app.
+- **Check for updates:** looks for a newer release on GitHub and installs it, so you don't have to download it by hand (see below).
 - **Reset to defaults:** one tap puts every setting back (learned words and your KLIPY key are kept).
 
 Every slider starts in the middle of its range, so there's as much room to go up as down.
@@ -194,10 +199,10 @@ Every slider starts in the middle of its range, so there's as much room to go up
 A keyboard sees everything you type, so this matters:
 
 - **Nothing you type leaves your phone.** Word prediction, learning and the clipboard all run and stay on the device.
-- **The only network use is GIF search.** When you search, the search words, an anonymous ID and your KLIPY key go to `api.klipy.com` over HTTPS. Nothing else is ever sent.
+- **The only network use is GIF search and the update check.** When you search, the search words, an anonymous ID and your KLIPY key go to `api.klipy.com` over HTTPS. When you tap *Check for updates*, the app asks `api.github.com` for the latest release and downloads the APK from this repository's releases, with nothing about you or your phone (only a generic user agent). It never checks on its own. Nothing else is ever sent.
 - **No cloud backup:** learned words, settings and your KLIPY key are excluded from Android backup and device-to-device transfer.
 - **Password and number fields** are never predicted or learned from, and private (incognito) fields teach it nothing.
-- **Permissions:** Internet, used only for GIFs, and vibration, used only for the tick on key presses (Settings → Typing → Vibrate on keys). No contacts, no storage, no location.
+- **Permissions:** Internet, used only for GIFs and *Check for updates*; "install unknown apps" (`REQUEST_INSTALL_PACKAGES`), used only to hand the downloaded update to Android's installer; and vibration, used only for the tick on key presses (Settings → Typing → Vibrate on keys). No contacts, no storage, no location.
 - **HTTPS only:** plain-HTTP traffic and user-installed certificate authorities are refused.
 
 ## Build it yourself
