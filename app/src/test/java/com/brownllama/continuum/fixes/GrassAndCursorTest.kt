@@ -515,4 +515,21 @@ class GrassAndCursorTest {
         val soilTop = rec.tops.first { isBrown(it.first) }.second
         assertEquals(k.view.overlayH + k.view.keyboardHeight + 40f, soilTop, 2.5f)
     }
+
+    @Test fun `with grass but no soil, the strip under the grass is the grass's ground, not empty`() {
+        val k = Keyboard(mapOf(Prefs.BOTTOM_SPACE to 0, Prefs.GRASS_HEIGHT to 26)).also {
+            it.waitReady(); it.focus(); it.view.navBottom = 40; it.view.gestureBottom = 40; it.view.requestLayout(); it.layoutView()
+        }
+        val rec = grassOf(k)
+        // A green rectangle across the width reaches the bottom of the view (under the grass, where Android's bar is).
+        val down = rec.rects.filter { isGreen(it.first) && it.third >= k.view.width.toFloat() }.maxOf { it.second }
+        assertEquals(k.view.height.toFloat(), down, 1f)
+        assertTrue("and still no soil", rec.tops.none { isBrown(it.first) })
+        // With neither grass nor soil it is left plain.
+        val bare = Keyboard(mapOf(Prefs.BOTTOM_SPACE to 0, Prefs.GRASS_HEIGHT to 0)).also {
+            it.waitReady(); it.focus(); it.view.navBottom = 40; it.view.gestureBottom = 40; it.view.requestLayout(); it.layoutView()
+        }
+        val plain = grassOf(bare)
+        assertTrue(plain.rects.none { isGreen(it.first) && it.third >= bare.view.width.toFloat() })
+    }
 }
