@@ -13,6 +13,7 @@ import com.brownllama.continuum.keyboard.KeyboardView
 import com.brownllama.continuum.keyboard.editMenuRect
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -25,7 +26,7 @@ import java.time.Duration
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [36])
 class GrassAndCursorTest {
-    /** [space]: the space under the keys, in dp (with Android's navigation bar it is taller on a phone). */
+    /** [space]: the soil under the grass, in dp (Android's navigation bar comes on top of that on a phone). */
     private fun keyboard(mode: String = "mini", space: Int = 40) =
         Keyboard(mapOf(Prefs.MODE to mode, Prefs.LAYOUT to "qwertz", Prefs.AUTOCORRECT to false, Prefs.BOTTOM_SPACE to space))
             .also { it.waitReady() }
@@ -148,29 +149,40 @@ class GrassAndCursorTest {
         assertTrue(grassOf(some).paths.any { isGreen(it) })
     }
 
-    @Test fun `the space below the keys and the grass height are one strip, the soil is what the grass leaves`() {
-        fun view(space: Int, grass: Int) = Keyboard(mapOf(Prefs.BOTTOM_SPACE to space, Prefs.GRASS_HEIGHT to grass))
-            .also { it.waitReady(); it.focus(); it.layoutView() }
-        val base = view(24, 24)
-        // More space with the same grass: taller, with more soil; the grass and its touch area stay.
-        val roomy = view(40, 24)
-        assertEquals(base.view.height + 16, roomy.view.height)
-        assertEquals(roomy.view.height - 16f, grassOf(roomy).tops.first { isBrown(it.first) }.second, 2.5f)
-        // Shorter grass in the same space: the same height, more of it soil.
-        val short = view(40, 16)
-        assertEquals(roomy.view.height, short.view.height)
-        assertEquals(short.view.height - 24f, grassOf(short).tops.first { isBrown(it.first) }.second, 2.5f)
-        // Grass taller than the space: the space grows to fit it.
-        val tall = view(24, 40)
-        assertEquals(base.view.height + 16, tall.view.height)
+    @Test fun `the grass grows upward from the soil, and the soil keeps its size`() {
+        // What a keyboard looks like with this much soil and grass: its height, and how far above its bottom the soil starts (null: no soil).
+        // (Measured at once: all keyboards of a test share the settings, so a later one would restyle an earlier one.)
+        class Look(val height: Int, val soilDepth: Float?)
+        fun look(space: Int, grass: Int, bar: Int = 0): Look {
+            val k = Keyboard(mapOf(Prefs.BOTTOM_SPACE to space, Prefs.GRASS_HEIGHT to grass))
+            k.waitReady(); k.focus(); k.view.systemBottom = bar; k.view.requestLayout(); k.layoutView()
+            val soil = grassOf(k).tops.firstOrNull { isBrown(it.first) }?.second
+            return Look(k.view.height, soil?.let { k.view.height - it })
+        }
+        val base = look(8, 24)
+        assertEquals(8f, base.soilDepth!!, 2.5f)
+        // More soil: the view is taller by that, the grass is as it was, the soil under it is bigger.
+        val deep = look(24, 24)
+        assertEquals(base.height + 16, deep.height)
+        assertEquals(24f, deep.soilDepth!!, 2.5f)
+        // Taller grass: the view is taller by that, and the soil is the same 8 dp under it (so the keys
+        // are pushed up and the grass grows up, not down into the soil).
+        val tall = look(8, 40)
+        assertEquals(base.height + 16, tall.height)
+        assertEquals(8f, tall.soilDepth!!, 2.5f)
+        // 0 soil: no soil at all, and nothing under the grass.
+        val none = look(0, 24)
+        assertEquals(base.height - 8, none.height)
+        assertNull("no soil", none.soilDepth)
+        // Android's bar changes that for nothing: with no soil its area is plain, with some the soil carries on there.
+        assertNull("no soil under the bar either", look(0, 24, bar = 40).soilDepth)
+        assertEquals(48f, look(8, 24, bar = 40).soilDepth!!, 2.5f)
         // The grass you can touch is its height: a slide just inside its bottom edge works, just under it does not.
-        val inside = view(40, 24)
-        inside.focus(text = "hello world")
+        val inside = Keyboard(mapOf(Prefs.BOTTOM_SPACE to 40, Prefs.GRASS_HEIGHT to 24)).also { it.waitReady(); it.focus(text = "hello world") }
         inside.layoutView()
         inside.slide(-28f, y = inside.view.overlayH + inside.view.keyboardHeight + 24f - 3f)
         assertEquals(4, inside.edit.selectionStart)
-        val under = view(40, 24)
-        under.focus(text = "hello world")
+        val under = Keyboard(mapOf(Prefs.BOTTOM_SPACE to 40, Prefs.GRASS_HEIGHT to 24)).also { it.waitReady(); it.focus(text = "hello world") }
         under.layoutView()
         under.slide(-28f, y = under.view.overlayH + under.view.keyboardHeight + 24f + 4f)
         assertTrue("soil is not grass, so the cursor did not slide", under.edit.selectionStart > 4)
@@ -305,8 +317,8 @@ class GrassAndCursorTest {
 
     // ---- the navigation bar ---------------------------------------------------------------------
 
-    @Test fun `the soil lies under the grass and under android's navigation bar`() {
-        // Without a bar, the soil starts a few pixels under the grass's blades.
+    @Test fun `the soil lies under the grass, and carries on under android's navigation bar`() {
+        // Without being told, the soil starts a few pixels under the grass's blades.
         val plain = Recorder(Bitmap.createBitmap(1000, 100, Bitmap.Config.ARGB_8888))
         com.brownllama.continuum.keyboard.Grass(2f).draw(plain, Paint(), 1000f, 0f, 100f, true, 0xFFFFFFFF.toInt())
         assertEquals(16f, plain.tops.first { isBrown(it.first) }.second, 0.5f)
@@ -314,25 +326,24 @@ class GrassAndCursorTest {
         val withBar = Recorder(Bitmap.createBitmap(1000, 100, Bitmap.Config.ARGB_8888))
         com.brownllama.continuum.keyboard.Grass(2f).draw(withBar, Paint(), 1000f, 0f, 100f, true, 0xFFFFFFFF.toInt(), 60f)
         assertEquals(60f, withBar.tops.first { isBrown(it.first) }.second, 0.5f)
-        // In the view (space 40, grass 24, a 40 px bar): the soil starts 24 down; the 16 + 40 px under it are soil.
+        // In the view (soil 40, grass 24, a 40 px bar): the soil starts under the grass, 40 + 40 px above the bottom.
         val k = keyboard()
         k.focus()
         k.view.systemBottom = 40
         k.view.requestLayout()
         val rec = grassOf(k)
-        assertEquals(k.view.height - 40f - 16f, rec.tops.first { isBrown(it.first) }.second, 2.5f)
+        assertEquals(k.view.height - 40f - 40f, rec.tops.first { isBrown(it.first) }.second, 2.5f)
         // A slide on the grass just above where the soil starts still moves the cursor.
         k.focus(text = "hello world")
         k.layoutView()
-        k.slide(-24f, y = k.view.height - 40f - 16f - 6f)
+        k.slide(-24f, y = k.view.height - 40f - 40f - 6f)
         assertEquals(5, k.edit.selectionStart)
     }
 
-    @Test fun `there is more room for the grass by default`() {
-        assertTrue(Prefs.BOTTOM_SPACE_DEFAULT >= 20)
+    @Test fun `the defaults are a grass of 24 dp over 8 dp of soil`() {
+        assertEquals(24, Prefs.GRASS_HEIGHT_DEFAULT)
+        assertEquals(8, Prefs.BOTTOM_SPACE_DEFAULT)
     }
-
-    // ---- Android's gesture zones -----------------------------------------------------------------
 
     @Test fun `the back swipe is kept off the keys and the grass`() {
         val k = keyboard()
@@ -364,7 +375,7 @@ class GrassAndCursorTest {
         k.layoutView()
         // The grass above is the touchable part, the soil under it covers the zone.
         val rec = grassOf(k)
-        assertEquals(k.view.height - 60f - 16f, rec.tops.first { isBrown(it.first) }.second, 2.5f)
+        assertEquals(k.view.height - 60f - 40f, rec.tops.first { isBrown(it.first) }.second, 2.5f)
     }
 
     // ---- where the cursor slide starts, and the soil setting ----------------------------------------
