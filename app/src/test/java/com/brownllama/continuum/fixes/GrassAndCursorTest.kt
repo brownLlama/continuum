@@ -501,4 +501,18 @@ class GrassAndCursorTest {
         k.view.onTouchEvent(MotionEvent.obtain(t + 200, t + 200, MotionEvent.ACTION_DOWN, k.view.width * 0.5f, k.view.overlayH + k.view.keyboardHeight - 20f, 0))
         assertFalse("a glow under a finger on the letters", k.view.glows.isEmpty())
     }
+
+    @Test fun `the grass is blades standing on the soil, not a green slab`() {
+        val k = Keyboard(mapOf(Prefs.BOTTOM_SPACE to 24, Prefs.GRASS_HEIGHT to 40)).also { it.waitReady(); it.focus(); it.layoutView() }
+        val rec = grassOf(k)
+        // The only wide green rectangle is a thin line of turf where the grass meets the soil.
+        val wide = rec.rects.indices.filter { isGreen(rec.rects[it].first) && rec.rects[it].third >= k.view.width.toFloat() }
+        assertTrue("a line of turf", wide.isNotEmpty())
+        for (i in wide) assertTrue("turf is one pixel thick, not a slab", rec.rects[i].second - rec.tops[i].second <= 3f)
+        // The blades are drawn as shapes of their own.
+        assertTrue(rec.paths.count { isGreen(it) } >= 2)
+        // The soil is below the turf: the soil's top is at the grass height, 40 dp down from the keys.
+        val soilTop = rec.tops.first { isBrown(it.first) }.second
+        assertEquals(k.view.overlayH + k.view.keyboardHeight + 40f, soilTop, 2.5f)
+    }
 }

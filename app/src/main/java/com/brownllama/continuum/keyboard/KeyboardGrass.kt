@@ -13,21 +13,19 @@ import kotlin.math.max
 import kotlin.math.min
 
 /**
- * Pixel-art grass, drawn in the same chunky pixels as the animals ([unit] px each): tufts of
- * pointed blades of every height with a lighter tip, stubble between them, a few tiny flowers, and
- * a body of earth-green with lighter blades and darker specks scattered through it, and brown soil
- * underneath with a ragged edge where the roots reach into it, lighter clods, darker specks and the
- * odd pebble. Where things
- * fall comes from a hash of the column, so the strip has no repeating pattern, and is the same
- * every time it is drawn. The shapes are paths built once for a width, so drawing it is a few
- * fills. [drawFront] draws the tallest blades again, after an animal, so its feet stand in the grass.
+ * Pixel-art grass, drawn in the same chunky pixels as the animals ([unit] px each): brown soil, with
+ * lighter clods, darker specks and the odd pebble, and blades of grass standing up out of it. The
+ * blades are tufts of one to three pointed blades of every height up to the grass height, with a
+ * lighter tip, stubble between them, a few tiny flowers, and a thin line of turf where they meet the
+ * soil. Where things fall comes from a hash of the column, so the strip has no repeating pattern, and
+ * is the same every time it is drawn. The shapes are paths built once for a size, so drawing it is a
+ * few fills. [drawFront] draws the taller blades again, after an animal, so its feet stand in the grass.
  */
 internal class Grass(private val unit: Float) {
     private val blades = Path()
+    private val bases = Path()
     private val tips = Path()
     private val flowers = Path()
-    private val inner = Path()
-    private val specks = Path()
     private val tall = Path()
     private val tallTips = Path()
     private val roots = Path()
@@ -36,47 +34,44 @@ internal class Grass(private val unit: Float) {
     private val pebbles = Path()
     private var builtWidth = -1f
     private var builtRows = -1
-    private var builtSoil = -1
+    private var builtGround = -1
 
-    /** Where an animal's feet go, measured down from the top of the grass. */
-    fun feetOffset(strip: Float) = min(FEET_ROWS * unit, strip)
-
-    /** Draws the grass in a strip [top]..[bottom] (keyboard coordinates), [light] for a light keyboard. */
+    /**
+     * Draws the strip [top]..[bottom] (keyboard coordinates), [light] for a light keyboard: the soil
+     * from [soilFrom] (measured from [top], where the blades are rooted: the grass height) down, if
+     * [soil], and the blades standing up from that line to [top] at the most.
+     */
     fun draw(
         c: Canvas, paint: Paint, width: Float, top: Float, bottom: Float, light: Boolean, background: Int,
         soilFrom: Float? = null, soil: Boolean = true,
     ) {
         val strip = bottom - top
         if (strip < 1f || width < 1f) return
-        // The soil starts at [soilFrom] (measured from [top]) when given: under Android's navigation
-        // bar, which a finger can't reach, so the grass itself is the part that can be touched.
-        val soilRow = if (soilFrom != null) max(0, (soilFrom / unit).toInt()) else SOIL_ROW
-        build(width, ceil(strip / unit).toInt(), soilRow)
+        val ground = if (soilFrom != null) max(0, (soilFrom / unit).toInt()) else SOIL_ROW
+        build(width, ceil(strip / unit).toInt(), ground)
         val p = palette(light, background)
         c.withTranslation(0f, top) {
             clipRect(0f, 0f, width, strip)
-            // Soil first, then the green body over its top, with the roots reaching down into it.
-            if (soil && strip > soilRow * unit) {
+            if (soil && strip > ground * unit) {
                 paint.color = p.soil
-                drawRect(0f, soilRow * unit, width, strip, paint)
+                drawRect(0f, ground * unit, width, strip, paint)
                 paint.color = p.clod
                 drawPath(clods, paint)
                 paint.color = p.dirt
                 drawPath(dirt, paint)
                 paint.color = p.pebble
                 drawPath(pebbles, paint)
+                // A thin line of turf where the grass meets the soil, with roots reaching a little way in.
+                paint.color = p.turf
+                drawRect(0f, ground * unit, width, min(strip, (ground + 1) * unit), paint)
+                drawPath(roots, paint)
             }
-            // No grass at all when the height is 0: only soil.
-            if (soilRow == 0) return@withTranslation
-            paint.color = p.body
-            if (soilRow > TOP_ROWS) drawRect(0f, TOP_ROWS * unit, width, min(strip, soilRow * unit), paint)
-            drawPath(roots, paint)
-            paint.color = p.inner
-            drawPath(inner, paint)
-            paint.color = p.speck
-            drawPath(specks, paint)
+            // No blades at all when the grass height is 0.
+            if (ground == 0) return@withTranslation
             paint.color = p.blade
             drawPath(blades, paint)
+            paint.color = p.base
+            drawPath(bases, paint)
             paint.color = p.tip
             drawPath(tips, paint)
             paint.color = p.flower
@@ -84,7 +79,7 @@ internal class Grass(private val unit: Float) {
         }
     }
 
-    /** The tallest blades again, over whatever stands in the grass. */
+    /** The taller blades again, over whatever stands in the grass. */
     fun drawFront(c: Canvas, paint: Paint, width: Float, top: Float, bottom: Float, light: Boolean, background: Int) {
         if (bottom - top < 1f || width < 1f || builtWidth != width) return
         val p = palette(light, background)
@@ -96,12 +91,12 @@ internal class Grass(private val unit: Float) {
         }
     }
 
-    private fun build(width: Float, rows: Int, soilRow: Int) {
-        if (width == builtWidth && rows == builtRows && soilRow == builtSoil) return
+    private fun build(width: Float, rows: Int, ground: Int) {
+        if (width == builtWidth && rows == builtRows && ground == builtGround) return
         builtWidth = width
         builtRows = rows
-        builtSoil = soilRow
-        for (p in listOf(blades, tips, flowers, inner, specks, tall, tallTips, roots, clods, dirt, pebbles)) p.reset()
+        builtGround = ground
+        for (p in listOf(blades, bases, tips, flowers, tall, tallTips, roots, clods, dirt, pebbles)) p.reset()
         val columns = ceil(width / unit).toInt()
 
         fun cell(path: Path, col: Int, row: Int, w: Int = 1, h: Int = 1) {
@@ -109,53 +104,48 @@ internal class Grass(private val unit: Float) {
             path.addRect(left, row * unit, min(width, left + w * unit), (row + h) * unit, Path.Direction.CW)
         }
 
-        // The top: tufts of one to three blades, the middle one tallest, with stubble between.
-        var i = 0
-        while (i < columns) {
-            if (hash(i, 1) % 5 == 0) {
-                val w = 1 + hash(i, 2) % 3
-                for (k in 0 until w) {
-                    val h = 1 + hash(i + k, 3) % 2
-                    cell(blades, i + k, TOP_ROWS - h, 1, h)
+        if (ground > 0) {
+            // Blades stand on the ground line (row [ground]) and grow up, at most [ground] pixels tall:
+            // tufts of one to three, the middle one tallest, with stubble between.
+            val lowest = min(ground, max(2, ground * 2 / 5))
+            fun blade(col: Int, h: Int, peak: Boolean) {
+                cell(blades, col, ground - h, 1, h)
+                cell(bases, col, ground - 1)
+                if (h >= 3) cell(tips, col, ground - h)
+                if (h >= TALL) {
+                    cell(tall, col, ground - h, 1, h)
+                    cell(tallTips, col, ground - h)
                 }
-                i += w
-            } else {
-                val peak = 3 + hash(i, 4) % 3
-                val w = 1 + hash(i, 5) % 3
-                for (k in 0 until w) {
-                    val h = if (k == (w - 1) / 2) peak else max(1, peak - 1 - hash(i + k, 6) % 2)
-                    val row = TOP_ROWS - h
-                    cell(blades, i + k, row, 1, h)
-                    if (h >= 3) cell(tips, i + k, row)
-                    if (h >= TALL) {
-                        cell(tall, i + k, row, 1, h)
-                        cell(tallTips, i + k, row)
+                // The odd flower on top of a tall blade.
+                if (peak && h >= TALL && hash(col, 7) % 14 == 0) cell(flowers, col, ground - h)
+            }
+            var i = 0
+            while (i < columns) {
+                if (hash(i, 1) % 5 == 0) {
+                    val w = 1 + hash(i, 2) % 3
+                    for (k in 0 until w) blade(i + k, 1 + hash(i + k, 3) % max(1, min(2, ground)), false)
+                    i += w
+                } else {
+                    val peak = lowest + hash(i, 4) % (ground - lowest + 1)
+                    val w = 1 + hash(i, 5) % 3
+                    for (k in 0 until w) {
+                        val mid = k == (w - 1) / 2
+                        blade(i + k, if (mid) peak else max(1, peak - 1 - hash(i + k, 6) % (1 + peak / 4)), mid)
                     }
-                    // The odd flower on a tall blade.
-                    if (h == peak && peak >= TALL && hash(i + k, 7) % 14 == 0) cell(flowers, i + k, row)
+                    i += w
                 }
-                i += w
             }
         }
-
-        // The body: lighter blades (one pixel wide, two tall) and darker specks, scattered.
-        for (row in TOP_ROWS until min(rows, soilRow)) {
-            for (col in 0 until columns) {
-                val h = hash(col, 100 + row)
-                if (h % 22 == 0) cell(inner, col, row, 1, min(2, rows - row))
-                else if (h % 22 == 7) cell(specks, col, row, 1 + h / 22 % 2)
-            }
-        }
-        // The roots: here and there the green reaches one or two pixels further down into the soil.
+        // The roots: here and there the turf reaches one or two pixels further down into the soil.
         var col = 0
         while (col < columns) {
             val w = 1 + hash(col, 8) % 3
             val depth = hash(col, 9) % 3 // 0, 1 or 2 extra rows
-            if (depth > 0 && soilRow >= TOP_ROWS) for (k in 0 until w) cell(roots, col + k, soilRow, 1, depth - (if (k == w - 1 && w > 1) 1 else 0))
+            if (depth > 0) for (k in 0 until w) cell(roots, col + k, ground + 1, 1, depth - (if (k == w - 1 && w > 1) 1 else 0))
             col += w + hash(col, 10) % 3
         }
         // The soil: lighter clods and darker specks, and the odd pebble (two pixels wide, one tall).
-        for (row in soilRow until min(rows, soilRow + MAX_TEXTURE_ROWS)) {
+        for (row in ground + 1 until min(rows, ground + 1 + MAX_TEXTURE_ROWS)) {
             for (c in 0 until columns) {
                 val h = hash(c, 300 + row)
                 when {
@@ -168,35 +158,31 @@ internal class Grass(private val unit: Float) {
     }
 
     private class Palette(
-        val blade: Int, val tip: Int, val body: Int, val inner: Int, val speck: Int, val flower: Int,
+        val blade: Int, val tip: Int, val base: Int, val turf: Int, val flower: Int,
         val soil: Int, val clod: Int, val dirt: Int, val pebble: Int,
     )
 
     private fun palette(light: Boolean, background: Int): Palette =
         if (light) {
             Palette(
-                0xFF84B86C.toInt(), 0xFFA5CF8B.toInt(), 0xFF6CA356.toInt(), 0xFF7CB264.toInt(), 0xFF588F46.toInt(), 0xFFF2EFE4.toInt(),
+                0xFF7DB566.toInt(), 0xFFA5CF8B.toInt(), 0xFF5F9A4C.toInt(), 0xFF5F9A4C.toInt(), 0xFFF2EFE4.toInt(),
                 0xFF8A6A4C.toInt(), 0xFF9C7B59.toInt(), 0xFF6F5339.toInt(), 0xFFB9AA94.toInt(),
             )
         } else {
             // Quiet and dim under a dark keyboard: deep greens, pulled towards the keyboard's own colour.
             fun calm(color: Int) = ColorUtils.blendARGB(color, background, 0.4f)
             Palette(
-                calm(0xFF3F6A3A.toInt()), calm(0xFF4F7C47.toInt()), calm(0xFF2F5230.toInt()), calm(0xFF386037.toInt()),
-                calm(0xFF264325.toInt()), calm(0xFF8E9A86.toInt()),
+                calm(0xFF3F6A3A.toInt()), calm(0xFF4F7C47.toInt()), calm(0xFF2F5230.toInt()), calm(0xFF2F5230.toInt()),
+                calm(0xFF8E9A86.toInt()),
                 calm(0xFF4D3A2B.toInt()), calm(0xFF5A4533.toInt()), calm(0xFF3E2E22.toInt()), calm(0xFF7D7466.toInt()),
             )
         }
 
     private companion object {
-        /** The strip's top rows are blades (up to 5 pixels tall); the green body starts below. */
-        const val TOP_ROWS = 5
-        /** The soil starts this many pixels down, with the green's roots reaching a little further. */
-        const val SOIL_ROW = TOP_ROWS + 3
+        /** Where the soil starts, in pixels from the top, when not told. */
+        const val SOIL_ROW = 8
         /** Blades this tall or taller stand in front of an animal's feet. */
-        const val TALL = 4
-        /** Feet stand this many pixels into the grass. */
-        const val FEET_ROWS = 3
+        const val TALL = 3
         /** The soil is textured this many rows down; below that it is plain. */
         const val MAX_TEXTURE_ROWS = 40
 
