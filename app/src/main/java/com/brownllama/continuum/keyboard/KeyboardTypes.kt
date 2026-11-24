@@ -54,11 +54,6 @@ internal class Pointer(private val view: KeyboardView, val id: Int, val downX: F
     val downAt = SystemClock.uptimeMillis()
     var longPressAt = 0L
     var pathLen = 0f
-    /** Landed on the grass under the keyboard: sliding sideways from there moves the cursor ([cursorSlide]). */
-    var grass = false
-    /** Sliding the cursor; [cursorX] is where the last step was taken. */
-    var cursoring = false
-    var cursorX = downX
     /** Travelled further than [slop]: no longer a tap or a long press. */
     var moved = false
     /** Held long enough to show the key's long-press character(s). */

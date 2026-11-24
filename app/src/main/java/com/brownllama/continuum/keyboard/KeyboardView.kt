@@ -33,7 +33,6 @@ import com.brownllama.continuum.prediction.Mode
 import com.brownllama.continuum.prediction.Tap
 import com.brownllama.continuum.theme.KeyboardTheme
 import kotlin.math.max
-import kotlin.math.min
 import kotlin.math.roundToInt
 
 /**
@@ -90,13 +89,6 @@ class KeyboardView(context: Context, internal val listener: Listener) : View(con
         /** An emoji picked from the emoji panel. */
         fun onEmoji(emoji: String)
         fun onBackspace()
-        /**
-         * A finger slid along the grass: move the cursor by [steps] characters (negative: left), never
-         * past the ends of the text. With text selected, it stretches the selection instead.
-         */
-        fun onCursorMove(steps: Int)
-        /** An item of the grass's hold menu: act on the selection (or the whole text). */
-        fun onEditAction(action: EditAction)
         /** Swipe left. */
         fun onDeleteWord()
         /** Space key or swipe right. */
@@ -148,9 +140,6 @@ class KeyboardView(context: Context, internal val listener: Listener) : View(con
 
     enum class Shift { OFF, ON, LOCK }
 
-    /** What the grass's hold menu asks of the text field. */
-    enum class EditAction { SELECT_WORD, SELECT_ALL, CUT, COPY, PASTE }
-
     /** What fills the keyboard below the bar. SYMBOLS / SYMBOLS2 are the two number pages. */
     enum class Panel {
         LETTERS, SYMBOLS, SYMBOLS2, EMOJI, GIF, CLIPBOARD, STICKERS;
@@ -191,24 +180,17 @@ class KeyboardView(context: Context, internal val listener: Listener) : View(con
     var barScale = 1f
         set(value) { if (field != value) { field = value; requestLayout(); relayout() } }
     /**
-     * The grass under the keys, in dp (settings slider "Space below keyboard"); 0 is nothing at all. It is
-     * the touchable layer. The grass's own dark ground carries on under Android's navigation bar (see
-     * [systemBottom]), which is added separately because from Android 15 the IME window is edge-to-edge.
+     * Space between the keys and whatever system bar is under them (settings slider). From Android 15
+     * the IME window is edge-to-edge, so the bars' own height is added separately ([systemBottom]).
      */
     var bottomSpaceDp = Prefs.BOTTOM_SPACE_DEFAULT.toFloat()
-        set(value) { if (field != value) { field = value; requestLayout(); invalidate() } }
+        set(value) { if (field != value) { field = value; requestLayout() } }
     /**
-     * Height in px kept clear under the keyboard: the system bars still showing (the gesture handle or
-     * navigation buttons, and Android 16's keyboard buttons unless "Hide system buttons" hid them). With
-     * grass under the keys it is the taller gesture zone Android reads its swipes in, so the grass
-     * is clear of it; with none, only the bars' own height, so nothing more than Android needs is
-     * kept. The keys sit above it, so nothing overlaps them.
+     * Height in px of the system bars still showing under the keyboard: the gesture handle or
+     * navigation buttons, and Android 16's keyboard buttons unless "Hide system buttons" hid them.
+     * The keys sit above it, so nothing overlaps them.
      */
-    internal val systemBottom get() = if (bottomSpaceDp > 0f) max(navBottom, gestureBottom) else navBottom
-    /** The navigation bar's (and Android 16's keyboard buttons') height, in px. */
-    internal var navBottom = 0
-    /** That, or the taller strip at the bottom where Android reads its home and app-switch swipes, in px. */
-    internal var gestureBottom = 0
+    private var systemBottom = 0
     var layout = KeyLayout.QWERTZ
         set(value) { if (field != value) { field = value; relayout() } }
     /** Whether the emoji panel has the GIF tab (setting "Show GIFs"). */
@@ -266,9 +248,7 @@ class KeyboardView(context: Context, internal val listener: Listener) : View(con
         scheduleAnimal(randomBetween(animalFrequency.openMs))
     }
 
-    fun keyboardHidden() {
-        endAnimal(cancel = true)
-    }
+    fun keyboardHidden() = endAnimal(cancel = true)
     /** The editor's action (EditorInfo.IME_ACTION_*), drawn on the enter key; NONE = plain enter arrow. */
     var enterAction = EditorInfo.IME_ACTION_NONE
         set(value) { field = value; invalidate(); accessibility.changed() }
@@ -588,18 +568,13 @@ class KeyboardView(context: Context, internal val listener: Listener) : View(con
     }
 
     override fun onApplyWindowInsets(insets: WindowInsets): WindowInsets {
-        var nav = 0
-        var gesture = 0
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            nav = insets.getInsets(WindowInsets.Type.navigationBars() or WindowInsets.Type.captionBar()).bottom
-            // The strip at the bottom where Android reads its home and app-switch swipes can be taller than the bar itself.
-            gesture = insets.getInsets(
-                WindowInsets.Type.navigationBars() or WindowInsets.Type.captionBar() or WindowInsets.Type.mandatorySystemGestures(),
-            ).bottom
+        val bottom = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            insets.getInsets(WindowInsets.Type.navigationBars() or WindowInsets.Type.captionBar()).bottom
+        } else {
+            0
         }
-        if (nav != navBottom || gesture != gestureBottom) {
-            navBottom = nav
-            gestureBottom = gesture
+        if (bottom != systemBottom) {
+            systemBottom = bottom
             requestLayout()
         }
         return super.onApplyWindowInsets(insets)
@@ -611,11 +586,6 @@ class KeyboardView(context: Context, internal val listener: Listener) : View(con
     }
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) = relayout()
-
-    override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
-        super.onLayout(changed, left, top, right, bottom)
-        updateGestureExclusion()
-    }
 
     // Mini mode slots: slot i holds the i-th letter of KeyLayout.miniOrder and the i-th strip symbol.
     internal val slotW get() = letterRect.width() / 26f
@@ -690,8 +660,6 @@ class KeyboardView(context: Context, internal val listener: Listener) : View(con
 
     /** 2 dp per sprite pixel, in whole screen pixels so it stays crisp. */
     internal val animal = Animal(max(1f, (2f * density).roundToInt().toFloat()))
-    /** The strip under the keyboard, in the same pixels as the animals that walk on it. */
-    internal val grass = Grass(max(1f, (2f * density).roundToInt().toFloat()))
     internal val animalCheck = Runnable { maybeStartAnimal() }
     internal var lastTouchAt = 0L
 
@@ -810,7 +778,6 @@ class KeyboardView(context: Context, internal val listener: Listener) : View(con
         canvas.translate(0f, overlayH + header)
         fill.color = theme.background
         canvas.drawRect(0f, -header, width.toFloat(), height - overlayH - header, fill)
-        drawGrass(canvas)
         // After a switch (letters / numbers / emoji / GIF) the new content fades in; after a switch
         // between mini and full mode it also rises a little into place, easing out.
         val fade = progress(panelChangedAt, fadeMs)

@@ -66,61 +66,10 @@ class Keyboard(prefs: Map<String, Any> = emptyMap()) {
     fun focus(info: EditorInfo = info(), text: String = "") {
         edit.setText(text)
         edit.setSelection(text.length)
-        info.initialSelStart = text.length
-        info.initialSelEnd = text.length
-        ime.ic = Arrows(edit.onCreateInputConnection(EditorInfo()))
+        ime.ic = edit.onCreateInputConnection(EditorInfo())
         ime.onStartInput(info, false)
         ime.onStartInputView(info, false)
         idle()
-    }
-
-    /**
-     * The field's connection, with the arrow keys doing what an app attached to a window does with them
-     * (a bare connection ignores them): the cursor moves one character, and the keyboard is told.
-     */
-    /** Whether the field answers when asked where its selection is (some apps don't). */
-    var reportsExtractedText = true
-
-    /** How many arrow-key presses the keyboard has sent (to check it never presses one past the text). */
-    var arrowPresses = 0
-
-    private inner class Arrows(base: InputConnection) : android.view.inputmethod.InputConnectionWrapper(base, true) {
-        private var anchor = 0
-
-        override fun getExtractedText(request: android.view.inputmethod.ExtractedTextRequest?, flags: Int): android.view.inputmethod.ExtractedText? =
-            if (reportsExtractedText) super.getExtractedText(request, flags) else null
-
-        /** The field tells the keyboard about a selection set from outside, as an app does. */
-        override fun setSelection(start: Int, end: Int): Boolean {
-            val old = edit.selectionStart
-            val oldEnd = edit.selectionEnd
-            val ok = super.setSelection(start, end)
-            ime.onUpdateSelection(old, oldEnd, edit.selectionStart, edit.selectionEnd, -1, -1)
-            return ok
-        }
-        override fun sendKeyEvent(event: android.view.KeyEvent): Boolean {
-            val dir = when (event.keyCode) {
-                android.view.KeyEvent.KEYCODE_DPAD_LEFT -> -1
-                android.view.KeyEvent.KEYCODE_DPAD_RIGHT -> 1
-                else -> return super.sendKeyEvent(event)
-            }
-            if (event.action == android.view.KeyEvent.ACTION_DOWN) {
-                arrowPresses++
-                val old = edit.selectionStart
-                val oldEnd = edit.selectionEnd
-                if (event.isShiftPressed) {
-                    // Stretches the selection: the end that is not at the anchor moves.
-                    if (old == oldEnd) anchor = old
-                    val moving = if (anchor == old) oldEnd else old
-                    edit.setSelection(anchor, (moving + dir).coerceIn(0, edit.text.length))
-                } else {
-                    val pos = (old + dir).coerceIn(0, edit.text.length)
-                    edit.setSelection(pos)
-                }
-                ime.onUpdateSelection(old, oldEnd, edit.selectionStart, edit.selectionEnd, -1, -1)
-            }
-            return true
-        }
     }
 
     /** The field loses focus (keyboard hidden first). */

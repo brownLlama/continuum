@@ -88,11 +88,6 @@ internal fun KeyboardView.drawMiniLetters(c: Canvas) {
 internal fun KeyboardView.drawPreviews(c: Canvas) {
     val t = theme
     for (p in pointers.values) {
-        if (p.grass && p.longPressed) {
-            drawEditMenu(c, p)
-            continue
-        }
-        if (p.grass) continue
         val k = p.key ?: continue
         if (k.kind == Kind.SHIFT && p.longPressed && !p.consumed) {
             drawShiftMenu(c, k, p)
