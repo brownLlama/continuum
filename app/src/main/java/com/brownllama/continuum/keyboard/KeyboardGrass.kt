@@ -3,7 +3,9 @@ package com.brownllama.continuum.keyboard
 
 import android.graphics.Canvas
 import android.graphics.Paint
+import android.graphics.Rect
 import android.graphics.Path
+import android.os.Build
 import androidx.core.graphics.ColorUtils
 import androidx.core.graphics.withTranslation
 import kotlin.math.ceil
@@ -223,3 +225,17 @@ internal fun KeyboardView.drawGrass(c: Canvas) {
 /** The tallest blades over an animal's feet. */
 internal fun KeyboardView.drawGrassFront(c: Canvas) =
     grass.drawFront(c, fill, width.toFloat(), keyboardHeight, grassBottom(), theme.isLight, theme.background, if (selecting) theme.accent else null)
+
+/**
+ * Android's "back" swipe starts at the left and right edges of the screen, where this keyboard's
+ * own swipes (delete a word, space, the cursor on the grass) often begin too. Asks Android to leave
+ * the keys and the grass alone. It honours at most 200 dp of height, so the lowest 200 dp is what is
+ * asked for. Android's bottom swipes (home, switch app) can't be excluded: the keyboard keeps clear of
+ * them instead (see [KeyboardView.systemBottom]).
+ */
+internal fun KeyboardView.updateGestureExclusion() {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q || width == 0) return
+    val bottom = (height - systemBottom).coerceAtLeast(0)
+    val top = max(overlayH + gifHeaderH, bottom - dpu(200f)).toInt()
+    systemGestureExclusionRects = if (bottom > top) listOf(Rect(0, top, width, bottom)) else emptyList()
+}

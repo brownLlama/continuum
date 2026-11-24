@@ -16,13 +16,9 @@ import com.brownllama.continuum.theme.KeyboardTheme
  * is then a long press on the space bar.
  */
 internal fun ContinuumIME.showSystemButtons(show: Boolean) {
-    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.BAKLAVA) return
     val c = window?.window?.insetsController ?: return
-    // The keyboard-switch and hide buttons (Android 16+), and, where Android lets a keyboard ask,
-    // the gesture line under the keys. Android decides whether it obeys; nothing breaks if it doesn't.
-    val types = WindowInsets.Type.navigationBars() or
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.BAKLAVA) WindowInsets.Type.captionBar() else 0
-    if (show) c.show(types) else c.hide(types)
+    if (show) c.show(WindowInsets.Type.captionBar()) else c.hide(WindowInsets.Type.captionBar())
 }
 
 /** Matches the navigation bar area under the keyboard (and its button colours) to the theme. */

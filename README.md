@@ -142,7 +142,7 @@ How sensitive swipes are (shortest swipe, flick speed, long swipe, straightness)
 
 ### 🔄 Updating from the app
 
-Settings → **Check for updates** asks GitHub for the newest release. If it is newer than the installed version it shows the size, and **Update** downloads it (with a progress bar and Cancel), checks its SHA-256 against the release's `SHA256SUMS.txt`, and hands it to Android's installer, which asks you to confirm. The first time, Android also asks you to allow Continuum to install apps ("Install unknown apps"). Android installs the update only if it is signed with the same key as the installed app, so a swapped file is refused. It only runs when you tap the row; nothing is checked in the background.
+Settings → **Check for updates** asks GitHub for the newest release. If it is newer than the installed version it shows the size, and **Update** downloads it (with a progress bar and Cancel), checks its SHA-256 against the release's `SHA256SUMS.txt`, and opens Android's installer on it, which asks you to confirm. The first time, Continuum explains that Android needs "Allow from this source" (Install unknown apps) switched on for it, and opens that Android page; switch it on, come back and tap **Update** again. Android installs the update only if it is signed with the same key as the installed app, so a swapped file is refused. It only runs when you tap the row; nothing is checked in the background.
 
 ### 🌱 Grass, cursor and copy / cut / paste
 
@@ -182,7 +182,7 @@ The space under the keys is a strip of pixel-art **grass** (quiet, dim greens un
 <img src="docs/screenshots/settings.png" width="32%" align="right" alt="Settings home page">
 
 - **Appearance:** theme and layout (QWERTZ or QWERTY).
-- **Size & position:** separate heights for the mini keyboard, the full keyboard and the suggestion bar, plus the space under the keys. The keys always sit above Android's navigation bar or gesture handle. On Android 16+ you can hide Android's own keyboard buttons to get that space back; the same setting also asks Android to hide the gesture line under the keys, which Android may not allow a keyboard to do.
+- **Size & position:** separate heights for the mini keyboard, the full keyboard and the suggestion bar, plus the space under the keys. The keys always sit above Android's navigation bar or gesture handle. On Android 16+ you can hide Android's own keyboard buttons to get that space back. The pale gesture line is Android's own and can't be hidden by a keyboard; the keyboard keeps its keys above Android's gesture area instead.
 - **Typing:** autocorrect, auto-capitalisation, press-and-hold time, key vibration (on or off, and its strength), and *Forget learned words*.
 - **Gestures:** swipe sensitivity, each slider explained.
 - **GIFs:** show or hide the emoji panel's GIF tab, and your KLIPY key.

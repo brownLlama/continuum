@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Files handed to the app being typed in: GIFs downloaded for sending (cacheDir/gifs, see GifFeed)
-     and stickers ready to send (cacheDir/stickers, see StickerStore). -->
+     stickers ready to send (cacheDir/stickers, see StickerStore) and the downloaded update
+     handed to Android's installer (cacheDir/updates, see UpdateFlow). -->
 <paths>
     <cache-path name="gifs" path="gifs/" />
     <cache-path name="stickers" path="stickers/" />
+    <cache-path name="updates" path="updates/" />
 </paths>

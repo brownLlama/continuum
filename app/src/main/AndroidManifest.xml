@@ -63,11 +63,6 @@
                 android:resource="@xml/gif_paths" />
         </provider>
 
-        <!-- The installer's answer to an update (shows its confirmation, or why it failed). -->
-        <receiver
-            android:name=".update.UpdateReceiver"
-            android:exported="false" />
-
         <service
             android:name=".ContinuumIME"
             android:exported="true"
