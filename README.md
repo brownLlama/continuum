@@ -146,7 +146,7 @@ Settings → **Check for updates** asks GitHub for the newest release. If it is 
 
 ### 🌱 Grass, cursor and copy / cut / paste
 
-The space under the keys is a strip of pixel-art **grass** (quiet, dim greens under a dark theme), and the visiting animals walk on it (their feet in the blades). It is also a touch strip for editing the text:
+The space under the keys is a strip of pixel-art **grass** (quiet, dim greens under a dark theme) over a layer of brown soil with a ragged edge, clods and pebbles, and the visiting animals walk on it (their feet in the blades). It is also a touch strip for editing the text:
 
 - **Slide** a finger sideways on the grass to move the cursor, one character for about every 10 dp. A bubble above the grass shows the words around the cursor with the caret in the middle (selected text highlighted), so you see exactly where it is. A word you are typing is finished as typed first. A tap on the grass still types the letter above it.
 - **Hold** on the grass for a small menu above it: **Select · All · Cut · Copy · Paste**. Slide up onto an item and lift to use it; lifting on the grass does nothing. *Select* makes sliding stretch a selection instead of moving the cursor (the grass turns the accent colour while it is on), and it ends on any key tap or after cut, copy or paste. *All*, *Cut*, *Copy* and *Paste* work through the field's own menu actions.

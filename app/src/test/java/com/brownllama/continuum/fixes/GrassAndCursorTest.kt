@@ -25,8 +25,10 @@ import java.time.Duration
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [36])
 class GrassAndCursorTest {
-    private fun keyboard(mode: String = "mini") =
-        Keyboard(mapOf(Prefs.MODE to mode, Prefs.LAYOUT to "qwertz", Prefs.AUTOCORRECT to false)).also { it.waitReady() }
+    /** [space]: the space under the keys, in dp (with Android's navigation bar it is taller on a phone). */
+    private fun keyboard(mode: String = "mini", space: Int = 40) =
+        Keyboard(mapOf(Prefs.MODE to mode, Prefs.LAYOUT to "qwertz", Prefs.AUTOCORRECT to false, Prefs.BOTTOM_SPACE to space))
+            .also { it.waitReady() }
 
     /** A finger on the grass (the bottom pixels of the view) sliding by [dx] pixels in small moves. */
     private fun Keyboard.slide(dx: Float, fromX: Float = view.width / 2f, y: Float? = null, lift: Boolean = true) {
@@ -106,6 +108,8 @@ class GrassAndCursorTest {
 
     private fun isGreen(c: Int) = ((c shr 8) and 0xff) > ((c shr 16) and 0xff) + 10 && ((c shr 8) and 0xff) > (c and 0xff) + 10
 
+    private fun isBrown(c: Int) = ((c shr 16) and 0xff) > ((c shr 8) and 0xff) && ((c shr 16) and 0xff) > (c and 0xff)
+
     private fun grassOf(k: Keyboard): Recorder {
         k.layoutView()
         val rec = Recorder(Bitmap.createBitmap(k.view.width, k.view.height, Bitmap.Config.ARGB_8888))
@@ -121,8 +125,11 @@ class GrassAndCursorTest {
                 k.view.showPanel(panel)
                 val rec = grassOf(k)
                 val body = rec.rects.filter { isGreen(it.first) && it.third >= k.view.width.toFloat() }
-                assertTrue("$mode/$panel body", body.isNotEmpty())
-                assertEquals("$mode/$panel: down to the bottom of the view", k.view.height.toFloat(), body.last().second, 1f)
+                assertTrue("$mode/$panel green body", body.isNotEmpty())
+                // The soil under it reaches down to the bottom of the view.
+                val soil = rec.rects.filter { isBrown(it.first) && it.third >= k.view.width.toFloat() }
+                assertTrue("$mode/$panel soil", soil.isNotEmpty())
+                assertEquals("$mode/$panel: down to the bottom of the view", k.view.height.toFloat(), soil.last().second, 1f)
                 assertTrue("$mode/$panel blades", rec.paths.any { isGreen(it) })
             }
         }
