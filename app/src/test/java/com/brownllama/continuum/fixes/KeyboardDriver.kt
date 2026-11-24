@@ -66,10 +66,40 @@ class Keyboard(prefs: Map<String, Any> = emptyMap()) {
     fun focus(info: EditorInfo = info(), text: String = "") {
         edit.setText(text)
         edit.setSelection(text.length)
-        ime.ic = edit.onCreateInputConnection(EditorInfo())
+        ime.ic = Arrows(edit.onCreateInputConnection(EditorInfo()))
         ime.onStartInput(info, false)
         ime.onStartInputView(info, false)
         idle()
+    }
+
+    /**
+     * The field's connection, with the arrow keys doing what an app attached to a window does with them
+     * (a bare connection ignores them): the cursor moves one character, and the keyboard is told.
+     */
+    private inner class Arrows(base: InputConnection) : android.view.inputmethod.InputConnectionWrapper(base, true) {
+        private var anchor = 0
+        override fun sendKeyEvent(event: android.view.KeyEvent): Boolean {
+            val dir = when (event.keyCode) {
+                android.view.KeyEvent.KEYCODE_DPAD_LEFT -> -1
+                android.view.KeyEvent.KEYCODE_DPAD_RIGHT -> 1
+                else -> return super.sendKeyEvent(event)
+            }
+            if (event.action == android.view.KeyEvent.ACTION_DOWN) {
+                val old = edit.selectionStart
+                val oldEnd = edit.selectionEnd
+                if (event.isShiftPressed) {
+                    // Stretches the selection: the end that is not at the anchor moves.
+                    if (old == oldEnd) anchor = old
+                    val moving = if (anchor == old) oldEnd else old
+                    edit.setSelection(anchor, (moving + dir).coerceIn(0, edit.text.length))
+                } else {
+                    val pos = (old + dir).coerceIn(0, edit.text.length)
+                    edit.setSelection(pos)
+                }
+                ime.onUpdateSelection(old, oldEnd, edit.selectionStart, edit.selectionEnd, -1, -1)
+            }
+            return true
+        }
     }
 
     /** The field loses focus (keyboard hidden first). */

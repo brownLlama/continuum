@@ -140,6 +140,15 @@ English-only things (*don't* for *dont*, *thankyou* → *thank you*, *16th*, a c
 
 How sensitive swipes are (shortest swipe, flick speed, long swipe, straightness) is adjustable, with an explanation for each slider.
 
+### 🌱 Grass, cursor and copy / cut / paste
+
+The space under the keys is a strip of pixel-art **grass**, and the visiting animals walk on it (their feet in the blades). It is also a touch strip for editing the text:
+
+- **Slide** a finger sideways on the grass to move the cursor, one character for about every 10 dp. A word you are typing is finished as typed first. A tap on the grass still types the letter above it.
+- **Hold** on the grass for a small menu above it: **Select · All · Cut · Copy · Paste**. Slide up onto an item and lift to use it; lifting on the grass does nothing. *Select* makes sliding stretch a selection instead of moving the cursor (the grass turns the accent colour while it is on), and it ends on any key tap or after cut, copy or paste. *All*, *Cut*, *Copy* and *Paste* work through the field's own menu actions.
+- The strip is the "space under the keys" setting plus Android's navigation bar, so it needs a few dp of that space; at 0 and no navigation bar there is no grass and no strip.
+- Not while searching GIFs, and the menu is not offered over the emoji, GIF, clipboard and sticker panels.
+
 ### 😀 Emoji, 📋 clipboard and GIFs
 
 <p>
