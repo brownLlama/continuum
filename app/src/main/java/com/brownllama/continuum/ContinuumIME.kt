@@ -128,6 +128,12 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
     internal var deletedShown = false
     internal lateinit var appThemes: AppThemes
     internal var currentPackage: String? = null
+    /** Word-list loads under way (main thread); [ensureDictionary] reads it again only when none is. */
+    internal var dictLoads = 0
+    /** A text field has the keyboard (between [onStartInputView] and [onFinishInputView]). */
+    internal var typingActive = false
+    /** Saves what was learned, a moment after the last new word (see [SAVE_DELAY_MS]). */
+    internal val saveLearned = Runnable { user.save() }
     @Volatile internal var decoder: Decoder? = null
     internal var dict: Dictionary? = null
     internal lateinit var emojiHistory: EmojiHistory
@@ -258,6 +264,7 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
         appThemes = AppThemes(this)
         gifs = GifFeed(this, prefs)
         val loader = Executors.newSingleThreadExecutor()
+        dictLoads++
         loader.execute {
             loadDictionaryNow(language)
             val groups = Emoji.groups(this)
@@ -294,11 +301,16 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
         super.onDestroy()
     }
 
-    /** Android is short of memory: drop the GIF previews (unless they're on screen). */
+    /**
+     * Android is short of memory: drop the GIF previews (unless they're on screen). Once the app is
+     * cached (no field has the keyboard) the word list goes too; it is read again when a field next
+     * opens the keyboard ([ensureDictionary]).
+     */
     @Suppress("DEPRECATION") // TRIM_MEMORY_RUNNING_LOW: still sent on the Android versions that have it.
     override fun onTrimMemory(level: Int) {
         super.onTrimMemory(level)
         if (level < TRIM_MEMORY_RUNNING_LOW) return
+        if (level >= TRIM_MEMORY_BACKGROUND) releaseDictionary()
         val v = view
         if (v != null && v.panel == KeyboardView.Panel.GIF) return
         v?.releaseGifs()
@@ -379,7 +391,9 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
         privateField = isPrivate(info)
         captureClip() // something may have been copied while the keyboard wasn't running
         currentPackage = info.packageName
+        typingActive = true
         applyPrefs()
+        ensureDictionary()
         taps.clear()
         deletedTaps.clear()
         fixing = false
@@ -428,6 +442,7 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
         // The app may already have finished the composing text itself (it does on the back gesture);
         // committing the word again would then insert it a second time, so keep what's in the field.
         finishComposing(keepShown = true)
+        typingActive = false
         user.save()
         flushTouch()
         touch.save()
@@ -572,7 +587,7 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
      * through [InputConnection.commitContent], which most messengers turn into a GIF message ready to
      * send (some send it at once). Fields that don't accept GIFs get the GIF's link as text instead.
      */
-    internal fun sendGif(gif: Gif) = deliverSendGif(gif)
+    internal fun sendGif(gif: Gif) = deliverGif(gif)
 
     /** The cursor was moved while nothing was being typed: fill the bar for where it is now. */
     private val followCursor = Runnable {

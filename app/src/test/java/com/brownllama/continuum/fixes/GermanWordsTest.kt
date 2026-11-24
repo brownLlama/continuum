@@ -62,6 +62,7 @@ class GermanWordsTest {
         val k = keyboard("full", autocorrect = true)
         k.focus(text = "in "); k.typeGerman("münchen"); k.space()
         assertEquals("münchen ", k.typed("in ", "munchen"))
+        k.blur() // the keyboard closing is what writes what it learned
         val exact = keyboard("full")
         exact.focus(text = "in "); exact.type("munchen")
         assertTrue(exact.bar.toString(), "münchen" in exact.bar)

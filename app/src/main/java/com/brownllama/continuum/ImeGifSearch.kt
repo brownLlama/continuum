@@ -77,7 +77,7 @@ internal fun ContinuumIME.resetWordState() {
     autoSpace = false
 }
 
-internal fun ContinuumIME.deliverSendGif(gif: Gif) {
+internal fun ContinuumIME.deliverGif(gif: Gif) {
     // While searching, the word in progress belongs to the query; the app has none.
     if (queryEditor == null) finishComposing()
     val info = currentInputEditorInfo

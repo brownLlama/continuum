@@ -17,18 +17,51 @@ import java.io.File
 import java.util.concurrent.Executors
 
 /** The learned words of [l], read on first use. */
-internal fun ContinuumIME.userFor(l: Language): UserModel = users.getOrPut(l) { UserModel(File(filesDir, l.userFile), background = true) }
+internal fun ContinuumIME.userFor(l: Language): UserModel = users.getOrPut(l) {
+    UserModel(File(filesDir, l.userFile), background = true).also { m ->
+        // New words are written a moment later (and when the keyboard closes), not one write each.
+        m.onNewWord = {
+            main.removeCallbacks(saveLearned)
+            main.postDelayed(saveLearned, SAVE_DELAY_MS)
+        }
+    }
+}
 
 /** Reads the word list of [l] (on the loading thread) and, if that is still the language, starts using it. */
 internal fun ContinuumIME.loadDictionaryNow(l: Language) {
     val d = Dictionary.load(this, l)
     main.post {
+        dictLoads--
         if (l != language) return@post
         dict = d
         decoder = Decoder(d, user)
         applyTouchPrefs()
         if (taps.isNotEmpty()) redecode() else showPredictions()
     }
+}
+
+/** Reads the word list of [l] on a thread of its own, which ends when it's done ([loadDictionaryNow]). */
+internal fun ContinuumIME.loadDictionaryInBackground(l: Language) {
+    dictLoads++
+    val loader = Executors.newSingleThreadExecutor()
+    loader.execute { loadDictionaryNow(l) }
+    loader.shutdown()
+}
+
+/**
+ * Lets go of the word list and the decoder (a few MB) while no field has the keyboard and the app is
+ * cached; [ensureDictionary] brings them back. The learned words stay (they are small).
+ */
+internal fun ContinuumIME.releaseDictionary() {
+    if (typingActive || taps.isNotEmpty() || dictLoads > 0) return
+    decoder = null
+    dict = null
+    result = null
+}
+
+/** A field opened the keyboard: read the word list again if [releaseDictionary] let it go. */
+internal fun ContinuumIME.ensureDictionary() {
+    if (decoder == null && dictLoads == 0) loadDictionaryInBackground(language)
 }
 
 /**
@@ -57,9 +90,7 @@ internal fun ContinuumIME.applyLanguage() {
     result = null
     decoder = null
     dict = null
-    val loader = Executors.newSingleThreadExecutor()
-    loader.execute { loadDictionaryNow(wanted) }
-    loader.shutdown()
+    loadDictionaryInBackground(wanted)
     showPredictions()
     // A small animated hint (and the language label) shows which language it is now.
     view?.showLanguageHint(old, wanted)

@@ -23,6 +23,8 @@ internal const val STALE_UPDATE_MS = 300L
 /** How long the cursor must rest before the bar's predictions are redone for its new place. */
 internal const val FOLLOW_CURSOR_MS = 150L
 internal const val HOUR_MS = 60L * 60 * 1000
+/** A newly learned word is saved this long after the last one, so typing a few new words is one write. */
+internal const val SAVE_DELAY_MS = 3_000L
 /** GIF search: how long typing must pause before the results update. */
 internal const val LIVE_SEARCH_MS = 600L
 /** Punctuation that sticks to the previous word, taking the space before it. */
