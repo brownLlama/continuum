@@ -28,7 +28,7 @@ object Prefs {
 
     /** Space between the keys and the bottom of the screen, in dp. */
     const val BOTTOM_SPACE = "bottom_space_dp"
-    const val BOTTOM_SPACE_DEFAULT = 24
+    const val BOTTOM_SPACE_DEFAULT = 8
     /** Height of the grass you can touch, in dp; the rest of the space under the keys, and what is under Android's bar, is soil. */
     const val GRASS_HEIGHT = "grass_dp"
     const val GRASS_HEIGHT_DEFAULT = 24

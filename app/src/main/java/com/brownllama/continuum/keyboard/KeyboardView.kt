@@ -603,7 +603,7 @@ class KeyboardView(context: Context, internal val listener: Listener) : View(con
     }
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-        val height = overlayH + gifHeaderH + keyboardHeight + dpu(max(bottomSpaceDp, grassDp)) + systemBottom
+        val height = overlayH + gifHeaderH + keyboardHeight + dpu(grassDp) + dpu(bottomSpaceDp) + systemBottom
         setMeasuredDimension(MeasureSpec.getSize(widthMeasureSpec), height.roundToInt())
     }
 

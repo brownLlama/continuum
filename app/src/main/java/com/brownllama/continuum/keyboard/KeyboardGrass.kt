@@ -44,7 +44,7 @@ internal class Grass(private val unit: Float) {
     /** Draws the grass in a strip [top]..[bottom] (keyboard coordinates), [light] for a light keyboard. */
     fun draw(
         c: Canvas, paint: Paint, width: Float, top: Float, bottom: Float, light: Boolean, background: Int,
-        soilFrom: Float? = null,
+        soilFrom: Float? = null, soil: Boolean = true,
     ) {
         val strip = bottom - top
         if (strip < 1f || width < 1f) return
@@ -56,7 +56,7 @@ internal class Grass(private val unit: Float) {
         c.withTranslation(0f, top) {
             clipRect(0f, 0f, width, strip)
             // Soil first, then the green body over its top, with the roots reaching down into it.
-            if (strip > soilRow * unit) {
+            if (soil && strip > soilRow * unit) {
                 paint.color = p.soil
                 drawRect(0f, soilRow * unit, width, strip, paint)
                 paint.color = p.clod
@@ -218,8 +218,12 @@ internal fun KeyboardView.grassBottom() = height - overlayH - gifHeaderH
 
 /** The grass under the keyboard (drawn before the keys and the animals). */
 internal fun KeyboardView.drawGrass(c: Canvas) {
-    // The grass is the top of the strip, [grassDp] tall; everything under it, and under Android's bars, is soil.
-    grass.draw(c, fill, width.toFloat(), keyboardHeight, grassBottom(), theme.isLight, theme.background, dpu(grassDp))
+    // Down from the keys: the grass, [grassDp] tall, then the soil, [bottomSpaceDp] tall and carrying on
+    // under Android's bars. With no soil there is only the grass (and the bar's area is the plain background).
+    val grassPx = dpu(grassDp)
+    val soil = bottomSpaceDp > 0f
+    val end = keyboardHeight + grassPx + if (soil) dpu(bottomSpaceDp) + systemBottom else 0f
+    grass.draw(c, fill, width.toFloat(), keyboardHeight, minOf(end, grassBottom()), theme.isLight, theme.background, grassPx, soil)
 }
 
 /** The tallest blades over an animal's feet. */
