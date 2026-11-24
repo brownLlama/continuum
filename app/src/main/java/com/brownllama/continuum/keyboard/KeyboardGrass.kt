@@ -13,13 +13,13 @@ import kotlin.math.max
 import kotlin.math.min
 
 /**
- * Pixel-art grass, drawn in the same chunky pixels as the animals ([unit] px each): brown soil, with
- * lighter clods, darker specks and the odd pebble, and blades of grass standing up out of it. The
- * blades are tufts of one to three pointed blades of every height up to the grass height, with a
- * lighter tip, stubble between them, a few tiny flowers, and a thin line of turf where they meet the
- * soil. Where things fall comes from a hash of the column, so the strip has no repeating pattern, and
- * is the same every time it is drawn. The shapes are paths built once for a size, so drawing it is a
- * few fills. [drawFront] draws the taller blades again, after an animal, so its feet stand in the grass.
+ * Pixel-art grass, drawn in the same chunky pixels as the animals ([unit] px each): blades of grass
+ * standing on the ground line. The blades are tufts of one to three pointed blades of every height up to
+ * the grass height, with a lighter tip, stubble between them and a few tiny flowers. Below the ground line
+ * (where Android's navigation bar is) the grass's own dark ground carries on, with lighter and darker
+ * patches. Where things fall comes from a hash of the column, so the strip has no repeating pattern, and
+ * is the same every time it is drawn. The shapes are paths built once for a size, so drawing it is a few
+ * fills. [drawFront] draws the taller blades again, after an animal, so its feet stand in the grass.
  */
 internal class Grass(private val unit: Float) {
     private val blades = Path()
@@ -28,45 +28,36 @@ internal class Grass(private val unit: Float) {
     private val flowers = Path()
     private val tall = Path()
     private val tallTips = Path()
-    private val roots = Path()
-    private val clods = Path()
-    private val dirt = Path()
-    private val pebbles = Path()
+    private val lighter = Path()
+    private val darker = Path()
     private var builtWidth = -1f
     private var builtRows = -1
     private var builtGround = -1
 
     /**
-     * Draws the strip [top]..[bottom] (keyboard coordinates), [light] for a light keyboard: the soil
-     * from [soilFrom] (measured from [top], where the blades are rooted: the grass height) down, if
-     * [soil], and the blades standing up from that line to [top] at the most.
+     * Draws the strip [top]..[bottom] (keyboard coordinates), [light] for a light keyboard: the blades
+     * standing on the ground line [groundFrom] (measured from [top]; the grass height) and growing up to
+     * [top] at the most, and the ground from that line down to [bottom].
      */
     fun draw(
         c: Canvas, paint: Paint, width: Float, top: Float, bottom: Float, light: Boolean, background: Int,
-        soilFrom: Float? = null, soil: Boolean = true,
+        groundFrom: Float? = null,
     ) {
         val strip = bottom - top
         if (strip < 1f || width < 1f) return
-        val ground = if (soilFrom != null) max(0, (soilFrom / unit).toInt()) else SOIL_ROW
+        val ground = if (groundFrom != null) max(0, (groundFrom / unit).toInt()) else DEFAULT_GROUND_ROW
         build(width, ceil(strip / unit).toInt(), ground)
         val p = palette(light, background)
         c.withTranslation(0f, top) {
             clipRect(0f, 0f, width, strip)
-            if (soil && strip > ground * unit) {
-                paint.color = p.soil
+            // The ground under the blades (under Android's bar), with lighter and darker patches.
+            if (strip > ground * unit) {
+                paint.color = p.ground
                 drawRect(0f, ground * unit, width, strip, paint)
-                paint.color = p.clod
-                drawPath(clods, paint)
-                paint.color = p.dirt
-                drawPath(dirt, paint)
-                paint.color = p.pebble
-                drawPath(pebbles, paint)
-                // With grass, a thin line of turf where it meets the soil, with roots reaching a little way in.
-                if (ground > 0) {
-                    paint.color = p.turf
-                    drawRect(0f, ground * unit, width, min(strip, (ground + 1) * unit), paint)
-                    drawPath(roots, paint)
-                }
+                paint.color = p.lighter
+                drawPath(lighter, paint)
+                paint.color = p.darker
+                drawPath(darker, paint)
             }
             // No blades at all when the grass height is 0.
             if (ground == 0) return@withTranslation
@@ -98,7 +89,7 @@ internal class Grass(private val unit: Float) {
         builtWidth = width
         builtRows = rows
         builtGround = ground
-        for (p in listOf(blades, bases, tips, flowers, tall, tallTips, roots, clods, dirt, pebbles)) p.reset()
+        for (p in listOf(blades, bases, tips, flowers, tall, tallTips, lighter, darker)) p.reset()
         val columns = ceil(width / unit).toInt()
 
         fun cell(path: Path, col: Int, row: Int, w: Int = 1, h: Int = 1) {
@@ -138,54 +129,44 @@ internal class Grass(private val unit: Float) {
                 }
             }
         }
-        // The roots: here and there the turf reaches one or two pixels further down into the soil.
-        var col = 0
-        while (col < columns) {
-            val w = 1 + hash(col, 8) % 3
-            val depth = hash(col, 9) % 3 // 0, 1 or 2 extra rows
-            if (depth > 0) for (k in 0 until w) cell(roots, col + k, ground + 1, 1, depth - (if (k == w - 1 && w > 1) 1 else 0))
-            col += w + hash(col, 10) % 3
-        }
-        // The soil: lighter clods and darker specks, and the odd pebble (two pixels wide, one tall).
-        for (row in ground + 1 until min(rows, ground + 1 + MAX_TEXTURE_ROWS)) {
+        // The ground: lighter and darker patches, one to three pixels wide, scattered.
+        for (row in ground until min(rows, ground + MAX_TEXTURE_ROWS)) {
             for (c in 0 until columns) {
                 val h = hash(c, 300 + row)
                 when {
-                    h % 17 == 0 -> cell(clods, c, row, 1 + h / 17 % 2)
-                    h % 17 == 5 -> cell(dirt, c, row, 1 + h / 17 % 3)
-                    h % 97 == 11 -> cell(pebbles, c, row, 2)
+                    h % 17 == 0 -> cell(lighter, c, row, 1 + h / 17 % 2)
+                    h % 17 == 5 -> cell(darker, c, row, 1 + h / 17 % 3)
                 }
             }
         }
     }
 
     private class Palette(
-        val blade: Int, val tip: Int, val base: Int, val turf: Int, val flower: Int,
-        val soil: Int, val clod: Int, val dirt: Int, val pebble: Int,
+        val blade: Int, val tip: Int, val base: Int, val flower: Int,
+        val ground: Int, val lighter: Int, val darker: Int,
     )
 
     private fun palette(light: Boolean, background: Int): Palette =
         if (light) {
             Palette(
-                0xFF7DB566.toInt(), 0xFFA5CF8B.toInt(), 0xFF5F9A4C.toInt(), 0xFF5F9A4C.toInt(), 0xFFF2EFE4.toInt(),
-                0xFF8A6A4C.toInt(), 0xFF9C7B59.toInt(), 0xFF6F5339.toInt(), 0xFFB9AA94.toInt(),
+                0xFF7DB566.toInt(), 0xFFA5CF8B.toInt(), 0xFF5F9A4C.toInt(), 0xFFF2EFE4.toInt(),
+                0xFF5F9A4C.toInt(), 0xFF6BA657.toInt(), 0xFF538C42.toInt(),
             )
         } else {
             // Quiet and dim under a dark keyboard: deep greens, pulled towards the keyboard's own colour.
             fun calm(color: Int) = ColorUtils.blendARGB(color, background, 0.4f)
             Palette(
-                calm(0xFF3F6A3A.toInt()), calm(0xFF4F7C47.toInt()), calm(0xFF2F5230.toInt()), calm(0xFF2F5230.toInt()),
-                calm(0xFF8E9A86.toInt()),
-                calm(0xFF4D3A2B.toInt()), calm(0xFF5A4533.toInt()), calm(0xFF3E2E22.toInt()), calm(0xFF7D7466.toInt()),
+                calm(0xFF3F6A3A.toInt()), calm(0xFF4F7C47.toInt()), calm(0xFF2F5230.toInt()), calm(0xFF8E9A86.toInt()),
+                calm(0xFF2F5230.toInt()), calm(0xFF38603A.toInt()), calm(0xFF274628.toInt()),
             )
         }
 
     private companion object {
-        /** Where the soil starts, in pixels from the top, when not told. */
-        const val SOIL_ROW = 8
+        /** Where the ground starts, in pixels from the top, when not told. */
+        const val DEFAULT_GROUND_ROW = 8
         /** Blades this tall or taller stand in front of an animal's feet. */
         const val TALL = 3
-        /** The soil is textured this many rows down; below that it is plain. */
+        /** The ground is textured this many rows down; below that it is plain. */
         const val MAX_TEXTURE_ROWS = 40
 
         /** A number that looks random but is always the same for the same [i] and [salt]. */
@@ -206,16 +187,16 @@ internal fun KeyboardView.grassBottom() = height - overlayH - gifHeaderH
 
 /** The grass under the keyboard (drawn before the keys and the animals). */
 internal fun KeyboardView.drawGrass(c: Canvas) {
-    // Down from the keys: the grass, [grassDp] tall, on the soil, [soilDp] tall, which carries on under
+    // Down from the keys: the grass, [bottomSpaceDp] tall, then its dark ground, which carries on under
     // Android's bars. With the space at 0 nothing is drawn.
     if (bottomSpaceDp <= 0f) return
     val end = keyboardHeight + dpu(bottomSpaceDp) + systemBottom
-    grass.draw(c, fill, width.toFloat(), keyboardHeight, minOf(end, grassBottom()), theme.isLight, theme.background, dpu(grassDp))
+    grass.draw(c, fill, width.toFloat(), keyboardHeight, minOf(end, grassBottom()), theme.isLight, theme.background, dpu(bottomSpaceDp))
 }
 
 /** The tallest blades over an animal's feet. */
 internal fun KeyboardView.drawGrassFront(c: Canvas) {
-    if (grassDp <= 0f) return // no grass, no blades
+    if (bottomSpaceDp <= 0f) return // no grass, no blades
     grass.drawFront(c, fill, width.toFloat(), keyboardHeight, grassBottom(), theme.isLight, theme.background)
 }
 
@@ -228,8 +209,8 @@ internal fun KeyboardView.drawGrassFront(c: Canvas) {
  */
 internal fun KeyboardView.updateGestureExclusion() {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q || width == 0) return
-    // The grass and the keys; the soil under it needs no gestures of its own.
-    val bottom = (overlayH + gifHeaderH + keyboardHeight + dpu(grassDp)).toInt().coerceAtMost(height)
+    // The grass and the keys; the ground under it needs no gestures of its own.
+    val bottom = (overlayH + gifHeaderH + keyboardHeight + dpu(bottomSpaceDp)).toInt().coerceAtMost(height)
     val top = max(overlayH + gifHeaderH, bottom - dpu(200f)).toInt()
     systemGestureExclusionRects = if (bottom > top) listOf(Rect(0, top, width, bottom)) else emptyList()
 }

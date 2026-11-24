@@ -83,7 +83,7 @@
     <string name="pref_bar_height">Suggestion bar (%)</string>
     <string name="cat_position">Position</string>
     <string name="pref_bottom_space_dp">Space below keyboard (dp)</string>
-    <string name="pref_bottom_space_dp_summary">The ground under the keys. 0 is nothing. Raise it and a small layer of soil appears; raise it more and grass grows on top of the soil, which stays the same. The grass is the part you can touch: slide in its bottom right to move the cursor, hold for the edit menu. Android\'s navigation bar or gesture handle sits under it, and the soil carries on there.</string>
+    <string name="pref_bottom_space_dp_summary">How tall the grass under the keys is. 0 is nothing. The grass is the part you can touch: slide in its bottom right to move the cursor, hold for the edit menu. A taller grass pushes the keys up. Android\'s navigation bar or gesture handle sits under it, and the grass\'s dark ground carries on there.</string>
     <string name="pref_hide_system_buttons">Hide system buttons</string>
     <string name="pref_hide_system_buttons_summary">Removes Android\'s keyboard-switch and hide-keyboard buttons from under the keys (Android 16+), giving the space back. Hold shift, or the space bar in the full keyboard, to switch keyboards.</string>
 

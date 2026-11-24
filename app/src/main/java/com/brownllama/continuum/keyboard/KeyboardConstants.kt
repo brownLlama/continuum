@@ -88,5 +88,3 @@ internal val EDIT_MENU = intArrayOf(EDIT_SELECT, EDIT_ALL, EDIT_CUT, EDIT_COPY, 
 /** The hold menu's cells: width (shrinks on a narrow screen) and height. */
 internal const val EDIT_CELL_DP = 64f
 internal const val EDIT_HEIGHT_DP = 44f
-/** The soil under the grass, in dp: a small layer that stays the same while the grass grows above it. */
-internal const val SOIL_DP = 4f
