@@ -61,16 +61,12 @@ internal class Grass(private val unit: Float) {
                 drawPath(dirt, paint)
                 paint.color = p.pebble
                 drawPath(pebbles, paint)
-                // A thin line of turf where the grass meets the soil, with roots reaching a little way in.
-                paint.color = p.turf
-                drawRect(0f, ground * unit, width, min(strip, (ground + 1) * unit), paint)
-                drawPath(roots, paint)
-            }
-            // With grass but no soil, what is under the grass (Android's bar) is the grass's own dark ground,
-            // not an empty strip.
-            if (!soil && ground > 0 && strip > ground * unit) {
-                paint.color = p.base
-                drawRect(0f, ground * unit, width, strip, paint)
+                // With grass, a thin line of turf where it meets the soil, with roots reaching a little way in.
+                if (ground > 0) {
+                    paint.color = p.turf
+                    drawRect(0f, ground * unit, width, min(strip, (ground + 1) * unit), paint)
+                    drawPath(roots, paint)
+                }
             }
             // No blades at all when the grass height is 0.
             if (ground == 0) return@withTranslation
@@ -210,13 +206,11 @@ internal fun KeyboardView.grassBottom() = height - overlayH - gifHeaderH
 
 /** The grass under the keyboard (drawn before the keys and the animals). */
 internal fun KeyboardView.drawGrass(c: Canvas) {
-    // Down from the keys: the grass, [grassDp] tall, then the soil, [bottomSpaceDp] tall and carrying on
-    // under Android's bars. With no soil the grass stands on its own dark ground, which also fills Android's bar area.
-    val grassPx = dpu(grassDp)
-    val soil = bottomSpaceDp > 0f
-    // Under the grass is soil, or, with no soil, the grass's own ground; only with neither grass nor soil is it left plain.
-    val end = keyboardHeight + grassPx + if (soil) dpu(bottomSpaceDp) + systemBottom else if (grassPx > 0f) systemBottom.toFloat() else 0f
-    grass.draw(c, fill, width.toFloat(), keyboardHeight, minOf(end, grassBottom()), theme.isLight, theme.background, grassPx, soil)
+    // Down from the keys: the grass, [grassDp] tall, on the soil, [soilDp] tall, which carries on under
+    // Android's bars. With the space at 0 nothing is drawn.
+    if (bottomSpaceDp <= 0f) return
+    val end = keyboardHeight + dpu(bottomSpaceDp) + systemBottom
+    grass.draw(c, fill, width.toFloat(), keyboardHeight, minOf(end, grassBottom()), theme.isLight, theme.background, dpu(grassDp))
 }
 
 /** The tallest blades over an animal's feet. */
