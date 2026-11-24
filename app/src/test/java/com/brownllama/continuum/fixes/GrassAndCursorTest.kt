@@ -30,10 +30,13 @@ class GrassAndCursorTest {
         Keyboard(mapOf(Prefs.MODE to mode, Prefs.LAYOUT to "qwertz", Prefs.AUTOCORRECT to false, Prefs.BOTTOM_SPACE to space))
             .also { it.waitReady() }
 
-    /** A finger on the grass (the bottom pixels of the view) sliding by [dx] pixels in small moves. */
+    /** A touch point just inside the grass (a few pixels under the keys), in the view's own pixels. */
+    private fun Keyboard.grassY() = view.overlayH + view.gifHeaderH + view.keyboardHeight + 6f
+
+    /** A finger on the grass (just under the keys) sliding by [dx] pixels in small moves. */
     private fun Keyboard.slide(dx: Float, fromX: Float = view.width * 0.8f, y: Float? = null, lift: Boolean = true) {
         layoutView() // the view grows when full mode opens
-        val y = y ?: (view.height - 4f)
+        val y = y ?: grassY()
         val t = android.os.SystemClock.uptimeMillis()
         fun ev(action: Int, x: Float, at: Long) = MotionEvent.obtain(t, at, action, x, y, 0)
         view.onTouchEvent(ev(MotionEvent.ACTION_DOWN, fromX, t))
@@ -86,7 +89,7 @@ class GrassAndCursorTest {
         val k = keyboard()
         k.focus(text = "hello")
         k.layoutView()
-        k.tap(k.view.width / 2f, k.view.height - 4f)
+        k.tap(k.view.width / 2f, k.grassY())
         assertEquals(6, k.text.length)
         assertEquals(6, k.edit.selectionStart)
         // The same slide higher up is a swipe on the letters (swipe left deletes a word), not the cursor.
@@ -138,11 +141,39 @@ class GrassAndCursorTest {
         }
     }
 
-    @Test fun `the grass follows the setting for the space below the keyboard`() {
-        val none = Keyboard(mapOf(Prefs.BOTTOM_SPACE to 0)).also { it.waitReady(); it.focus() }
-        assertFalse("no space, no grass", grassOf(none).paths.any { isGreen(it) })
-        val some = Keyboard(mapOf(Prefs.BOTTOM_SPACE to 40)).also { it.waitReady(); it.focus() }
+    @Test fun `the grass follows its height setting, and none at 0`() {
+        val none = Keyboard(mapOf(Prefs.BOTTOM_SPACE to 0, Prefs.GRASS_HEIGHT to 0)).also { it.waitReady(); it.focus() }
+        assertFalse("no grass at 0", grassOf(none).paths.any { isGreen(it) })
+        val some = Keyboard(mapOf(Prefs.BOTTOM_SPACE to 0, Prefs.GRASS_HEIGHT to 24)).also { it.waitReady(); it.focus() }
         assertTrue(grassOf(some).paths.any { isGreen(it) })
+    }
+
+    @Test fun `the space below the keys and the grass height are one strip, the soil is what the grass leaves`() {
+        fun view(space: Int, grass: Int) = Keyboard(mapOf(Prefs.BOTTOM_SPACE to space, Prefs.GRASS_HEIGHT to grass))
+            .also { it.waitReady(); it.focus(); it.layoutView() }
+        val base = view(24, 24)
+        // More space with the same grass: taller, with more soil; the grass and its touch area stay.
+        val roomy = view(40, 24)
+        assertEquals(base.view.height + 16, roomy.view.height)
+        assertEquals(roomy.view.height - 16f, grassOf(roomy).tops.first { isBrown(it.first) }.second, 2.5f)
+        // Shorter grass in the same space: the same height, more of it soil.
+        val short = view(40, 16)
+        assertEquals(roomy.view.height, short.view.height)
+        assertEquals(short.view.height - 24f, grassOf(short).tops.first { isBrown(it.first) }.second, 2.5f)
+        // Grass taller than the space: the space grows to fit it.
+        val tall = view(24, 40)
+        assertEquals(base.view.height + 16, tall.view.height)
+        // The grass you can touch is its height: a slide just inside its bottom edge works, just under it does not.
+        val inside = view(40, 24)
+        inside.focus(text = "hello world")
+        inside.layoutView()
+        inside.slide(-28f, y = inside.view.overlayH + inside.view.keyboardHeight + 24f - 3f)
+        assertEquals(4, inside.edit.selectionStart)
+        val under = view(40, 24)
+        under.focus(text = "hello world")
+        under.layoutView()
+        under.slide(-28f, y = under.view.overlayH + under.view.keyboardHeight + 24f + 4f)
+        assertTrue("soil is not grass, so the cursor did not slide", under.edit.selectionStart > 4)
     }
 
     // ---- edit menu ------------------------------------------------------------------------------
@@ -153,7 +184,7 @@ class GrassAndCursorTest {
      */
     private fun Keyboard.menu(item: Int, fromX: Float = view.width / 2f) {
         layoutView()
-        val y0 = view.height - 4f
+        val y0 = grassY()
         val t = android.os.SystemClock.uptimeMillis()
         fun ev(action: Int, x: Float, y: Float, at: Long) = MotionEvent.obtain(t, at, action, x, y, 0)
         view.onTouchEvent(ev(MotionEvent.ACTION_DOWN, fromX, y0, t))
@@ -262,7 +293,7 @@ class GrassAndCursorTest {
         k.focus()
         k.layoutView()
         val t = android.os.SystemClock.uptimeMillis()
-        k.view.onTouchEvent(MotionEvent.obtain(t, t, MotionEvent.ACTION_DOWN, k.view.width / 2f, k.view.height - 4f, 0))
+        k.view.onTouchEvent(MotionEvent.obtain(t, t, MotionEvent.ACTION_DOWN, k.view.width / 2f, k.grassY(), 0))
         shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(900))
         val words = ArrayList<String>()
         val rec = object : Canvas(Bitmap.createBitmap(k.view.width, k.view.height, Bitmap.Config.ARGB_8888)) {
@@ -274,26 +305,26 @@ class GrassAndCursorTest {
 
     // ---- the navigation bar ---------------------------------------------------------------------
 
-    @Test fun `the soil lies under android's navigation bar, so the grass above it is the part to touch`() {
+    @Test fun `the soil lies under the grass and under android's navigation bar`() {
         // Without a bar, the soil starts a few pixels under the grass's blades.
         val plain = Recorder(Bitmap.createBitmap(1000, 100, Bitmap.Config.ARGB_8888))
         com.brownllama.continuum.keyboard.Grass(2f).draw(plain, Paint(), 1000f, 0f, 100f, true, 0xFFFFFFFF.toInt())
         assertEquals(16f, plain.tops.first { isBrown(it.first) }.second, 0.5f)
-        // With the bar's last 40 px given, it starts there.
+        // Given where the grass ends, the soil starts there.
         val withBar = Recorder(Bitmap.createBitmap(1000, 100, Bitmap.Config.ARGB_8888))
         com.brownllama.continuum.keyboard.Grass(2f).draw(withBar, Paint(), 1000f, 0f, 100f, true, 0xFFFFFFFF.toInt(), 60f)
         assertEquals(60f, withBar.tops.first { isBrown(it.first) }.second, 0.5f)
-        // In the view: the soil starts where the bar does (the bottom 40 px).
+        // In the view (space 40, grass 24, a 40 px bar): the soil starts 24 down; the 16 + 40 px under it are soil.
         val k = keyboard()
         k.focus()
         k.view.systemBottom = 40
+        k.view.requestLayout()
         val rec = grassOf(k)
-        val soilTop = rec.tops.first { isBrown(it.first) }.second
-        assertEquals(k.view.height - 40f, soilTop, 2.5f)
-        // A slide on the grass just above the bar still moves the cursor.
+        assertEquals(k.view.height - 40f - 16f, rec.tops.first { isBrown(it.first) }.second, 2.5f)
+        // A slide on the grass just above where the soil starts still moves the cursor.
         k.focus(text = "hello world")
         k.layoutView()
-        k.slide(-24f, y = k.view.height - 40f - 6f)
+        k.slide(-24f, y = k.view.height - 40f - 16f - 6f)
         assertEquals(5, k.edit.selectionStart)
     }
 
@@ -307,16 +338,17 @@ class GrassAndCursorTest {
         val k = keyboard()
         k.focus()
         k.layoutView()
+        val grassEnd = (k.view.overlayH + k.view.keyboardHeight + 24f * k.context.resources.displayMetrics.density).toInt()
         val rects = k.view.systemGestureExclusionRects
         assertEquals(1, rects.size)
         assertEquals(0, rects[0].left)
         assertEquals(k.view.width, rects[0].right)
-        assertEquals("down to the bottom of the view when there is no bar", k.view.height, rects[0].bottom)
-        // With a bar, the grass above it is covered and the bar is not.
+        assertEquals("down to the end of the grass, not the soil", grassEnd, rects[0].bottom)
+        // A bar under the soil changes nothing.
         k.view.systemBottom = 40
         k.view.requestLayout()
         k.layoutView()
-        assertEquals(k.view.height - 40, k.view.systemGestureExclusionRects[0].bottom)
+        assertEquals(grassEnd, k.view.systemGestureExclusionRects[0].bottom)
         assertTrue("never more than 200 dp", k.view.systemGestureExclusionRects[0].height() <= 200f * k.context.resources.displayMetrics.density + 1)
     }
 
@@ -332,7 +364,7 @@ class GrassAndCursorTest {
         k.layoutView()
         // The grass above is the touchable part, the soil under it covers the zone.
         val rec = grassOf(k)
-        assertEquals(k.view.height - 60f, rec.tops.first { isBrown(it.first) }.second, 2.5f)
+        assertEquals(k.view.height - 60f - 16f, rec.tops.first { isBrown(it.first) }.second, 2.5f)
     }
 
     // ---- where the cursor slide starts, and the soil setting ----------------------------------------
@@ -363,23 +395,74 @@ class GrassAndCursorTest {
         assertEquals(75, k.edit.selectionStart) // 25 characters in 100 dp
     }
 
-    @Test fun `the soil can be made thicker, and the grass you can touch stays the same`() {
-        val plain = keyboard()
-        plain.focus()
-        plain.layoutView()
-        val h0 = plain.view.height
-        val thick = Keyboard(mapOf(Prefs.BOTTOM_SPACE to 40, Prefs.SOIL_SPACE to 24)).also { it.waitReady(); it.focus() }
-        thick.layoutView()
-        assertEquals(24f, thick.view.soilDp, 0f)
-        assertEquals("24 dp more soil under the same grass", h0 + 24, thick.view.height)
-        val rec = grassOf(thick)
-        assertEquals(thick.view.height - 24f, rec.tops.first { isBrown(it.first) }.second, 2.5f)
-        // The default is no extra soil.
-        assertEquals(0, Prefs.SOIL_SPACE_DEFAULT)
-        // The slide still works on the grass above it.
-        thick.focus(text = "hello world")
-        thick.layoutView()
-        thick.slide(-28f, y = thick.view.height - 24f - 6f)
-        assertEquals(4, thick.edit.selectionStart)
+    // ---- word selection that works in any app, and a quiet keyboard ---------------------------------
+
+    @Test fun `Word sets the selection by position, with no key presses, when the app says where the cursor is`() {
+        val k = keyboard()
+        k.focus(text = "hello big world")
+        k.moveCursor(7)
+        k.menu(0)
+        assertEquals("big", selected(k))
+        assertEquals("no arrow keys were needed", 0, k.arrowPresses)
+        // Even when the app only reports its selection through updates and does not answer when asked.
+        val k2 = keyboard()
+        k2.reportsExtractedText = false
+        k2.focus(text = "hello big world")
+        k2.moveCursor(7)
+        k2.menu(0)
+        assertEquals("big", selected(k2))
+        assertEquals(0, k2.arrowPresses)
+    }
+
+    @Test fun `Word still works in an app that says nothing about its cursor, with shifted arrow keys`() {
+        val k = keyboard()
+        k.reportsExtractedText = false
+        k.focus(text = "hello big world")
+        k.edit.setSelection(7) // the app does not tell the keyboard
+        k.ime.selStart = -1
+        k.ime.selEnd = -1
+        k.menu(0)
+        assertEquals("big", selected(k))
+        assertTrue(k.arrowPresses > 0)
+    }
+
+    @Test fun `with a word selected, sliding moves its right end by position`() {
+        val k = keyboard()
+        k.focus(text = "hello big world")
+        k.moveCursor(7)
+        k.menu(0) // "big"
+        assertEquals("big", selected(k))
+        k.slide(22f) // 5 characters to the right
+        assertEquals("big worl", selected(k))
+        k.slide(-20f) // 5 back
+        assertEquals("big", selected(k))
+        assertEquals("no arrow keys were needed", 0, k.arrowPresses)
+        // Shrinking stops at the start of the selection.
+        k.slide(-400f)
+        assertEquals("", selected(k))
+        // Growing stops at the end of the text.
+        val k2 = keyboard()
+        k2.focus(text = "hello big world")
+        k2.moveCursor(7)
+        k2.menu(0)
+        k2.slide(400f)
+        assertEquals(15, maxOf(k2.edit.selectionStart, k2.edit.selectionEnd))
+        assertEquals("big world", selected(k2))
+    }
+
+    @Test fun `a finger on the grass makes no glow and no key highlight, and a finger on the keys still does`() {
+        val k = keyboard()
+        k.focus()
+        k.layoutView()
+        val t = android.os.SystemClock.uptimeMillis()
+        k.view.onTouchEvent(MotionEvent.obtain(t, t, MotionEvent.ACTION_DOWN, k.view.width * 0.8f, k.grassY(), 0))
+        assertTrue("no glow on the grass", k.view.glows.isEmpty())
+        for (i in 1..10) k.view.onTouchEvent(MotionEvent.obtain(t, t + i * 8L, MotionEvent.ACTION_MOVE, k.view.width * 0.8f - i * 6f, k.grassY(), 0))
+        assertTrue("still none while sliding", k.view.glows.isEmpty())
+        k.view.onTouchEvent(MotionEvent.obtain(t, t + 100, MotionEvent.ACTION_UP, k.view.width * 0.8f - 60f, k.grassY(), 0))
+        k.idle()
+        // On the letter row it glows, as it always did.
+        k.view.onTouchEvent(MotionEvent.obtain(t + 200, t + 200, MotionEvent.ACTION_DOWN, k.view.width * 0.5f, k.view.overlayH + k.view.keyboardHeight - 20f, 0))
+        assertFalse("a glow under a finger on the letters", k.view.glows.isEmpty())
     }
 }

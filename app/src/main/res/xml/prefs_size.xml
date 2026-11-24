@@ -44,13 +44,13 @@
             app:updatesContinuously="true" />
         <SeekBarPreference
             android:max="40"
-            app:defaultValue="0"
-            app:key="soil_dp"
+            app:defaultValue="24"
+            app:key="grass_dp"
             app:min="0"
             app:seekBarIncrement="1"
             app:showSeekBarValue="true"
-            app:summary="@string/pref_soil_dp_summary"
-            app:title="@string/pref_soil_dp"
+            app:summary="@string/pref_grass_dp_summary"
+            app:title="@string/pref_grass_dp"
             app:updatesContinuously="true" />
         <SwitchPreferenceCompat
             app:defaultValue="true"

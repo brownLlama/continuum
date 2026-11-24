@@ -1,10 +1,11 @@
 package com.brownllama.continuum.fixes
 
+import android.content.pm.PackageManager
 import android.os.Looper
 import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
+import androidx.test.core.app.ApplicationProvider
 import com.brownllama.continuum.SettingsActivity
-import com.brownllama.continuum.update.Release
 import com.brownllama.continuum.update.Transport
 import com.brownllama.continuum.update.UpdateClient
 import com.brownllama.continuum.update.UpdateException
@@ -16,57 +17,37 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
-import org.junit.Rule
 import org.junit.Test
-import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
 import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.shadows.ShadowDialog
-import java.io.File
-import java.security.MessageDigest
 import java.util.concurrent.Executor
 
 private const val BASE = "https://github.com/brownLlama/continuum/releases/download/v0.0.38"
 
-private fun sha(bytes: ByteArray) = MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
-
 /** What GitHub answers for the latest release (the parts the app reads). */
-private fun releaseJson(tag: String = "v0.0.38", apk: String = "$BASE/Continuum.apk", sums: String = "$BASE/SHA256SUMS.txt") = """
+private fun releaseJson(tag: String = "v0.0.38", apk: String = "$BASE/Continuum.apk") = """
 {"tag_name":"$tag","html_url":"https://github.com/brownLlama/continuum/releases/tag/$tag",
- "assets":[{"name":"Continuum.apk","size":1234,"browser_download_url":"$apk"},
-           {"name":"SHA256SUMS.txt","size":90,"browser_download_url":"$sums"}]}
+ "assets":[{"name":"Continuum.apk","size":1234,"browser_download_url":"$apk"}]}
 """.trimIndent()
 
 /** A network that answers from memory. */
-private class FakeNet(
-    val json: String = releaseJson(),
-    val apk: ByteArray = "the apk".toByteArray(),
-    val sums: String? = null,
-    val fail: Boolean = false,
-) : Transport {
+private class FakeNet(val json: String = releaseJson(), val fail: Boolean = false) : Transport {
     val asked = ArrayList<String>()
     override fun getText(url: String, maxBytes: Long): String {
         asked += url
         if (fail) throw java.io.IOException("offline")
-        return if (url.endsWith("SHA256SUMS.txt")) sums ?: "${sha(apk)}  Continuum.apk\n" else json
-    }
-    override fun download(url: String, dest: File, maxBytes: Long, progress: (Long, Long) -> Unit) {
-        asked += url
-        if (fail) throw java.io.IOException("offline")
-        dest.writeBytes(apk)
-        progress(apk.size.toLong(), apk.size.toLong())
+        return json
     }
 }
 
-/** The release parsing, version comparison and checked download (org.json needs Robolectric). */
+/** The release parsing and version comparison (org.json needs Robolectric). */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [36])
 class UpdateClientTest {
-    @get:Rule val tmp = TemporaryFolder()
-
     @Test fun versionsCompareNumbersNotText() {
         assertTrue(Versions.isNewer("0.0.36", "0.0.37"))
         assertTrue(Versions.isNewer("0.0.9", "0.0.10"))
@@ -88,19 +69,15 @@ class UpdateClientTest {
         assertEquals(listOf(UpdateClient.LATEST_URL), net.asked)
         assertEquals("0.0.38", r.version)
         assertEquals("$BASE/Continuum.apk", r.apkUrl)
-        assertEquals("$BASE/SHA256SUMS.txt", r.sumsUrl)
         assertEquals(1234L, r.apkBytes)
         assertEquals("https://github.com/brownLlama/continuum/releases/tag/v0.0.38", r.pageUrl)
     }
 
     @Test fun refusesReleasesItCannotTrust() {
-        // Files from anywhere but this repository's releases are never taken.
-        val foreign = releaseJson(apk = "https://evil.example/Continuum.apk", sums = "https://evil.example/SHA256SUMS.txt")
-        assertThrows { UpdateClient.parseRelease(foreign) }
-        val http = releaseJson(apk = "http://github.com/brownLlama/continuum/releases/download/v1/Continuum.apk")
-        assertThrows { UpdateClient.parseRelease(http) }
-        val other = releaseJson(apk = "https://github.com/someone/else/releases/download/v1/Continuum.apk")
-        assertThrows { UpdateClient.parseRelease(other) }
+        // Links from anywhere but this repository's releases are never taken.
+        assertThrows { UpdateClient.parseRelease(releaseJson(apk = "https://evil.example/Continuum.apk")) }
+        assertThrows { UpdateClient.parseRelease(releaseJson(apk = "http://github.com/brownLlama/continuum/releases/download/v1/Continuum.apk")) }
+        assertThrows { UpdateClient.parseRelease(releaseJson(apk = "https://github.com/someone/else/releases/download/v1/Continuum.apk")) }
         assertThrows { UpdateClient.parseRelease(releaseJson(tag = "nightly")) }
         assertThrows { UpdateClient.parseRelease("""{"tag_name":"v1.0.0","assets":[]}""") }
         assertThrows { UpdateClient.parseRelease("not json") }
@@ -114,39 +91,17 @@ class UpdateClientTest {
         try { block(); fail("expected an UpdateException") } catch (_: UpdateException) {}
     }
 
-    @Test fun readsChecksumFiles() {
-        val h = "a".repeat(64)
-        val g = "b".repeat(64)
-        assertEquals(h, UpdateClient.parseSums("$h  Continuum.apk\n$g  Other.apk\n", "Continuum.apk"))
-        assertEquals(g, UpdateClient.parseSums("$h  Continuum.apk\n$g *Other.apk\n", "Other.apk"))
-        assertNull(UpdateClient.parseSums("$h  Other.apk", "Continuum.apk"))
-        assertNull(UpdateClient.parseSums("tooshort  Continuum.apk", "Continuum.apk"))
-    }
-
-    @Test fun downloadsAndChecksTheFile() {
-        val net = FakeNet()
-        val client = UpdateClient(net)
-        var last = -1L
-        val file = client.download(client.latest(), tmp.root) { done, _ -> last = done }
-        assertEquals("the apk", file.readText())
-        assertEquals(7L, last)
-    }
-
-    @Test fun aDamagedOrUnlistedDownloadIsDeleted() {
-        val wrong = FakeNet(sums = "${"0".repeat(64)}  Continuum.apk")
-        val client = UpdateClient(wrong)
-        assertThrows { client.download(client.latest(), tmp.root) { _, _ -> } }
-        assertFalse(File(tmp.root, "Continuum.apk").exists())
-        val unlisted = FakeNet(sums = "${sha("x".toByteArray())}  Other.apk")
-        assertThrows { UpdateClient(unlisted).download(UpdateClient(unlisted).latest(), tmp.root) { _, _ -> } }
-        // No checksums in the release: nothing is trusted.
-        val noSums = Release("0.0.38", "https://github.com/brownLlama/continuum/releases/latest", "$BASE/Continuum.apk", 1, null)
-        assertThrows { UpdateClient(FakeNet()).download(noSums, tmp.root) { _, _ -> } }
-        assertFalse(File(tmp.root, "Continuum.apk").exists())
+    @Test fun theAppAsksForNoInstallPermission_andOnlyTheTwoItNeeds() {
+        // Google Play Protect treats "install unknown apps" plus downloading an APK as a warning sign.
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val perms = context.packageManager.getPackageInfo(context.packageName, PackageManager.GET_PERMISSIONS)
+            .requestedPermissions.orEmpty().filter { it.startsWith("android.permission.") }.toSet()
+        assertFalse("android.permission.REQUEST_INSTALL_PACKAGES" in perms)
+        assertEquals(setOf("android.permission.INTERNET", "android.permission.VIBRATE"), perms)
     }
 }
 
-/** Settings → Check for updates, with the network and the installer replaced. */
+/** Settings → Check for updates, with the network replaced. */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [36])
 class UpdateFlowTest {
@@ -159,62 +114,46 @@ class UpdateFlowTest {
     private fun text(d: AlertDialog) = d.findViewById<TextView>(androidx.appcompat.R.id.alertTitle)?.text.toString() + " | " +
         (d.findViewById<TextView>(android.R.id.message)?.text ?: "")
 
-    private fun flow(net: FakeNet, installed: String, installs: MutableList<File>, allowed: Boolean = true, opened: MutableList<Boolean> = ArrayList()): UpdateFlow {
+    private fun flow(net: FakeNet, installed: String, opened: MutableList<String>): UpdateFlow {
         val activity = Robolectric.buildActivity(SettingsActivity::class.java).setup().get()
-        return UpdateFlow(activity, UpdateClient(net), now, installed, { allowed }, { opened += true }) { installs += it }
+        return UpdateFlow(activity, UpdateClient(net), now, installed) { opened += it }
     }
 
-    @Test fun aNewerVersionIsOfferedDownloadedAndHandedToTheInstaller() {
-        val installs = ArrayList<File>()
+    @Test fun aNewerVersionIsOffered_andDownloadOpensItsLinkInTheBrowser() {
+        val opened = ArrayList<String>()
         val net = FakeNet()
-        flow(net, "0.0.37", installs).start()
+        flow(net, "0.0.37", opened).start()
         val offer = dialog()
         assertTrue(text(offer), text(offer).contains("Version 0.0.38 is available"))
         assertTrue(text(offer), text(offer).contains("You have 0.0.37"))
-        assertTrue("nothing downloaded before asking", net.asked.none { it.endsWith(".apk") })
+        assertEquals("only the release was asked for", listOf(UpdateClient.LATEST_URL), net.asked)
+        assertTrue("nothing opened before asking", opened.isEmpty())
         offer.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
         idle()
-        assertEquals(1, installs.size)
-        assertEquals("the apk", installs[0].readText())
-        assertEquals(listOf(UpdateClient.LATEST_URL, "$BASE/SHA256SUMS.txt", "$BASE/Continuum.apk"), net.asked)
+        assertEquals(listOf("$BASE/Continuum.apk"), opened)
     }
 
-    @Test fun androidIsAskedToAllowInstallingFirst_andNothingIsDownloadedUntilItIsAllowed() {
-        val installs = ArrayList<File>()
-        val opened = ArrayList<Boolean>()
-        val net = FakeNet()
-        flow(net, "0.0.37", installs, allowed = false, opened = opened).start()
-        dialog().getButton(AlertDialog.BUTTON_POSITIVE).performClick() // Update
-        val ask = dialog()
-        assertTrue(text(ask), text(ask).contains("Allow installing updates"))
-        assertTrue("nothing downloaded yet", net.asked.none { it.endsWith(".apk") })
-        ask.getButton(AlertDialog.BUTTON_POSITIVE).performClick() // Open settings
+    @Test fun whatsNewOpensTheReleasePage() {
+        val opened = ArrayList<String>()
+        flow(FakeNet(), "0.0.37", opened).start()
+        dialog().getButton(AlertDialog.BUTTON_NEUTRAL).performClick()
         idle()
-        assertEquals(listOf(true), opened)
-        assertTrue(installs.isEmpty())
+        assertEquals(listOf("https://github.com/brownLlama/continuum/releases/tag/v0.0.38"), opened)
     }
 
-    @Test fun nothingIsDownloadedWhenYouAreUpToDateOrSayNotNow() {
-        val installs = ArrayList<File>()
-        val net = FakeNet()
-        flow(net, "0.0.38", installs).start()
+    @Test fun nothingIsOpenedWhenYouAreUpToDateOrSayNotNow() {
+        val opened = ArrayList<String>()
+        flow(FakeNet(), "0.0.38", opened).start()
         assertTrue(text(dialog()).contains("up to date"))
-        val later = FakeNet()
-        flow(later, "0.0.30", installs).start()
+        flow(FakeNet(), "0.0.30", opened).start()
         dialog().getButton(AlertDialog.BUTTON_NEGATIVE).performClick()
         idle()
-        assertTrue(installs.isEmpty())
-        assertEquals(listOf(UpdateClient.LATEST_URL), later.asked)
+        assertTrue(opened.isEmpty())
     }
 
-    @Test fun failuresAreSaidInPlainWords() {
-        val installs = ArrayList<File>()
-        flow(FakeNet(fail = true), "0.0.30", installs).start()
+    @Test fun anOfflinePhoneIsToldInPlainWords() {
+        flow(FakeNet(fail = true), "0.0.30", ArrayList()).start()
         assertTrue(text(dialog()).contains("Couldn't reach GitHub"))
-        flow(FakeNet(sums = "${"0".repeat(64)}  Continuum.apk"), "0.0.30", installs).start()
-        dialog().getButton(AlertDialog.BUTTON_POSITIVE).performClick()
-        assertTrue(text(dialog()).contains("checksum"))
-        assertTrue("a damaged file is never installed", installs.isEmpty())
     }
 
     @Test fun theSettingsPageHasTheRow() {

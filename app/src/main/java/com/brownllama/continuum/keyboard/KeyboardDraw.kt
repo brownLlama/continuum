@@ -97,7 +97,7 @@ internal fun KeyboardView.drawContent(canvas: Canvas) {
     drawZoom(canvas)
 }
 
-internal fun KeyboardView.isPressed(k: Key) = pointers.values.any { it.key === k && !it.consumed }
+internal fun KeyboardView.isPressed(k: Key) = pointers.values.any { it.key === k && !it.consumed && !it.grass }
 
 /** Draws one key: its pressed background, then its label or icon. */
 internal fun KeyboardView.drawKey(c: Canvas, k: Key, inBar: Boolean) {

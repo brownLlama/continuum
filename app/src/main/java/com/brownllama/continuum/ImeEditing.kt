@@ -4,6 +4,7 @@ package com.brownllama.continuum
 import android.os.SystemClock
 import android.view.KeyEvent
 import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.ExtractedTextRequest
 import android.view.inputmethod.InputConnection
 import android.widget.Toast
 import androidx.core.content.edit
@@ -394,10 +395,24 @@ internal fun ContinuumIME.handleEmoji(emoji: String) {
 }
 
 /**
+ * Where the selection is in the app's text, as (start, end) with start <= end (equal: just a cursor):
+ * what the field says when asked, else what it last told us. Null when neither is known.
+ */
+private fun ContinuumIME.selectionOf(ic: InputConnection): Pair<Int, Int>? {
+    val ex = ic.getExtractedText(ExtractedTextRequest().apply { hintMaxChars = 2000 }, 0)
+    if (ex != null && ex.selectionStart >= 0 && ex.selectionEnd >= 0) {
+        val a = ex.startOffset + ex.selectionStart
+        val b = ex.startOffset + ex.selectionEnd
+        return minOf(a, b) to maxOf(a, b)
+    }
+    return if (selStart >= 0 && selEnd >= 0) minOf(selStart, selEnd) to maxOf(selStart, selEnd) else null
+}
+
+/**
  * The finger slid along the grass: the cursor moves [steps] characters, as arrow keys would move it,
  * but only within the text (an arrow key at the end of a text can leave the field for another one).
- * With text selected, it stretches the selection instead (shift held). A word in progress is finished
- * first, as it stands. Not while the GIF search has the keyboard.
+ * With text selected, it stretches or shrinks the selection (its right end) instead. A word in
+ * progress is finished first, as it stands. Not while the GIF search has the keyboard.
  */
 internal fun ContinuumIME.handleCursorMove(steps: Int) {
     if (queryEditor != null || steps == 0) return
@@ -408,24 +423,42 @@ internal fun ContinuumIME.handleCursorMove(steps: Int) {
     deletedSlots = null
     val left = steps < 0
     val n = abs(steps)
-    val selected = ic.getSelectedText(0)?.length ?: 0
-    // How many characters are left in that direction (a selection can also be shrunk from the other side).
-    val room = if (left) {
-        (ic.getTextBeforeCursor(n, 0)?.length ?: n) + selected
-    } else {
-        ic.getTextAfterCursor(n, 0)?.length ?: n
+    val span = selectionOf(ic)
+    if (span != null && span.first != span.second) {
+        // Text is selected: move its right end, from the exact position when the app tells us.
+        val (s, e) = span
+        val room = if (left) e - s else ic.getTextAfterCursor(n, 0)?.length ?: n
+        val newEnd = if (left) e - minOf(n, room) else e + minOf(n, room)
+        ic.setSelection(s, newEnd)
+        return
     }
+    // The app didn't say where the cursor is: arrow keys, with shift held if text is selected.
+    val selected = if (span == null) ic.getSelectedText(0)?.length ?: 0 else 0
+    val room = if (left) (ic.getTextBeforeCursor(n, 0)?.length ?: n) + selected else ic.getTextAfterCursor(n, 0)?.length ?: n
     arrows(ic, right = !left, times = minOf(n, room), shift = selected > 0)
 }
 
-/** Selects the word the cursor is in or at the end of (letters, digits, apostrophes and hyphens). */
+/**
+ * Selects the word the cursor is in or at the end of (letters, digits, apostrophes and hyphens). It
+ * sets the selection by position when the app says where the cursor is; otherwise it uses shifted
+ * arrow keys.
+ */
 private fun ContinuumIME.selectWordAtCursor(ic: InputConnection) {
     fun inWord(c: Char) = c.isLetterOrDigit() || c == '\'' || c == '\u2019' || c == '-'
+    var span = selectionOf(ic)
+    // Text already selected: the word is looked for at its end.
+    if (span != null && span.first != span.second) {
+        ic.setSelection(span.second, span.second)
+        span = span.second to span.second
+    }
     val back = ic.getTextBeforeCursor(WORD_SCAN, 0)?.takeLastWhile(::inWord)?.length ?: 0
     val ahead = ic.getTextAfterCursor(WORD_SCAN, 0)?.takeWhile(::inWord)?.length ?: 0
     if (back + ahead == 0) return
-    // To the start of the word, then over it with shift held: the selection then grows to the right
-    // when the finger slides right, and shrinks when it slides left.
+    if (span != null) {
+        ic.setSelection(span.first - back, span.first + ahead)
+        return
+    }
+    // The app doesn't say where the cursor is: to the start of the word, then over it with shift held.
     arrows(ic, right = false, times = back, shift = false)
     arrows(ic, right = true, times = back + ahead, shift = true)
 }

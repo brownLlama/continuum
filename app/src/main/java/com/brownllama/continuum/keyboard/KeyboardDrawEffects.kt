@@ -92,6 +92,7 @@ internal fun KeyboardView.drawPreviews(c: Canvas) {
             drawEditMenu(c, p)
             continue
         }
+        if (p.grass) continue
         val k = p.key ?: continue
         if (k.kind == Kind.SHIFT && p.longPressed && !p.consumed) {
             drawShiftMenu(c, k, p)
