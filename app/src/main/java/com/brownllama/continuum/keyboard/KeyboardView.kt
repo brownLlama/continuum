@@ -202,11 +202,17 @@ class KeyboardView(context: Context, internal val listener: Listener) : View(con
     var grassDp = Prefs.GRASS_HEIGHT_DEFAULT.toFloat()
         set(value) { if (field != value) { field = value; requestLayout(); invalidate() } }
     /**
-     * Height in px of the system bars still showing under the keyboard: the gesture handle or
-     * navigation buttons, and Android 16's keyboard buttons unless "Hide system buttons" hid them.
-     * The keys sit above it, so nothing overlaps them.
+     * Height in px kept clear under the keyboard: the system bars still showing (the gesture handle or
+     * navigation buttons, and Android 16's keyboard buttons unless "Hide system buttons" hid them). With
+     * grass or soil under the keys it is the taller gesture zone Android reads its swipes in, so the grass
+     * is clear of it; with neither, only the bars' own height, so nothing more than Android needs is
+     * kept. The keys sit above it, so nothing overlaps them.
      */
-    internal var systemBottom = 0
+    internal val systemBottom get() = if (grassDp > 0f || bottomSpaceDp > 0f) max(navBottom, gestureBottom) else navBottom
+    /** The navigation bar's (and Android 16's keyboard buttons') height, in px. */
+    internal var navBottom = 0
+    /** That, or the taller strip at the bottom where Android reads its home and app-switch swipes, in px. */
+    internal var gestureBottom = 0
     var layout = KeyLayout.QWERTZ
         set(value) { if (field != value) { field = value; relayout() } }
     /** Whether the emoji panel has the GIF tab (setting "Show GIFs"). */
@@ -586,17 +592,18 @@ class KeyboardView(context: Context, internal val listener: Listener) : View(con
     }
 
     override fun onApplyWindowInsets(insets: WindowInsets): WindowInsets {
-        val bottom = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            // The bars, and the strip at the bottom where Android reads its home and app-switch swipes
-            // (which can be taller than the bar itself): nothing of ours goes there.
-            insets.getInsets(
+        var nav = 0
+        var gesture = 0
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            nav = insets.getInsets(WindowInsets.Type.navigationBars() or WindowInsets.Type.captionBar()).bottom
+            // The strip at the bottom where Android reads its home and app-switch swipes can be taller than the bar itself.
+            gesture = insets.getInsets(
                 WindowInsets.Type.navigationBars() or WindowInsets.Type.captionBar() or WindowInsets.Type.mandatorySystemGestures(),
             ).bottom
-        } else {
-            0
         }
-        if (bottom != systemBottom) {
-            systemBottom = bottom
+        if (nav != navBottom || gesture != gestureBottom) {
+            navBottom = nav
+            gestureBottom = gesture
             requestLayout()
         }
         return super.onApplyWindowInsets(insets)

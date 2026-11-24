@@ -227,8 +227,10 @@ internal fun KeyboardView.drawGrass(c: Canvas) {
 }
 
 /** The tallest blades over an animal's feet. */
-internal fun KeyboardView.drawGrassFront(c: Canvas) =
+internal fun KeyboardView.drawGrassFront(c: Canvas) {
+    if (grassDp <= 0f) return // no grass, no blades
     grass.drawFront(c, fill, width.toFloat(), keyboardHeight, grassBottom(), theme.isLight, theme.background)
+}
 
 /**
  * Android's "back" swipe starts at the left and right edges of the screen, where this keyboard's
