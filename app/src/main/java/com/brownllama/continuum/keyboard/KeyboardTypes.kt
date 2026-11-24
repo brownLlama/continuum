@@ -113,6 +113,3 @@ internal class Zoom(var start: Int, var slot: Int, var row: Int, val numbers: Bo
     var german: String? = null
     var germanSlot = -1
 }
-
-/** What surrounds the cursor: the text [before] it, the [selected] text (if any) and the text [after] it. */
-internal class CursorText(val before: String, val selected: String, val after: String)

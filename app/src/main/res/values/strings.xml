@@ -91,6 +91,8 @@
     <string name="pref_full_height">Full keyboard (%)</string>
     <string name="pref_bar_height">Suggestion bar (%)</string>
     <string name="cat_position">Position</string>
+    <string name="pref_soil_dp">Soil under the grass (dp)</string>
+    <string name="pref_soil_dp_summary">More brown soil under the grass, for looks: it is not part of the strip you can touch. Some soil always shows under Android\'s gesture area.</string>
     <string name="pref_bottom_space_dp">Space below keyboard (dp)</string>
     <string name="pref_bottom_space_dp_summary">Extra space between the keys and Android\'s navigation bar or gesture handle: the strip of grass you can touch to move the cursor (hold it for the edit menu). The keys never overlap the bar.</string>
     <string name="pref_hide_system_buttons">Hide system buttons</string>
@@ -248,7 +250,7 @@
     <string name="sticker_shared">This app doesn\'t take stickers here, so pick where to send it</string>
     <string name="autocorrect_on">Autocorrect on</string>
     <string name="autocorrect_off">Autocorrect off: words are typed and learned as written</string>
-    <string name="edit_select">Select</string>
+    <string name="edit_select">Word</string>
     <string name="edit_all">All</string>
     <string name="edit_cut">Cut</string>
     <string name="edit_copy">Copy</string>
