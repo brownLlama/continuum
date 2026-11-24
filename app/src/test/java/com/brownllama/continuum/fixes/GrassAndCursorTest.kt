@@ -169,16 +169,16 @@ class GrassAndCursorTest {
         assertNull("0: no blades at all", none.top)
         val small = look(2)
         assertTrue("a little: a little grass", small.blades)
-        assertTrue("a little: no taller than that, not the whole bar", small.top!! <= 2.5f)
+        assertTrue("a little: well short of the whole bar: ${small.top}", small.top!! <= 8f)
         val base = look(24)
         assertTrue(base.blades)
         // The blades stand on the bottom of the view, whatever the bar's height, and are at most as tall as the space.
         assertEquals(base.height.toFloat(), base.bottom!!, 1f)
-        assertTrue("at most 24 px tall, not the 40 px bar: ${base.top}", base.top!! <= 24f + 2.5f && base.top > 12f)
+        assertEquals("from 20 dp up the grass reaches the keys: the space plus the bar", 24f + 40f, base.top!!, 2.5f)
         // More space: the view is taller by that (the keys go up), and the grass is taller.
         val more = look(40)
         assertEquals(base.height + 16, more.height)
-        assertTrue("taller: ${more.top}", more.top!! in 36f..42.5f)
+        assertEquals("taller: ${more.top}", 40f + 40f, more.top!!, 2.5f)
         // The grass you can touch is all of it: a slide just inside its bottom edge works, under it does not.
         val inside = Keyboard(mapOf(Prefs.BOTTOM_SPACE to 24)).also { it.waitReady(); it.focus(text = "hello world") }
         inside.layoutView()
@@ -495,13 +495,21 @@ class GrassAndCursorTest {
         assertFalse("a glow under a finger on the letters", k.view.glows.isEmpty())
     }
 
+    @Test fun `the grass reaches up to the keys, with no gap, from 20 dp up`() {
+        val k = Keyboard(mapOf(Prefs.BOTTOM_SPACE to 30)).withBar(60)
+        val rec = grassOf(k)
+        // The tallest blades reach the bottom of the keys (the space plus the bar above the bottom of the view).
+        assertEquals(k.view.height - 90f, rec.blades()!!.first, 2.5f)
+        assertEquals((k.view.overlayH + k.view.keyboardHeight), rec.blades()!!.first, 2.5f)
+    }
+
     @Test fun `the grass is blades, not a green slab, and the tallest reach the height of the setting`() {
         val k = Keyboard(mapOf(Prefs.BOTTOM_SPACE to 40)).withBar(40)
         val rec = grassOf(k)
         assertTrue("no wide flat rectangle", rec.groundTops(k.view.width).isEmpty())
         // The blades are drawn as shapes of their own, the tallest 40 dp up from the bottom of the view.
         assertTrue(rec.paths.count { isGreen(it) } >= 2)
-        assertEquals(k.view.height - 40f, rec.blades()!!.first, 2.5f)
+        assertEquals("the setting plus the bar", k.view.height - 80f, rec.blades()!!.first, 2.5f)
     }
 
     @Test fun `a small value is a thin line of grass, not a block the size of android's bar`() {
@@ -509,7 +517,7 @@ class GrassAndCursorTest {
         val rec = grassOf(k)
         val (top, bottom) = rec.blades()!!
         assertEquals(k.view.height.toFloat(), bottom, 1f)
-        assertTrue("only about 1 dp of blades: ${bottom - top}", bottom - top <= 4f)
+        assertTrue("only a few px of blades, not the 60 px bar: ${bottom - top}", bottom - top <= 6f)
         assertTrue(rec.groundTops(k.view.width).isEmpty())
         val bare = Keyboard(mapOf(Prefs.BOTTOM_SPACE to 0)).withBar(40)
         val plain = grassOf(bare)
