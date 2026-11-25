@@ -6,7 +6,7 @@ import android.os.Looper
 import android.os.SystemClock
 import android.view.MotionEvent
 import com.brownllama.continuum.Prefs
-import com.brownllama.continuum.keyboard.TREE_EDGE_GAP_DP
+import com.brownllama.continuum.keyboard.CURSOR_MODE_TIMEOUT_MS
 import com.brownllama.continuum.keyboard.Tree
 import com.brownllama.continuum.keyboard.grassBottom
 import com.brownllama.continuum.keyboard.grassTop
@@ -22,8 +22,9 @@ import org.robolectric.annotation.Config
 import java.time.Duration
 
 /**
- * The tree in the grass: held and picked up, dragged to move the cursor, and let go to fall where it
- * is. Over the grass it is picked up at once; over the keys a quick tap is still the key's.
+ * The tree in the grass is the switch of the cursor mode: tapped twice on its bottom it turns the mode
+ * on, and the keys become a trackpad; tapped twice again (or after a while, or on leaving) it turns off.
+ * Its leaves over the keys only show.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [36])
@@ -46,8 +47,8 @@ class TreeCursorTest {
 
     private val Keyboard.offY get() = view.overlayH + view.gifHeaderH
 
-    /** A finger on the tree's base, in the grass (view pixels). */
-    private fun Keyboard.onBase(): Pair<Float, Float> {
+    /** A finger on the tree's trunk, in the grass (view pixels). */
+    private fun Keyboard.onTrunk(): Pair<Float, Float> {
         val t = view.tree
         return t.homeLeft + t.width / 2f to offY + t.homeTop + t.height - 3f
     }
@@ -64,24 +65,32 @@ class TreeCursorTest {
         e.recycle()
     }
 
-    /** Moves a finger from ([x], [y]) by ([dx], [dy]) in 20 small moves, then lets the frames run. */
-    private fun Keyboard.moveBy(x: Float, y: Float, dx: Float, dy: Float) {
-        for (i in 1..20) touch(MotionEvent.ACTION_MOVE, x + dx * i / 20, y + dy * i / 20)
+    private fun Keyboard.tapAt(x: Float, y: Float) {
+        touch(MotionEvent.ACTION_DOWN, x, y)
+        wait(40)
+        touch(MotionEvent.ACTION_UP, x, y)
+    }
+
+    /** Two quick taps on the tree's trunk. */
+    private fun Keyboard.doubleTapTree() {
+        val (x, y) = onTrunk()
+        tapAt(x, y)
+        wait(120)
+        tapAt(x, y)
         wait(50)
     }
 
-    /** Puts a finger on the tree's base and drags it by ([dx], [dy]); lifts unless [lift] is false. */
-    private fun Keyboard.drag(dx: Float, dy: Float = 0f, lift: Boolean = true) {
-        val (x, y) = onBase()
+    /** Slides a finger from ([x], [y]) by ([dx], [dy]) in 20 small moves, then lets the frames run. */
+    private fun Keyboard.slide(x: Float, y: Float, dx: Float, dy: Float, lift: Boolean = true) {
         touch(MotionEvent.ACTION_DOWN, x, y)
-        moveBy(x, y, dx, dy)
-        if (lift) {
-            touch(MotionEvent.ACTION_UP, x + dx, y + dy)
-            wait(500) // it falls
-            frame()
-        }
-        idle()
+        for (i in 1..20) touch(MotionEvent.ACTION_MOVE, x + dx * i / 20, y + dy * i / 20)
+        wait(50)
+        if (lift) touch(MotionEvent.ACTION_UP, x + dx, y + dy)
+        wait(50)
     }
+
+    /** A spot on the letters, away from the tree. */
+    private fun Keyboard.onKeys() = 150f to offY + view.keyboardHeight * 0.6f
 
     @Test fun `a tree stands in the middle of the grass, above Android's gesture bar, rising over the keys`() {
         for (bar in listOf(0, 66)) {
@@ -94,7 +103,6 @@ class TreeCursorTest {
             assertTrue("its base is above the gesture bar", t.homeTop + t.height <= v.grassBottom - bar + 0.5f)
             assertEquals("its base is where it can be touched", v.treeBase(), t.homeTop + t.height, v.spritePx)
             assertEquals("in the middle", v.width / 2f, t.homeLeft + t.width / 2f, v.spritePx * 2)
-            assertTrue("clear of the screen edge", t.homeLeft + t.width < v.width)
             assertTrue("about 60 dp tall, as far as there is room", t.height >= 40f * k.context.resources.displayMetrics.density)
         }
     }
@@ -108,95 +116,68 @@ class TreeCursorTest {
         assertTrue(Tree.ALPHA in 120..230)
     }
 
-    @Test fun `over the grass it is picked up at once, and dragging it sideways moves the cursor`() {
+    @Test fun `a single tap on the tree only shakes it, so there is no mode and no letter typed`() {
+        val k = keyboard().withTree("hello")
+        val (x, y) = k.onTrunk()
+        k.tapAt(x, y)
+        k.wait(600)
+        assertFalse(k.view.cursorMode)
+        assertEquals("hello", k.text)
+        // A second tap long after is a first tap again.
+        k.tapAt(x, y)
+        assertFalse(k.view.cursorMode)
+    }
+
+    @Test fun `two quick taps on the tree turn the cursor mode on, and two more turn it off`() {
+        val k = keyboard().withTree("hello world")
+        k.doubleTapTree()
+        assertTrue(k.view.cursorMode)
+        assertTrue("the tree shows it", k.view.tree.active)
+        assertEquals("hello world", k.text)
+        k.wait(600)
+        k.doubleTapTree()
+        assertFalse(k.view.cursorMode)
+        assertFalse(k.view.tree.active)
+    }
+
+    @Test fun `in the cursor mode sliding anywhere on the keys moves the cursor`() {
         for (mode in listOf("mini", "full")) {
             val k = keyboard(mode).withTree("hello world")
-            assertEquals(11, k.edit.selectionStart)
-            val (x, y) = k.onBase()
-            k.touch(MotionEvent.ACTION_DOWN, x, y)
-            assertTrue("$mode: picked up at once", k.view.tree.carried)
-            k.moveBy(x, y, -28f, 0f) // one character for every 4 dp
+            k.doubleTapTree()
+            val (x, y) = k.onKeys()
+            k.slide(x, y, 28f, 0f) // one character for every 4 dp
+            assertEquals("$mode: right, but already at the end", 11, k.edit.selectionStart)
+            k.slide(x + 300f, y, -28f, 0f)
             assertEquals(mode, 4, k.edit.selectionStart)
-            assertEquals("hello world", k.text)
+            assertEquals("no letters were typed", "hello world", k.text)
+            k.slide(x, y, 12f, 0f) // three back
+            assertEquals(mode, 7, k.edit.selectionStart)
         }
+    }
+
+    @Test fun `in the cursor mode a tap on a key types nothing, and a swipe is not a swipe`() {
+        val k = keyboard().withTree("hello world")
+        k.doubleTapTree()
+        val (x, y) = k.onKeys()
+        k.tapAt(x, y)
+        assertEquals("hello world", k.text)
+        k.slide(x + 500f, y, -120f, 0f) // would be "delete a word"
+        assertEquals("hello world", k.text)
+        assertTrue(k.view.cursorMode)
     }
 
     @Test fun `the cursor moves are sent once a frame, not once per touch event`() {
         val k = keyboard().withTree("hello world")
-        val (x, y) = k.onBase()
-        k.touch(MotionEvent.ACTION_DOWN, x, y)
-        for (i in 1..20) k.touch(MotionEvent.ACTION_MOVE, x - 1.4f * i, y)
+        k.doubleTapTree()
+        val (x, y) = k.onKeys()
+        k.touch(MotionEvent.ACTION_DOWN, x + 500f, y)
+        for (i in 1..20) k.touch(MotionEvent.ACTION_MOVE, x + 500f - 1.4f * i, y)
         assertEquals("nothing sent yet", 11, k.edit.selectionStart)
         k.wait(50)
         assertEquals("all of it in one go", 4, k.edit.selectionStart)
     }
 
-    @Test fun `the tree hangs below the finger, and follows it exactly`() {
-        val k = keyboard().withTree("hello world")
-        val (x, y) = k.onBase()
-        k.touch(MotionEvent.ACTION_DOWN, x, y)
-        val t = k.view.tree
-        k.moveBy(x, y, -60f, -40f)
-        k.wait(Tree.HANG_MS + 50)
-        val now = SystemClock.uptimeMillis()
-        assertEquals("centred on the finger", x - 60f, t.heldLeft(now) + t.width / 2f, 0.5f)
-        assertEquals("its top just at the finger", y - 40f - k.offY - t.height * Tree.HELD_AT, t.heldTop(now), 0.5f)
-    }
-
-    @Test fun `letting go stops the cursor, and the tree falls straight down and stays where it landed`() {
-        val k = keyboard().withTree("hello world")
-        val t = k.view.tree
-        val (x, y) = k.onBase()
-        k.touch(MotionEvent.ACTION_DOWN, x, y)
-        k.moveBy(x, y, -400f, -50f)
-        val sel = k.edit.selectionStart
-        k.touch(MotionEvent.ACTION_UP, x - 400f, y - 50f)
-        assertFalse(t.carried)
-        assertTrue("falling", t.falling)
-        k.wait(500)
-        k.frame()
-        assertFalse("landed", t.falling)
-        assertEquals("on the ground line", k.view.treeBase(), t.homeTop + t.height, k.view.spritePx)
-        assertEquals("where it was let go", x - 400f, t.homeLeft + t.width / 2f, k.view.spritePx * 2)
-        assertTrue("not back in the middle", t.homeLeft + t.width / 2f < k.view.width * 0.4f)
-        // The cursor stopped: moving the finger now does nothing.
-        k.touch(MotionEvent.ACTION_MOVE, x - 600f, y)
-        k.wait(50)
-        assertEquals(sel, k.edit.selectionStart)
-        // And it can be picked up again where it stands.
-        val (x2, y2) = k.onBase()
-        k.touch(MotionEvent.ACTION_DOWN, x2, y2)
-        assertTrue(k.view.tree.carried)
-    }
-
-    @Test fun `it never lands closer to an edge than the gap`() {
-        val gap = TREE_EDGE_GAP_DP * 1f
-        for (dx in listOf(-5000f, 5000f)) {
-            val k = keyboard().withTree("hello")
-            val (x, y) = k.onBase()
-            k.touch(MotionEvent.ACTION_DOWN, x, y)
-            k.moveBy(x, y, dx, 0f)
-            k.touch(MotionEvent.ACTION_UP, x + dx, y)
-            k.wait(500)
-            k.frame()
-            val t = k.view.tree
-            assertTrue("left $dx", t.homeLeft >= gap - 0.5f)
-            assertTrue("right $dx", t.homeLeft + t.width <= k.view.width - gap + 0.5f)
-        }
-    }
-
-    @Test fun `dragging it right moves the cursor right, and never past the text`() {
-        val k = keyboard().withTree("hello world")
-        k.moveCursor(0)
-        k.drag(20f) // five characters
-        assertEquals(5, k.edit.selectionStart)
-        k.drag(1000f)
-        assertEquals(11, k.edit.selectionStart)
-        k.drag(-1000f)
-        assertEquals(0, k.edit.selectionStart)
-    }
-
-    @Test fun `dragging it up or down moves the cursor a line each 26 dp, as arrow keys`() {
+    @Test fun `in the cursor mode sliding up or down moves the cursor a line each 26 dp, as arrow keys`() {
         val k = keyboard().withTree("one\ntwo\nthree")
         val keys = ArrayList<Int>()
         val real = k.ime.ic!!
@@ -206,85 +187,74 @@ class TreeCursorTest {
                 return super.sendKeyEvent(event)
             }
         }
-        k.drag(0f, -52f) // two lines up
+        k.doubleTapTree()
+        val (x, y) = k.onKeys()
+        k.slide(x, y, 0f, -52f) // two lines up
         assertEquals(listOf(android.view.KeyEvent.KEYCODE_DPAD_UP, android.view.KeyEvent.KEYCODE_DPAD_UP), keys)
         assertEquals("one\ntwo\nthree", k.text)
     }
 
-    @Test fun `over the keys a quick tap on the tree types the key under it`() {
+    @Test fun `outside the cursor mode a slide on the keys is the swipe it always was`() {
+        val k = keyboard().withTree("hello world")
+        val (x, y) = k.onKeys()
+        k.slide(x + 500f, y, -120f, 0f)
+        assertEquals("hello ", k.text)
+        assertFalse(k.view.cursorMode)
+    }
+
+    @Test fun `the leaves over the keys only show, so a tap and a hold there go to the key under them`() {
         val k = keyboard().withTree("hello")
         val (x, y) = k.onCrown()
         assertTrue("that spot is over the keys", k.view.tree.homeTop + k.view.tree.height * 0.3f < k.view.grassTop)
-        val t = SystemClock.uptimeMillis()
-        k.touch(MotionEvent.ACTION_DOWN, x, y, t)
-        assertFalse("not picked up yet", k.view.tree.carried)
-        k.touch(MotionEvent.ACTION_UP, x, y, t + 80)
-        k.wait(400)
-        assertFalse(k.view.tree.carried)
+        k.tapAt(x, y)
         assertEquals("a letter was typed", 6, k.text.length)
-    }
-
-    @Test fun `over the keys a hold is the key's hold, so its popup or zoom still opens, and the tree stays put`() {
-        val k = keyboard().withTree("hello world")
-        val (x, y) = k.onCrown()
+        assertFalse(k.view.cursorMode)
+        // Even two quick taps there are two letters, not the switch.
+        k.tapAt(x, y)
+        k.wait(100)
+        k.tapAt(x, y)
+        assertFalse(k.view.cursorMode)
+        assertEquals(8, k.text.length)
+        // A hold is the key's hold: mini mode's zoom opens.
         k.touch(MotionEvent.ACTION_DOWN, x, y)
         k.wait(700)
-        assertFalse("the tree was not picked up", k.view.tree.carried)
-        assertTrue("the zoom of mini mode's letters opened, as anywhere else on the keys", k.view.zoom != null)
+        assertTrue(k.view.zoom != null)
         k.touch(MotionEvent.ACTION_UP, x, y)
     }
 
-    @Test fun `the whole width of the tree's bottom picks it up, but nothing beside it`() {
+    @Test fun `the mode turns itself off after a while, but not while a finger is sliding`() {
+        val k = keyboard().withTree("hello world")
+        k.doubleTapTree()
+        assertTrue(k.view.cursorMode)
+        k.wait(CURSOR_MODE_TIMEOUT_MS + 500)
+        assertFalse("timed out", k.view.cursorMode)
+        k.doubleTapTree()
+        val (x, y) = k.onKeys()
+        k.touch(MotionEvent.ACTION_DOWN, x, y)
+        k.touch(MotionEvent.ACTION_MOVE, x + 20f, y)
+        k.wait(CURSOR_MODE_TIMEOUT_MS * 2)
+        assertTrue("a finger is down", k.view.cursorMode)
+        k.touch(MotionEvent.ACTION_UP, x + 20f, y)
+        k.wait(CURSOR_MODE_TIMEOUT_MS + 500)
+        assertFalse(k.view.cursorMode)
+    }
+
+    @Test fun `hiding the keyboard turns the mode off`() {
+        val k = keyboard().withTree("hello")
+        k.doubleTapTree()
+        assertTrue(k.view.cursorMode)
+        k.view.keyboardHidden()
+        assertFalse(k.view.cursorMode)
+    }
+
+    @Test fun `a touch beside the tree is not the tree`() {
         val k = keyboard().withTree("hello world")
         val t = k.view.tree
         val y = k.offY + t.homeTop + t.height - 3f
-        // Near either side of the bottom, still in the grass.
-        k.touch(MotionEvent.ACTION_DOWN, t.homeLeft + 4f, y)
-        assertTrue(k.view.tree.carried)
-        k.touch(MotionEvent.ACTION_UP, t.homeLeft + 4f, y)
-        k.wait(500)
-        k.frame()
-        val t2 = k.view.tree
-        k.touch(MotionEvent.ACTION_DOWN, t2.homeLeft + t2.width + 60f, y)
-        assertFalse("well beside it is not the tree", k.view.tree.carried)
-    }
-
-    @Test fun `a swipe that starts on the tree over the keys is still the swipe`() {
-        val k = keyboard().withTree("hello world")
-        val (x, y) = k.onCrown()
-        val t = SystemClock.uptimeMillis()
-        k.touch(MotionEvent.ACTION_DOWN, x, y, t)
-        for (i in 1..6) k.touch(MotionEvent.ACTION_MOVE, x - 20f * i, y, t + i * 10L)
-        k.touch(MotionEvent.ACTION_UP, x - 120f, y, t + 80L)
-        k.wait(400)
-        assertFalse(k.view.tree.carried)
-        assertEquals("hello ", k.text)
-    }
-
-    @Test fun `a touch away from the tree is not the tree`() {
-        val k = keyboard().withTree("hello world")
-        val (_, y) = k.onBase()
-        k.touch(MotionEvent.ACTION_DOWN, 100f, y)
-        assertFalse(k.view.tree.carried)
-        k.touch(MotionEvent.ACTION_UP, 100f, y)
-        k.touch(MotionEvent.ACTION_DOWN, 100f, k.offY + k.view.keyboardHeight * 0.5f)
-        k.wait(400)
-        assertFalse(k.view.tree.carried)
-    }
-
-    @Test fun `a second finger typing does not drop the tree`() {
-        val k = keyboard().withTree("hello")
-        val (x, y) = k.onBase()
-        val t = SystemClock.uptimeMillis()
-        k.touch(MotionEvent.ACTION_DOWN, x, y, t)
-        assertTrue(k.view.tree.carried)
-        val props = arrayOf(MotionEvent.PointerProperties().apply { id = 0; toolType = MotionEvent.TOOL_TYPE_FINGER },
-            MotionEvent.PointerProperties().apply { id = 1; toolType = MotionEvent.TOOL_TYPE_FINGER })
-        val coords = arrayOf(MotionEvent.PointerCoords().apply { this.x = x; this.y = y },
-            MotionEvent.PointerCoords().apply { this.x = 100f; this.y = k.view.overlayH + 20f })
-        val e = MotionEvent.obtain(t, t + 20, MotionEvent.ACTION_POINTER_DOWN or (1 shl MotionEvent.ACTION_POINTER_INDEX_SHIFT), 2, props, coords, 0, 0, 1f, 1f, 0, 0, 0, 0)
-        k.view.onTouchEvent(e)
-        assertTrue("still held", k.view.tree.carried)
+        k.tapAt(t.homeLeft + t.width + 80f, y)
+        k.wait(100)
+        k.tapAt(t.homeLeft + t.width + 80f, y)
+        assertFalse(k.view.cursorMode)
     }
 
     @Test fun `the tree's picture has bumpy leaves, apples, branches and a trunk, at every size`() {

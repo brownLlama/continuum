@@ -10,6 +10,7 @@ import android.graphics.Rect
 import android.graphics.RectF
 import androidx.core.graphics.ColorUtils
 import androidx.core.graphics.createBitmap
+import com.brownllama.continuum.R
 import com.brownllama.continuum.prediction.Mode
 import kotlin.math.ceil
 import kotlin.math.min
@@ -239,22 +240,29 @@ internal fun KeyboardView.drawGrass(c: Canvas) {
  */
 internal fun KeyboardView.fitTree(grassH: Int = grassHeight) {
     val base = treeBase()
-    if (grassH <= 0 || base < grassTop + 2 * spritePx) return tree.fit(0f, 0f, 0f, 0f, 0)
-    tree.fit(width.toFloat(), base, barH + dpu(4f), dpu(TREE_EDGE_GAP_DP), (dpu(TREE_HEIGHT_DP) / spritePx).roundToInt())
+    if (grassH <= 0 || base < grassTop + 2 * spritePx) return tree.fit(0f, 0f, 0f, 0)
+    tree.fit(width.toFloat(), base, barH + dpu(4f), (dpu(TREE_HEIGHT_DP) / spritePx).roundToInt())
 }
 
 /** The bottom of the tree, and of the part of the grass a finger can pick it up from (keyboard coordinates). */
 internal fun KeyboardView.treeBase() = grassBottom - systemBottom - dpu(GESTURE_BAR_MARGIN_DP)
 
 /**
- * The tree: standing in the grass ([held] false, drawn over the keys, before the animals) or, while a finger carries it
- * or it falls ([held] true, drawn last, over everything). It redraws only while it moves by itself.
+ * The tree, over the keys and before the animals. It redraws only while it shakes (after a single tap);
+ * the rest of the time it is part of the frame like anything else.
  */
-internal fun KeyboardView.drawTree(c: Canvas, held: Boolean) {
-    if (!tree.present || panel.big || gifSearching || held != (tree.carried || tree.falling)) return
+internal fun KeyboardView.drawTree(c: Canvas) {
+    if (!tree.present || panel.big || gifSearching) return
     val next = tree.draw(c, SystemClock.uptimeMillis(), grass.treePalette())
-    // Redraws itself a frame at a time while it settles or falls; a finger's moves redraw it otherwise.
     if (next >= 0) postInvalidateOnAnimation()
+}
+
+/** In the cursor mode the keys are dimmed under a veil that says what to do; the tree, drawn after it, glows. */
+internal fun KeyboardView.drawCursorMode(c: Canvas) {
+    if (!cursorMode || panel.big || gifSearching) return
+    fill.color = ColorUtils.setAlphaComponent(theme.background, 185)
+    c.drawRect(0f, barH, width.toFloat(), keyboardHeight, fill)
+    drawText(c, resources.getString(R.string.cursor_mode_hint), width / 2f, (barH + keyboardHeight) / 2f, dpu(15f), theme.text, regular)
 }
 
 /**

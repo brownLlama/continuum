@@ -75,17 +75,20 @@ internal const val GERMAN_WAIT_MS = 700L
 internal const val REPEAT_DELAY_MS = 400L
 internal const val REPEAT_MS = 55L
 
-/** Sliding on the grass: the finger travels this far (dp) for each character the cursor moves. */
+/** In the cursor mode: the finger travels this far (dp) sideways for each character the cursor moves. */
 internal const val CURSOR_STRIDE_DP = 4f
-/** Carrying the tree: one line up or down for this much finger travel (dp). */
+/** In the cursor mode: one line up or down for this much finger travel (dp). */
 internal const val CURSOR_LINE_DP = 26f
 /** Kept clear above Android's gesture bar (dp), where its swipes begin: the tree stands above it. */
 internal const val GESTURE_BAR_MARGIN_DP = 6f
-/** A finger this near (dp) the sides of the tree's bottom still picks it up. */
+/** A finger this near (dp) the sides of the tree's bottom still taps it. */
 internal const val TREE_SLACK_DP = 8f
 /** How tall the tree is, in dp (it rises over the keys). */
 internal const val TREE_HEIGHT_DP = 60f
-/** The tree stays this far (dp) from either edge of the keyboard wherever it is put down. */
-internal const val TREE_EDGE_GAP_DP = 12f
-/** Cursor moves made while the tree is carried are collected for this long (about a frame) and sent together. */
+/** Cursor moves made in the cursor mode are collected for this long (about a frame) and sent together. */
 internal const val CURSOR_FLUSH_MS = 16L
+/** Two taps on the tree this close together (ms) are a double tap; a tap is a touch shorter than [TAP_MAX_MS]. */
+internal const val DOUBLE_TAP_MS = 400L
+internal const val TAP_MAX_MS = 300L
+/** The cursor mode turns itself off after this long (ms) with no finger on the keyboard. */
+internal const val CURSOR_MODE_TIMEOUT_MS = 6_000L

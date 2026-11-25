@@ -91,9 +91,9 @@ class KeyboardView(context: Context, internal val listener: Listener) : View(con
         fun onBackspace()
         /** Swipe left. */
         fun onDeleteWord()
-        /** The tree is carried sideways: move the cursor [steps] characters (negative: left). */
+        /** In the cursor mode, sliding sideways: move the cursor [steps] characters (negative: left). */
         fun onCursorMove(steps: Int)
-        /** The tree is carried up or down: move the cursor [lines] lines (negative: up). */
+        /** In the cursor mode, sliding up or down: move the cursor [lines] lines (negative: up). */
         fun onCursorLines(lines: Int)
         /** Space key or swipe right. */
         fun onSpace()
@@ -254,7 +254,10 @@ class KeyboardView(context: Context, internal val listener: Listener) : View(con
         scheduleAnimal(randomBetween(animalFrequency.openMs))
     }
 
-    fun keyboardHidden() = endAnimal(cancel = true)
+    fun keyboardHidden() {
+        setCursorMode(false)
+        endAnimal(cancel = true)
+    }
     /** The editor's action (EditorInfo.IME_ACTION_*), drawn on the enter key; NONE = plain enter arrow. */
     var enterAction = EditorInfo.IME_ACTION_NONE
         set(value) { field = value; invalidate(); accessibility.changed() }
@@ -669,13 +672,36 @@ class KeyboardView(context: Context, internal val listener: Listener) : View(con
     /** The flowers in the grass, which the animals eat. Random places; eaten ones regrow when the keyboard opens. */
     internal val meadow = Meadow()
     internal val animal = Animal(spritePx).also { it.meadow = meadow }
-    /** The tree in the middle of the grass: picked up and dragged to move the cursor ([pickUpTree], [treeMove]). */
+    /** The tree in the middle of the grass: tapped twice it turns the cursor mode on and off ([treeTapped]). */
     internal val tree = Tree(spritePx)
-    /** Cursor steps and lines the tree's finger has made since the last frame, sent to the editor together ([flushTreeCursor]). */
+    /** The cursor mode: the keys are a trackpad, a finger sliding anywhere moves the cursor ([cursorMove]). */
+    internal var cursorMode = false
+        private set
+    internal var lastTreeTapAt = 0L
+    internal val cursorTimeout = Runnable { cursorModeIdle() }
+
+    /** Turns the cursor mode on or off (the tree shows which); off by itself after a while without a touch. */
+    internal fun setCursorMode(on: Boolean) {
+        if (cursorMode == on) return
+        cursorMode = on
+        tree.active = on
+        timer.removeCallbacks(cursorTimeout)
+        if (on) timer.postDelayed(cursorTimeout, CURSOR_MODE_TIMEOUT_MS) else flushCursorMoves()
+        keyVibration.tap()
+        invalidate()
+    }
+
+    /** The mode times out only when no finger is sliding: while one is, it asks again later. */
+    private fun cursorModeIdle() {
+        if (pointers.values.any { it.area == Area.CURSOR }) timer.postDelayed(cursorTimeout, CURSOR_MODE_TIMEOUT_MS)
+        else setCursorMode(false)
+    }
+
+    /** Cursor steps and lines the sliding finger has made since the last frame, sent to the editor together ([flushCursorMoves]). */
     internal var pendingSteps = 0
     internal var pendingLines = 0
     internal var cursorFlushPending = false
-    internal val flushCursor = Runnable { flushTreeCursor() }
+    internal val flushCursor = Runnable { flushCursorMoves() }
     internal val animalCheck = Runnable { maybeStartAnimal() }
     /** The wind's next frame: redraws only the grass's strip ([windDirty]). */
     internal val windDirty = android.graphics.Rect()
@@ -724,6 +750,7 @@ class KeyboardView(context: Context, internal val listener: Listener) : View(con
         super.onDetachedFromWindow()
         endAnimal(cancel = true)
         timer.removeCallbacks(windTick)
+        timer.removeCallbacks(cursorTimeout)
         for (p in pointers.values) {
             timer.removeCallbacks(p.longPress)
             p.repeat?.let(timer::removeCallbacks)

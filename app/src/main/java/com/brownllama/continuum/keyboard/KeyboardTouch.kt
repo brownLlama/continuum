@@ -55,7 +55,7 @@ internal fun KeyboardView.handleTouch(e: MotionEvent) {
             for (p in pointers.values) {
                 timer.removeCallbacks(p.longPress)
                 p.repeat?.let(timer::removeCallbacks)
-                if (p.area == Area.TREE) dropTree()
+                if (p.area == Area.CURSOR) flushCursorMoves()
             }
             pointers.clear()
             zoom = null
@@ -83,7 +83,7 @@ internal fun KeyboardView.down(id: Int, x: Float, y: Float) {
             return
         }
     }
-    val p = pickUpTree(id, x, y) ?: when {
+    val p = treeOrCursorPointer(id, x, y) ?: when {
         // The GIF search header: its keys, then the strip of GIFs.
         y < -gifStripH -> hitKey(headerKeys, x, y)?.let { Pointer(this, id, x, y, Area.KEY, it) }
         y < 0f -> Pointer(this, id, x, y, Area.GRID, null)
@@ -110,6 +110,8 @@ internal fun KeyboardView.down(id: Int, x: Float, y: Float) {
         }
         p.repeat = r
         timer.postDelayed(r, REPEAT_DELAY_MS)
+    } else if (p.area == Area.TREE || p.area == Area.CURSOR) {
+        // The tree and the trackpad have no hold.
     } else if (p.area != Area.GRID || panel == Panel.CLIPBOARD || panel == Panel.STICKERS) {
         // Clip cards and the user's stickers can be held (to delete them); emoji and GIFs can't.
         timer.postDelayed(p.longPress, holdMs)
@@ -123,7 +125,11 @@ internal fun KeyboardView.move(p: Pointer, x: Float, y: Float) {
     p.x = x
     p.y = y
     val k = p.key
-    if (p.area == Area.TREE) return treeMove(p, x, y)
+    if (p.area == Area.TREE) {
+        if (!p.moved && hypot(x - p.downX, y - p.downY) > slop) p.moved = true
+        return
+    }
+    if (p.area == Area.CURSOR) return cursorMove(p, x, y)
     if (p.area == Area.GRID) {
         // The emoji / GIF grid scrolls vertically (the search header's strip sideways); any real
         // movement means it's not a tap.
@@ -204,7 +210,7 @@ internal fun KeyboardView.onLongerPress(p: Pointer) {
 internal fun KeyboardView.onLongPress(p: Pointer) {
     if (pointers[p.id] !== p || p.moved) return
     when (p.area) {
-        Area.TREE -> {}
+        Area.TREE, Area.CURSOR -> {}
         Area.STRIP, Area.LETTERS -> startZoom(p)
         Area.GRID -> if (panel == Panel.CLIPBOARD) {
             clipAt(p.downX, p.downY)?.let {
@@ -255,9 +261,12 @@ internal fun KeyboardView.release(p: Pointer) {
     pointers.remove(p.id)
     timer.removeCallbacks(p.longPress)
     p.repeat?.let(timer::removeCallbacks)
-    if (p.area == Area.TREE) {
-        // Let go: the cursor stops where it is, and the tree falls from where it hangs.
-        dropTree()
+    if (p.area == Area.TREE) return treeTapped(p)
+    if (p.area == Area.CURSOR) {
+        // Let go: the cursor stops where it is; the mode waits for the next slide (or times out).
+        flushCursorMoves()
+        timer.removeCallbacks(cursorTimeout)
+        timer.postDelayed(cursorTimeout, CURSOR_MODE_TIMEOUT_MS)
         invalidate()
         return
     }
@@ -314,14 +323,47 @@ internal fun KeyboardView.gesture(dx: Float, dy: Float, fromBar: Boolean) {
 }
 
 /**
- * The finger carrying the tree moved: the tree follows it, and the cursor moves with it, one
- * character for each [CURSOR_STRIDE_DP] sideways and one line for each [CURSOR_LINE_DP] up or down.
- * The steps are collected and sent once a frame, so a fast drag asks the editor for one move, not many.
+ * Where a finger lands decides what it is: on the bottom of the tree (in the grass, where there are no
+ * keys) it is a tap on the tree, counted for a double tap ([treeTapped]); anywhere else, in the cursor
+ * mode, it is a finger on the trackpad ([cursorMove]); otherwise null, and it is a key's as usual. The
+ * leafy part of the tree over the keys is only to look at: touches there go to the keys under it.
  */
-internal fun KeyboardView.treeMove(p: Pointer, x: Float, y: Float) {
-    if (!tree.carried) return
+internal fun KeyboardView.treeOrCursorPointer(id: Int, x: Float, y: Float): Pointer? {
+    if (gifSearching || panel.big) return null
+    if (tree.hit(x, y, dpu(TREE_SLACK_DP), keyboardHeight, treeBase())) return Pointer(this, id, x, y, Area.TREE, null)
+    if (cursorMode && y >= 0f) {
+        val p = Pointer(this, id, x, y, Area.CURSOR, null)
+        p.cursorX = x
+        p.cursorY = y
+        // A finger is down: the mode does not time out under it.
+        timer.removeCallbacks(cursorTimeout)
+        return p
+    }
+    return null
+}
+
+/** A finger left the tree: a quick tap that did not move counts; the second within [DOUBLE_TAP_MS] turns the cursor mode on or off. */
+internal fun KeyboardView.treeTapped(p: Pointer) {
+    val now = SystemClock.uptimeMillis()
+    if (p.moved || now - p.downAt > TAP_MAX_MS) return
+    if (lastTreeTapAt != 0L && now - lastTreeTapAt <= DOUBLE_TAP_MS) {
+        lastTreeTapAt = 0L
+        setCursorMode(!cursorMode)
+    } else {
+        // A single tap: the tree shakes, to show it heard.
+        lastTreeTapAt = now
+        tree.nudge(now)
+        invalidate()
+    }
+}
+
+/**
+ * A finger slid on the keys in the cursor mode: the cursor moves with it, one character for each
+ * [CURSOR_STRIDE_DP] sideways and one line for each [CURSOR_LINE_DP] up or down. The steps are
+ * collected and sent once a frame, so a fast slide asks the editor for one move, not many.
+ */
+internal fun KeyboardView.cursorMove(p: Pointer, x: Float, y: Float) {
     p.moved = true
-    tree.carry(x, y)
     val stride = dpu(CURSOR_STRIDE_DP)
     val steps = ((x - p.cursorX) / stride).toInt()
     if (steps != 0) {
@@ -338,11 +380,10 @@ internal fun KeyboardView.treeMove(p: Pointer, x: Float, y: Float) {
         cursorFlushPending = true
         timer.postDelayed(flushCursor, CURSOR_FLUSH_MS)
     }
-    postInvalidateOnAnimation()
 }
 
 /** Sends the cursor moves collected so far to the editor, with one tick. */
-internal fun KeyboardView.flushTreeCursor() {
+internal fun KeyboardView.flushCursorMoves() {
     cursorFlushPending = false
     timer.removeCallbacks(flushCursor)
     val steps = pendingSteps
@@ -353,35 +394,6 @@ internal fun KeyboardView.flushTreeCursor() {
     if (steps != 0) listener.onCursorMove(steps)
     if (lines != 0) listener.onCursorLines(lines)
     keyVibration.tap()
-}
-
-/** Let go of the tree: the cursor moves still owed are sent, and the tree falls from where it hangs. */
-internal fun KeyboardView.dropTree() {
-    flushTreeCursor()
-    tree.drop(SystemClock.uptimeMillis(), width.toFloat(), treeBase(), dpu(TREE_EDGE_GAP_DP))
-    postInvalidateOnAnimation()
-}
-
-/**
- * A finger landed on the bottom of the tree, the trunk and the part of it standing in the grass, where
- * there are no keys: it is picked up at once, and from then on carried by that finger. The leafy part
- * over the keys is only to look at: touches there go to the keys under it (taps, holds, swipes).
- * Returns the pointer, or null when the touch is not on the tree's bottom.
- */
-internal fun KeyboardView.pickUpTree(id: Int, x: Float, y: Float): Pointer? {
-    if (gifSearching || panel.big) return null
-    if (!tree.hit(x, y, dpu(TREE_SLACK_DP), keyboardHeight, treeBase())) return null
-    return grabTree(id, x, y)
-}
-
-private fun KeyboardView.grabTree(id: Int, x: Float, y: Float): Pointer {
-    val p = Pointer(this, id, x, y, Area.TREE, null)
-    p.cursorX = x
-    p.cursorY = y
-    tree.pickUp(x, y, SystemClock.uptimeMillis())
-    keyVibration.tap()
-    postInvalidateOnAnimation()
-    return p
 }
 
 /** A finger lifted without swiping. */
@@ -398,6 +410,6 @@ internal fun KeyboardView.tap(p: Pointer) {
             }
         }
         Area.KEY -> keyTap(p.key!!, p)
-        Area.TREE -> {}
+        Area.TREE, Area.CURSOR -> {}
     }
 }

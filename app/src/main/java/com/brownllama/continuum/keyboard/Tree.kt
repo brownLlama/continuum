@@ -1,15 +1,15 @@
-// The tree in the grass: pick it up (hold it) and drag it to move the cursor; let go and it falls where it is.
+// The tree in the grass: tap it twice to turn the cursor mode on, and the keys become a trackpad.
 package com.brownllama.continuum.keyboard
 
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.graphics.LightingColorFilter
 import android.graphics.Paint
 import androidx.core.graphics.createBitmap
 import kotlin.math.PI
 import kotlin.math.ceil
 import kotlin.math.floor
 import kotlin.math.max
-import kotlin.math.min
 import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.math.sqrt
@@ -20,10 +20,11 @@ import kotlin.math.sqrt
  * apples, branches, and a trunk that flares at the roots, all with the dark outline everything here
  * has. It is drawn a little see-through, so the keys behind it can still be read.
  *
- * It stands on the grass level above Android's gesture bar, first in the middle ([fit]). A finger on
- * its bottom, in the grass, picks it up ([pickUp]) and it hangs below the finger ([carry]) until the finger lets go ([drop]);
- * then it falls straight down from there and stands where it landed. Its picture is drawn once
- * into a bitmap for its size and colours, so a frame only copies that.
+ * It stands in the middle of the grass level above Android's gesture bar ([fit]). Its bottom, in the
+ * grass, is the switch for the cursor mode: tapped twice it turns the mode on ([active]: it is drawn
+ * solid and brighter) and tapped twice again it turns it off; a single tap only makes it shake
+ * ([nudge]). Its leafy part over the keys only shows; touches there go to the keys. Its picture is
+ * drawn once into a bitmap for its size and colours, so a frame only copies that.
  */
 internal class Tree(private val unit: Float) {
     /** Where it stands: the top left (keyboard coordinates), and its size in sprite pixels (0: no tree fits). */
@@ -36,39 +37,26 @@ internal class Tree(private val unit: Float) {
     var rows = 0
         private set
 
-    /** Held by a finger at ([carryX], [carryY]) since [grabAt]; or falling from ([fromLeft], [fromTop]) since [fallAt]. */
-    var carried = false
-        private set
-    var falling = false
-        private set
-    private var carryX = 0f
-    private var carryY = 0f
-    private var grabAt = 0L
-    /** Where the top left was relative to the finger when it was picked up. */
-    private var grabDx = 0f
-    private var grabDy = 0f
-    private var fallAt = 0L
-    private var fromLeft = 0f
-    private var fromTop = 0f
-    /** Where the user put it down, as a share of the keyboard's width (null: not yet, so in the middle). */
-    private var placed: Float? = null
+    /** The cursor mode is on: the tree is solid and glowing. */
+    var active = false
+    private var nudgeAt = -NUDGE_MS
 
     /** The tree's pixels (colour slots), for [fit]'s size. */
     private var grid = IntArray(0)
     private var image: Bitmap? = null
     private var builtKey = 0L
     private val paint = Paint().apply { alpha = ALPHA }
+    private val glow = LightingColorFilter(0xFFFFFFFF.toInt(), 0x002A2A14)
 
     val present get() = rows > 0
     val width get() = cols * unit
     val height get() = rows * unit
 
     /**
-     * Places the tree for a keyboard [viewWidth] wide: its base at [baseY] (just above Android's
-     * gesture bar), [wantRows] sprite pixels tall if it can be, but no higher than [topLimit]. In the
-     * middle until it has been put down somewhere; always [edgeGap] px or more from either edge.
+     * Places the tree for a keyboard [viewWidth] wide: in the middle, its base at [baseY] (just above
+     * Android's gesture bar), [wantRows] sprite pixels tall if it can be, but no higher than [topLimit].
      */
-    fun fit(viewWidth: Float, baseY: Float, topLimit: Float, edgeGap: Float, wantRows: Int) {
+    fun fit(viewWidth: Float, baseY: Float, topLimit: Float, wantRows: Int) {
         val fits = ((baseY - topLimit) / unit).toInt().coerceAtMost(wantRows)
         val r = if (fits >= MIN_ROWS) fits else 0
         val c = if (r == 0) 0 else crownWidth(r)
@@ -79,98 +67,39 @@ internal class Tree(private val unit: Float) {
         rows = r
         cols = c
         if (r == 0) return
-        val want = placed?.let { it * viewWidth } ?: ((viewWidth - c * unit) / 2f)
-        homeLeft = floor(want.coerceIn(edgeGap, max(edgeGap, viewWidth - edgeGap - c * unit)) / unit) * unit
-        if (!falling) homeTop = ceil((baseY - r * unit) / unit) * unit
-        else homeTop = ceil((baseY - r * unit) / unit) * unit
+        homeLeft = floor(((viewWidth - c * unit) / 2f) / unit) * unit
+        homeTop = ceil((baseY - r * unit) / unit) * unit
     }
 
     /**
-     * Whether (x, y) is on the bottom of the standing tree: within its width (widened by [slack] px) and
-     * between [from] (the top of the grass, where the keys end) and [to] (above Android's gesture bar). The
-     * crown over the keys is not for touching: it only shows. Not while it is held or falling.
+     * Whether (x, y) is on the bottom of the tree: within its width (widened by [slack] px) and between
+     * [from] (the top of the grass, where the keys end) and [to] (above Android's gesture bar). The crown
+     * over the keys is not for touching: it only shows.
      */
     fun hit(x: Float, y: Float, slack: Float, from: Float, to: Float): Boolean =
-        present && !carried && !falling && y >= max(from, homeTop) && y <= to &&
-            x >= homeLeft - slack && x <= homeLeft + width + slack
+        present && y >= max(from, homeTop) && y <= to && x >= homeLeft - slack && x <= homeLeft + width + slack
 
-    /** Picked up by a finger at ([x], [y]): it eases from where it stood to hang below the finger. */
-    fun pickUp(x: Float, y: Float, now: Long) {
-        carried = true
-        falling = false
-        carryX = x
-        carryY = y
-        grabAt = now
-        grabDx = homeLeft - x
-        grabDy = homeTop - y
-    }
-
-    /** The finger moved: the tree hangs below it (its top at the finger, the finger at the middle of its width). */
-    fun carry(x: Float, y: Float) {
-        carryX = x
-        carryY = y
-    }
-
-    /** Where the top left is now while held (easing from the grab to hanging below the finger). */
-    internal fun heldLeft(now: Long): Float {
-        val e = ease(((now - grabAt).toFloat() / HANG_MS).coerceIn(0f, 1f))
-        return carryX + grabDx + (-width / 2f - grabDx) * e
-    }
-
-    internal fun heldTop(now: Long): Float {
-        val e = ease(((now - grabAt).toFloat() / HANG_MS).coerceIn(0f, 1f))
-        return carryY + grabDy + (-height * HELD_AT - grabDy) * e
-    }
-
-    private fun ease(t: Float) = 1f - (1f - t) * (1f - t)
-
-    /**
-     * Let go: it falls straight down from where it hangs to the ground line [baseY] and stands there
-     * ([viewWidth]: its place is kept as a share of the keyboard's width).
-     */
-    fun drop(now: Long, viewWidth: Float, baseY: Float, edgeGap: Float) {
-        if (!carried) return
-        fromLeft = heldLeft(now)
-        fromTop = heldTop(now)
-        carried = false
-        falling = true
-        fallAt = now
-        val left = floor(fromLeft.coerceIn(edgeGap, max(edgeGap, viewWidth - edgeGap - width)) / unit) * unit
-        placed = left / viewWidth
-        homeLeft = left
-        homeTop = ceil((baseY - height) / unit) * unit
+    /** A single tap: the tree shakes for a moment, to show it was touched. */
+    fun nudge(now: Long) {
+        nudgeAt = now
     }
 
     /**
-     * Draws the tree: standing, hanging from the finger, or falling. Returns how many ms until it needs
-     * drawing again (while it moves by itself), or [REST]: a finger's moves redraw it.
+     * Draws the tree. Returns how many ms until it needs drawing again (while it shakes), or [REST].
      */
     fun draw(c: Canvas, now: Long, theme: Palette): Long {
         if (!present) return REST
-        var left = homeLeft
-        var top = homeTop
+        var shake = 0
         var next = REST
-        when {
-            carried -> {
-                left = heldLeft(now)
-                top = heldTop(now)
-                if (now - grabAt < HANG_MS) next = 16L
-            }
-            falling -> {
-                val t = ((now - fallAt).toFloat() / FALL_MS).coerceIn(0f, 1f)
-                if (t >= 1f) {
-                    falling = false
-                } else {
-                    // Gravity: slow at first, then faster.
-                    val g = t * t
-                    left = fromLeft + (homeLeft - fromLeft) * min(1f, t * 3f)
-                    top = fromTop + (homeTop - fromTop) * g
-                    next = 16L
-                }
-            }
+        val t = now - nudgeAt
+        if (t in 0 until NUDGE_MS) {
+            shake = (sin(2 * PI * t / (NUDGE_MS / 2.0)) * unit).roundToInt()
+            next = 16L
         }
+        paint.alpha = if (active) 255 else ALPHA
+        paint.colorFilter = if (active) glow else null
         // Whole screen pixels, so its own pixels stay crisp.
-        c.drawBitmap(imageFor(theme), left.roundToInt().toFloat(), top.roundToInt().toFloat(), paint)
+        c.drawBitmap(imageFor(theme), homeLeft + shake, homeTop, paint)
         return next
     }
 
@@ -220,11 +149,8 @@ internal class Tree(private val unit: Float) {
         const val MIN_ROWS = 8
         /** How see-through it is (of 255): the keys behind it can be read. */
         const val ALPHA = 190
-        /** How long it takes to settle below the finger after being picked up, and to fall when let go. */
-        const val HANG_MS = 140L
-        const val FALL_MS = 300L
-        /** Where on the tree the finger holds it (0 its top .. 1 its base): near the top, so it hangs below the finger. */
-        const val HELD_AT = 0.12f
+        /** How long a single tap makes it shake. */
+        const val NUDGE_MS = 220L
 
         const val NONE = 0
         const val OUTLINE = 1

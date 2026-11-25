@@ -42,7 +42,7 @@ internal class Key(
 // ---- touch ----------------------------------------------------------------------------
 
 /** Where a finger landed: on a [Key], mini mode's strip or letter row, or the emoji / GIF grid. */
-internal enum class Area { KEY, STRIP, LETTERS, GRID, TREE }
+internal enum class Area { KEY, STRIP, LETTERS, GRID, TREE, CURSOR }
 
 /** One finger on the keyboard, from down to up. */
 internal class Pointer(private val view: KeyboardView, val id: Int, val downX: Float, val downY: Float, val area: Area, val key: Key?) {
@@ -77,14 +77,14 @@ internal class Pointer(private val view: KeyboardView, val id: Int, val downX: F
     val longerPress = Runnable { view.onLongerPress(this) }
     /** The long-press popup's characters once [longerPress] added the German letter, else null (the key's hint). */
     var options: String? = null
-    /** Carrying the tree ([Area.TREE]): where the cursor was last moved a character ([cursorX]) or a line ([cursorY]). */
+    /** Sliding the cursor ([Area.CURSOR]): where it was last moved a character ([cursorX]) or a line ([cursorY]). */
     var cursorX = downX
     var cursorY = downY
     /** Backspace auto-repeat while held. */
     var repeat: Runnable? = null
 
     /** A plain tap still in progress, which another finger landing may finish early (see [handleTouch]). */
-    val flushable get() = area != Area.TREE && !zooming && !moved && !longPressed &&
+    val flushable get() = area != Area.TREE && area != Area.CURSOR && !zooming && !moved && !longPressed &&
         (area != Area.KEY || key?.kind == Kind.LETTER || key?.kind == Kind.TEXT)
 }
 
