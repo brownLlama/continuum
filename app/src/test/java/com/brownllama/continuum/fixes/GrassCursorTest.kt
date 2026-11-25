@@ -2,6 +2,7 @@ package com.brownllama.continuum.fixes
 
 import android.view.MotionEvent
 import com.brownllama.continuum.Prefs
+import com.brownllama.continuum.keyboard.grassBottom
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -110,5 +111,20 @@ class GrassCursorTest {
         k.view.onTouchEvent(ev(MotionEvent.ACTION_UP, 460f, t + 300L))
         assertEquals(0, k.view.grass.push)
         assertTrue(k.view.grass.at(10, k.view.grass.imageHeight) == 0)
+    }
+
+    @Test fun `the part of the grass over Android's gesture bar is not for sliding`() {
+        val bar = 60 // px: Android's gesture handle, under the grass the setting makes
+        for (fromBar in listOf(false, true)) {
+            val k = keyboard()
+            k.view.systemBottom = bar
+            k.focus(text = "hello world")
+            k.layoutView()
+            val gb = k.view.overlayH + k.view.gifHeaderH + k.view.grassBottom
+            // Just above the gesture bar, or inside it.
+            k.slide(-28f, y = if (fromBar) gb - bar / 2f else gb - bar - 16f * k.context.resources.displayMetrics.density)
+            if (fromBar) assertTrue("the cursor did not slide there", k.edit.selectionStart >= 11)
+            else assertEquals("the cursor slid above the bar", 4, k.edit.selectionStart)
+        }
     }
 }

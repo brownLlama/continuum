@@ -98,7 +98,10 @@ internal fun KeyboardView.down(id: Int, x: Float, y: Float) {
     pointers[id] = p
     // Below the keys is the grass: a sideways slide that starts there moves the cursor. Nothing that
     // starts on the keys is ever turned into one, so typing and swipes on the keys are as they were.
-    p.grass = grassHeight > 0 && y >= keyboardHeight && !gifSearching && !panel.big
+    // Not on the part of it over Android's gesture bar (or navigation buttons): swipes there belong to
+    // Android (home, switch apps), which would take the slide over half way.
+    p.grass = grassHeight > 0 && y >= keyboardHeight && y < grassBottom - systemBottom - dpu(GESTURE_BAR_MARGIN_DP) &&
+        !gifSearching && !panel.big
     // A tick for a key or the letter row; not for the emoji / GIF / sticker grids, which scroll.
     if (p.area != Area.GRID) keyVibration.tap()
     if ((p.area == Area.LETTERS || p.area == Area.STRIP) && !p.grass) glows += Glow(p)
