@@ -21,7 +21,7 @@ import kotlin.math.sqrt
  * has. It is drawn a little see-through, so the keys behind it can still be read.
  *
  * It stands at the right of the grass level above Android's gesture bar ([fit]). Its bottom, in the
- * grass, is the switch for the cursor mode: tapped twice it turns the mode on ([active]: it is drawn
+ * grass and the grass below it, is the switch for the cursor mode: tapped twice it turns the mode on ([active]: it is drawn
  * solid and brighter) and tapped twice again it turns it off; a single tap only makes it shake
  * ([nudge]). Its leafy part over the keys only shows; touches there go to the keys. Its picture is
  * drawn once into a bitmap for its size and colours, so a frame only copies that.
@@ -74,8 +74,9 @@ internal class Tree(private val unit: Float) {
 
     /**
      * Whether (x, y) is on the bottom of the tree: within its width (widened by [slack] px) and between
-     * [from] (the top of the grass, where the keys end) and [to] (above Android's gesture bar). The crown
-     * over the keys is not for touching: it only shows.
+     * [from] (the top of the grass, where the keys end) and [to] (the bottom of the screen, so the grass
+     * below the trunk counts too: a big place to double-tap). The crown over the keys is not for
+     * touching: it only shows.
      */
     fun hit(x: Float, y: Float, slack: Float, from: Float, to: Float): Boolean =
         present && y >= max(from, homeTop) && y <= to && x >= homeLeft - slack && x <= homeLeft + width + slack

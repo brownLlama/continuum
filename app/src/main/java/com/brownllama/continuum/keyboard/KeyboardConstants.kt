@@ -82,7 +82,7 @@ internal const val CURSOR_LINE_DP = 26f
 /** Kept clear above Android's gesture bar (dp), where its swipes begin: the tree stands above it. */
 internal const val GESTURE_BAR_MARGIN_DP = 6f
 /** A finger this near (dp) the sides of the tree's bottom still taps it. */
-internal const val TREE_SLACK_DP = 8f
+internal const val TREE_SLACK_DP = 16f
 /** How tall the tree is, in dp (it rises over the keys). */
 internal const val TREE_HEIGHT_DP = 60f
 /** Cursor moves made in the cursor mode are collected for this long (about a frame) and sent together. */

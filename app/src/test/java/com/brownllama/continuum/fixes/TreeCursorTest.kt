@@ -240,12 +240,53 @@ class TreeCursorTest {
         assertFalse(k.view.cursorMode)
     }
 
+    @Test fun `the instruction in the cursor mode is two short lines that fit between the left edge and the tree`() {
+        for (mode in listOf("mini", "full")) {
+            val k = keyboard(mode).withTree("hello")
+            k.doubleTapTree()
+            val drawn = ArrayList<Triple<String, Float, Float>>() // text, left, right
+            val canvas = object : Canvas(Bitmap.createBitmap(1080, 700, Bitmap.Config.ARGB_8888)) {
+                override fun drawText(text: String, x: Float, y: Float, paint: android.graphics.Paint) {
+                    val w = paint.measureText(text)
+                    drawn += Triple(text, x - w / 2f, x + w / 2f)
+                    super.drawText(text, x, y, paint)
+                }
+            }
+            k.view.draw(canvas)
+            val lines = drawn.filter { it.first.startsWith("Slide") || it.first.startsWith("Double") }
+            assertEquals("$mode: both lines are shown", 2, lines.size)
+            for ((t, l, r) in lines) {
+                assertTrue("$mode: '$t' starts inside the screen", l >= 0f)
+                assertTrue("$mode: '$t' ends before the tree", r <= k.view.tree.homeLeft)
+            }
+        }
+    }
+
     @Test fun `hiding the keyboard turns the mode off`() {
         val k = keyboard().withTree("hello")
         k.doubleTapTree()
         assertTrue(k.view.cursorMode)
         k.view.keyboardHidden()
         assertFalse(k.view.cursorMode)
+    }
+
+    @Test fun `the grass below the trunk, down to the bottom of the screen, and a little beside it, is the switch too`() {
+        val k = keyboard(bar = 66).withTree("hello world")
+        val t = k.view.tree
+        val v = k.view
+        // Under the trunk, over where Android's gesture bar is (a tap still reaches the keyboard there).
+        val low = k.offY + v.grassBottom - 8f
+        k.tapAt(t.homeLeft + t.width / 2f, low)
+        k.wait(120)
+        k.tapAt(t.homeLeft + t.width / 2f, low)
+        assertTrue("below the trunk", v.cursorMode)
+        k.wait(600)
+        // Beside it, within a thumb's width.
+        val beside = t.homeLeft - 12f * k.context.resources.displayMetrics.density
+        k.tapAt(beside, k.offY + t.homeTop + t.height - 3f)
+        k.wait(120)
+        k.tapAt(beside, k.offY + t.homeTop + t.height - 3f)
+        assertFalse("beside the tree, close", v.cursorMode)
     }
 
     @Test fun `a touch beside the tree is not the tree`() {

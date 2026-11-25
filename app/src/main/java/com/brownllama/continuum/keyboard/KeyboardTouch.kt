@@ -324,13 +324,13 @@ internal fun KeyboardView.gesture(dx: Float, dy: Float, fromBar: Boolean) {
 
 /**
  * Where a finger lands decides what it is: on the bottom of the tree (in the grass, where there are no
- * keys) it is a tap on the tree, counted for a double tap ([treeTapped]); anywhere else, in the cursor
+ * keys, and down to the bottom of the screen, a generous place to double-tap) it is a tap on the tree, counted for a double tap ([treeTapped]); anywhere else, in the cursor
  * mode, it is a finger on the trackpad ([cursorMove]); otherwise null, and it is a key's as usual. The
  * leafy part of the tree over the keys is only to look at: touches there go to the keys under it.
  */
 internal fun KeyboardView.treeOrCursorPointer(id: Int, x: Float, y: Float): Pointer? {
     if (gifSearching || panel.big) return null
-    if (tree.hit(x, y, dpu(TREE_SLACK_DP), keyboardHeight, treeBase())) return Pointer(this, id, x, y, Area.TREE, null)
+    if (tree.hit(x, y, dpu(TREE_SLACK_DP), keyboardHeight, grassBottom)) return Pointer(this, id, x, y, Area.TREE, null)
     if (cursorMode && y >= 0f) {
         val p = Pointer(this, id, x, y, Area.CURSOR, null)
         p.cursorX = x

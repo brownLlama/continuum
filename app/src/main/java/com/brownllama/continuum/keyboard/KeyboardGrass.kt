@@ -257,12 +257,30 @@ internal fun KeyboardView.drawTree(c: Canvas) {
     if (next >= 0) postInvalidateOnAnimation()
 }
 
-/** In the cursor mode the keys are dimmed under a veil that says what to do; the tree, drawn after it, glows. */
+/**
+ * In the cursor mode the keys are dimmed under a veil that says what to do, in two short lines, sized to
+ * fit between the left edge and the tree (which is drawn after it, and glows).
+ */
 internal fun KeyboardView.drawCursorMode(c: Canvas) {
     if (!cursorMode || panel.big || gifSearching) return
     fill.color = ColorUtils.setAlphaComponent(theme.background, 185)
     c.drawRect(0f, barH, width.toFloat(), keyboardHeight, fill)
-    drawText(c, resources.getString(R.string.cursor_mode_hint), width / 2f, (barH + keyboardHeight) / 2f, dpu(15f), theme.text, regular)
+    val left = dpu(12f)
+    val right = if (tree.present) tree.homeLeft - dpu(8f) else width - dpu(12f)
+    val room = (right - left).coerceAtLeast(dpu(80f))
+    val lines = listOf(resources.getString(R.string.cursor_mode_hint_1), resources.getString(R.string.cursor_mode_hint_2))
+    // As large as fits the width and the veil's height, but no larger than ordinary key text.
+    var size = min(dpu(15f), (keyboardHeight - barH) / 4f)
+    text.typeface = regular
+    while (size > dpu(8f)) {
+        text.textSize = size
+        if (lines.maxOf { text.measureText(it) } <= room) break
+        size -= dpu(0.5f)
+    }
+    val cx = (left + right) / 2f
+    val cy = (barH + keyboardHeight) / 2f
+    drawText(c, lines[0], cx, cy - size * 0.7f, size, theme.text, regular)
+    drawText(c, lines[1], cx, cy + size * 0.7f, size, theme.dim, regular)
 }
 
 /**
