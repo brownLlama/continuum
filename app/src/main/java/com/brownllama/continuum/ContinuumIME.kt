@@ -534,9 +534,6 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
     /** Copy or cut the selection to the clipboard. */
     override fun onSelectionAction(cut: Boolean) = handleSelectionAction(cut)
 
-    /** How many characters are selected, for the picture of the selection ([KeyboardView.Listener.selectionLength]). */
-    override fun selectionLength() = if (selStart >= 0 && selEnd >= 0) kotlin.math.abs(selEnd - selStart) else 0
-
     /** The selecting is over. */
     override fun onSelectionEnd(collapse: Boolean) = handleSelectionEnd(collapse)
 

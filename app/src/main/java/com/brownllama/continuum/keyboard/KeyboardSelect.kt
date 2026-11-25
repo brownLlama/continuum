@@ -1,4 +1,4 @@
-// Selecting text in the cursor mode: double tap, double tap and slide, triple tap; then copy or cut by choosing a swarm of fireflies.
+// Selecting text in the cursor mode: double tap, double tap and slide, triple tap; then copy or cut by choosing a glass jar for the fireflies.
 package com.brownllama.continuum.keyboard
 
 import android.graphics.Canvas
@@ -8,14 +8,15 @@ import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.min
 
-/** Where selecting has got to: [SELECTING] while fingers are making the selection, [CHOOSING] once it is made and the fireflies wait to be picked. */
+/** Where selecting has got to: [SELECTING] while fingers are making the selection, [CHOOSING] once it is made and two jars wait for the fireflies. */
 internal enum class Selection { NONE, SELECTING, CHOOSING }
 
 /** Selecting has begun (a double or triple tap selected something): the fireflies turn amber. */
 internal fun KeyboardView.beginSelecting() {
     selection = Selection.SELECTING
     fireflies.amber = true
-    fireflies.endChoice()
+    fireflies.release()
+    fireflies.amber = true
     timer.removeCallbacks(chooseTick)
     keyVibration.tap()
     postInvalidateOnAnimation()
@@ -28,8 +29,8 @@ internal fun KeyboardView.scheduleChoosing() {
 }
 
 /**
- * The selection is made: the swarm splits in two, one half circling a spot for copy and the other a spot for
- * cut, left and right of where the finger last was (near the thumb, and inside the screen, well apart).
+ * The selection is made: two jars appear, copy on the left and cut on the right of where the finger last was (near
+ * the thumb, and inside the screen, well apart), their lids open, and the fireflies hover between them.
  */
 internal fun KeyboardView.startChoosing() {
     if (selection != Selection.SELECTING || pointers.values.any { it.area == Area.CURSOR }) return
@@ -45,11 +46,7 @@ internal fun KeyboardView.startChoosing() {
     spotCopyX = left
     spotCutX = right
     spotY = fy
-    // The selection becomes a constellation: one star for about every three characters, in a pattern of its own.
-    val length = listener.selectionLength()
-    choiceStars = (length / 3 + 4).coerceIn(4, 9)
-    choiceSeed = length * 7 + 3
-    fireflies.choose(left, fy, right, fy)
+    fireflies.hover((left + right) / 2f, fy)
     selection = Selection.CHOOSING
     keyVibration.tap()
     timer.removeCallbacks(cursorTimeout)
@@ -74,124 +71,171 @@ internal fun KeyboardView.endSelection(collapse: Boolean) {
     timer.removeCallbacks(chooseTick)
     if (selection == Selection.NONE) return
     selection = Selection.NONE
-    fireflies.amber = false
-    fireflies.endChoice()
+    fireflies.release()
     listener.onSelectionEnd(collapse)
     invalidate()
 }
 
-/** A spot was tapped: the selection is copied or cut, and the swarm is one again. */
+/**
+ * A jar was tapped: the selection is copied or cut, the fireflies stream into that jar one after another, the other
+ * jar fades, and the lid clicks shut ([JAR_SHUT_MS] on) with a flash and a tick; a moment later the jar fades and
+ * the fireflies are let out ([JAR_TOTAL_MS]).
+ */
 internal fun KeyboardView.performSelectionButton(cut: Boolean) {
     listener.onSelectionAction(cut)
+    val now = SystemClock.uptimeMillis()
     selection = Selection.NONE
     tapCount = 0
     lastTapUpAt = 0L
-    fireflies.amber = false
-    fireflies.endChoice()
+    jarChosen = if (cut) 2 else 1
+    jarAt = now
+    val u = spritePx
+    fireflies.funnel(if (cut) spotCutX else spotCopyX, jarTop() + 9 * u, cut, now)
+    timer.removeCallbacks(jarClick)
+    timer.removeCallbacks(jarDone)
+    timer.postDelayed(jarClick, JAR_SHUT_MS)
+    timer.postDelayed(jarDone, JAR_TOTAL_MS)
     keyVibration.tap()
     invalidate()
 }
 
-/**
- * The two choices are constellations made from the selection (as many stars as it is long, up to nine, in a
- * pattern of their own), with the fireflies circling each. Copy is a pair of twins: the same constellation
- * twice, in pale blue, with an "=" between them. Cut is the same constellation split along a diagonal into
- * two halves drifting apart, in red-orange, with a dotted slash through the gap; every couple of seconds a
- * shooting star streaks along the slash.
- */
-internal fun KeyboardView.drawSelectionChoices(c: Canvas) {
-    if (selection != Selection.CHOOSING) return
-    val now = SystemClock.uptimeMillis()
-    val u = spritePx
-    val top = spotY - CONSTELLATION_H * u / 2f - u
-    // Copy: the twins.
-    val twinsLeft = spotCopyX - (2 * CONSTELLATION_W + TWIN_GAP) * u / 2f
-    constellation(c, twinsLeft, top, COPY_ICON, now, cut = false, shift = 0)
-    constellation(c, twinsLeft + (CONSTELLATION_W + TWIN_GAP) * u, top, COPY_ICON, now, cut = false, shift = 0)
-    fill.color = ColorUtils.setAlphaComponent(COPY_ICON, 230)
-    val eqX = twinsLeft + (CONSTELLATION_W + TWIN_GAP / 2f - 1) * u
-    c.drawRect(eqX, spotY - 2 * u, eqX + 2 * u, spotY - u, fill)
-    c.drawRect(eqX, spotY, eqX + 2 * u, spotY + u, fill)
-    // Cut: the one constellation, cut in two.
-    constellation(c, spotCutX - CONSTELLATION_W * u / 2f, top, CUT_ICON, now, cut = true, shift = 2)
-    val size = dpu(12f)
-    drawText(c, resources.getString(android.R.string.copy), spotCopyX, spotY + (CONSTELLATION_H / 2f + 3) * u, size, COPY_ICON, regular)
-    drawText(c, resources.getString(android.R.string.cut), spotCutX, spotY + (CONSTELLATION_H / 2f + 3) * u, size, CUT_ICON, regular)
+/** The jars' lids have clicked shut. */
+internal fun KeyboardView.jarClicked() {
+    keyVibration.tap()
+    postInvalidateOnAnimation()
 }
 
-/**
- * One constellation, [CONSTELLATION_W] × [CONSTELLATION_H] sprite pixels with its top left at ([left], [top]): the
- * stars of [choiceStars] and [choiceSeed], each a bright pixel with a cross of light that twinkles, joined in
- * order by one-pixel lines. If [cut], a diagonal slash from the bottom left to the top right splits it: the
- * stars and lines on each side stay on their side (no line crosses it) and the two halves are [shift] pixels
- * apart, a dotted slash between them, and a shooting star runs along it now and then.
- */
-private fun KeyboardView.constellation(c: Canvas, left: Float, top: Float, color: Int, now: Long, cut: Boolean, shift: Int) {
-    val u = spritePx
-    val w = CONSTELLATION_W
-    val h = CONSTELLATION_H
-    val n = choiceStars
-    fun starX(i: Int) = (((i + 0.1f + 0.75f * GrassField.noise(choiceSeed + i, 401)) * (w - 1)) / n).toInt().coerceIn(0, w - 1)
-    fun starY(i: Int) = (GrassField.noise(choiceSeed + i, 402) * (h - 1)).toInt()
-    // Which side of the slash a cell is on: -1 above and left of it, 1 below and right of it.
-    fun side(x: Int, y: Int) = if (x * h + y * w < w * h) -1 else 1
-    fun dx(s: Int) = if (cut) s * shift * u else 0f
-    fun dy(s: Int) = if (cut) s * shift * u * 0.5f else 0f
-    // The lines between one star and the next, a pixel at a time (not across the slash).
-    fill.color = ColorUtils.setAlphaComponent(color, 110)
-    for (i in 0 until n - 1) {
-        var x0 = starX(i); var y0 = starY(i)
-        val x1 = starX(i + 1); val y1 = starY(i + 1)
-        val sx = if (x0 < x1) 1 else -1
-        val sy = if (y0 < y1) 1 else -1
-        val ddx = kotlin.math.abs(x1 - x0)
-        val ddy = -kotlin.math.abs(y1 - y0)
-        var err = ddx + ddy
-        val s0 = side(x0, y0)
-        while (true) {
-            if (!cut || side(x0, y0) == s0 && side(x1, y1) == s0) {
-                val s = if (cut) side(x0, y0) else 0
-                val px = left + x0 * u + dx(s)
-                val py = top + y0 * u + dy(s)
-                c.drawRect(px, py, px + u, py + u, fill)
-            }
-            if (x0 == x1 && y0 == y1) break
-            val e2 = 2 * err
-            if (e2 >= ddy) { err += ddy; x0 += sx }
-            if (e2 <= ddx) { err += ddx; y0 += sy }
-        }
-    }
-    // The stars, each twinkling at its own pace.
-    for (i in 0 until n) {
-        val s = if (cut) side(starX(i), starY(i)) else 0
-        val px = left + starX(i) * u + dx(s)
-        val py = top + starY(i) * u + dy(s)
-        val tw = kotlin.math.sin(now / 1000.0 * (2.0 + (i % 3)) + i * 1.7).let { 0.5 + 0.5 * it * it }
-        fill.color = ColorUtils.setAlphaComponent(color, (80 + 90 * tw).toInt())
-        c.drawRect(px - u, py, px, py + u, fill)
-        c.drawRect(px + u, py, px + 2 * u, py + u, fill)
-        c.drawRect(px, py - u, px + u, py, fill)
-        c.drawRect(px, py + u, px + u, py + 2 * u, fill)
-        fill.color = ColorUtils.setAlphaComponent(0xFFFFFF, (160 + 95 * tw).toInt())
-        c.drawRect(px, py, px + u, py + u, fill)
-    }
-    if (!cut) return
-    // The slash: dots along the diagonal from the bottom left to the top right, and now and then a shooting star.
-    val steps = maxOf(w, h)
-    fill.color = ColorUtils.setAlphaComponent(color, 190)
-    for (k in 0..steps step 2) {
-        val x = k * (w - 1) / steps
-        val y = (h - 1) - k * (h - 1) / steps
-        c.drawRect(left + x * u, top + y * u, left + (x + 1) * u, top + (y + 1) * u, fill)
-    }
-    val t = (now % SHOOT_PERIOD_MS).toFloat() / SHOOT_MS
-    if (t < 1f) {
-        for (tail in 0..5) {
-            val p = (t - tail * 0.05f).coerceIn(0f, 1f)
-            val x = (p * (w - 1)).toInt()
-            val y = ((h - 1) - p * (h - 1)).toInt()
-            fill.color = ColorUtils.setAlphaComponent(0xFFFFFF, 255 - tail * 42)
-            c.drawRect(left + x * u, top + y * u, left + (x + 1) * u, top + (y + 1) * u, fill)
-        }
-    }
+/** The fireflies are let out of the jar. */
+internal fun KeyboardView.jarFinished() {
+    jarChosen = 0
+    fireflies.release(SystemClock.uptimeMillis())
+    invalidate()
 }
+
+/** Nothing of the jars is left (the mode ended). */
+internal fun KeyboardView.dropJars() {
+    timer.removeCallbacks(jarClick)
+    timer.removeCallbacks(jarDone)
+    jarChosen = 0
+}
+
+/** The top of the jars, which are centred on the height the finger lifted at. */
+internal fun KeyboardView.jarTop() = spotY - JAR_TOTAL_H * spritePx / 2f
+
+/**
+ * The two choices are glass jars, each with a paper label under it: copy on the left (pale blue glass), cut on the
+ * right (red-orange). Their lids hover open, bobbing a little, while the fireflies wait between them. When one is
+ * chosen the other fades; the fireflies pour into the chosen jar and light it up from inside, the lid drops and
+ * clicks shut (a flash of sparks), and then it fades. (The fireflies themselves are drawn by [Fireflies].)
+ */
+internal fun KeyboardView.drawJars(c: Canvas) {
+    val choosing = selection == Selection.CHOOSING
+    if (!choosing && jarChosen == 0) return
+    val now = SystemClock.uptimeMillis()
+    val t = now - jarAt
+    val u = spritePx
+    val top = jarTop()
+    for (j in 1..2) {
+        val cut = j == 2
+        val x = if (cut) spotCutX else spotCopyX
+        val chosen = jarChosen == j
+        var alpha = 255
+        var lift = 5f * u + (kotlin.math.sin(now / 320.0 + j).toFloat() * 0.6f * u)
+        var glow = 0f
+        var sparks = 0f
+        if (!choosing) {
+            if (!chosen) alpha = (255 * (1f - t / JAR_OTHER_FADE_MS.toFloat())).toInt().coerceIn(0, 255)
+            else {
+                lift = when {
+                    t < JAR_LID_MS -> 5f * u
+                    t < JAR_SHUT_MS -> 5f * u * (1f - (t - JAR_LID_MS).toFloat() / (JAR_SHUT_MS - JAR_LID_MS))
+                    else -> 0f
+                }
+                // Lit from inside as the fireflies come in, brightest just after the click.
+                glow = (t / JAR_LID_MS.toFloat()).coerceIn(0f, 1f) * 0.6f + if (t >= JAR_SHUT_MS) 0.4f else 0f
+                if (t in JAR_SHUT_MS until JAR_SHUT_MS + 260) sparks = (t - JAR_SHUT_MS) / 260f
+                if (t > JAR_FADE_MS) alpha = (255 * (1f - (t - JAR_FADE_MS).toFloat() / (JAR_TOTAL_MS - JAR_FADE_MS))).toInt().coerceIn(0, 255)
+            }
+        }
+        if (alpha <= 0) continue
+        drawJar(c, x, top, cut, resources.getString(if (cut) android.R.string.cut else android.R.string.copy), lift, glow, sparks, alpha)
+    }
+    // Keeps going while the jars move: they bob while they wait, and the click is quick.
+    if (animating && !choosing && jarChosen != 0) postInvalidateOnAnimation()
+}
+
+/** One jar with its lid [lift] px up, its glass lit by [glow] (0..1), [sparks] (0..1, 0: none) flying off the lid, all at [alpha]. */
+private fun KeyboardView.drawJar(c: Canvas, cx: Float, top: Float, cut: Boolean, label: String, lift: Float, glow: Float, sparks: Float, alpha: Int) {
+    val u = spritePx
+    val left = cx - JAR_W * u / 2f
+    val accent = if (cut) CUT_ICON else COPY_ICON
+    fun fillColor(argb: Int, a: Int = 255) { fill.color = ColorUtils.setAlphaComponent(argb, (a * alpha / 255).coerceIn(0, 255)) }
+    // The glass: a tint of the jar's colour, brighter when it is lit from inside, with a pale highlight down its left.
+    for (r in 3 until JAR_ROWS) {
+        val row = JAR[r]
+        var col = 0
+        while (col < JAR_W) {
+            val ch = row[col]
+            if (ch == '.') { col++; continue }
+            var end = col
+            while (end < JAR_W && row[end] == ch) end++
+            when (ch) {
+                '#' -> fillColor(0xFFFFFF, 190)
+                'g' -> fillColor(accent, (50 + 120 * glow).toInt())
+                'h' -> fillColor(0xFFFFFF, 120)
+            }
+            c.drawRect(left + col * u, top + r * u, left + end * u, top + (r + 1) * u, fill)
+            col = end
+        }
+    }
+    // The lid: a metal band lifted [lift] px above the neck while it is open.
+    val lidTop = top - lift
+    for (r in 0 until 3) {
+        val row = JAR[r]
+        for (col in 0 until JAR_W) {
+            val ch = row[col]
+            if (ch == '.') continue
+            fillColor(if (ch == 'l') LID_DARK else LID_LIGHT)
+            c.drawRect(left + col * u, lidTop + r * u, left + (col + 1) * u, lidTop + (r + 1) * u, fill)
+        }
+    }
+    // A flash of sparks off the lid at the click.
+    if (sparks > 0f) {
+        fillColor(0xFFFFFF, (255 * (1f - sparks)).toInt())
+        val d = (2 + 4 * sparks) * u
+        val mx = cx
+        val my = lidTop + u
+        c.drawRect(mx - d - u, my, mx - d, my + u, fill)
+        c.drawRect(mx + d, my, mx + d + u, my + u, fill)
+        c.drawRect(mx, my - d, mx + u, my - d + u, fill)
+        c.drawRect(mx - d, my - d * 0.7f, mx - d + u, my - d * 0.7f + u, fill)
+        c.drawRect(mx + d, my - d * 0.7f, mx + d + u, my - d * 0.7f + u, fill)
+    }
+    // The label: a paper tag under the jar with its name.
+    val tagTop = top + (JAR_ROWS + 1) * u
+    fillColor(TAG_PAPER)
+    c.drawRect(left + u, tagTop, left + (JAR_W - 1) * u, tagTop + TAG_H * u, fill)
+    fillColor(accent)
+    c.drawRect(left + u, tagTop + (TAG_H - 1) * u, left + (JAR_W - 1) * u, tagTop + TAG_H * u, fill)
+    drawText(c, label, cx, tagTop + (TAG_H - 1) * u / 2f, dpu(11f), ColorUtils.setAlphaComponent(TAG_INK, alpha), medium)
+}
+
+/** The jar, 14 sprite pixels wide: the lid (rows 0-2: '#' light, 'l' dark), then the glass ('#' its edge, 'g' inside, 'h' a highlight). */
+private val JAR = arrayOf(
+    "...LLLLLLLL...",
+    "...LlLlLlLL...",
+    "...LLLLLLLL...",
+    "....#....#....",
+    "..#gggggggg#..",
+    ".#hggggggggg#.",
+    ".#hggggggggg#.",
+    ".#hggggggggg#.",
+    ".#hggggggggg#.",
+    ".#hggggggggg#.",
+    ".#hggggggggg#.",
+    ".#hggggggggg#.",
+    ".#gggggggggg#.",
+    ".#gggggggggg#.",
+    "..#gggggggg#..",
+    "...########...",
+).map { it.padEnd(JAR_W, '.').take(JAR_W) }.toTypedArray()

@@ -297,9 +297,9 @@ internal fun KeyboardView.drawCursorMode(c: Canvas) {
     // The tree itself, glowing with its apples, above all that; then the fireflies.
     drawTree(c)
     val down = pointers.values.any { it.area == Area.CURSOR }
+    drawJars(c)
     fireflies.step(now, down, cursorFingerX, cursorFingerY)
     fireflies.draw(c, fill, now)
-    drawSelectionChoices(c)
     // A frame at a time while it lasts (a few seconds at most); with the system's animations off, only as fingers move.
     if (animating) postInvalidateDelayed(FIREFLY_FRAME_MS)
 }

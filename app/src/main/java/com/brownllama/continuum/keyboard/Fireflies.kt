@@ -17,9 +17,10 @@ import kotlin.random.Random
  * round it in loose circles; the finger also drops sparks that fade behind it ([SPARKS] of them in a
  * ring, so nothing is allocated). Let go, and they keep circling the spot for a moment, then scatter.
  *
- * Two more states. While text is being selected they turn amber ([amber]). Once it is, they split in two and
- * each half circles one of two spots ([choose]), a pale blue pair of lights for copy and a warm red-orange
- * one for cut, until [endChoice].
+ * Two more states. While text is being selected they turn amber ([amber]). Once it is, they hover together
+ * between two jars ([hover]) until one is chosen: then they stream, one after another, into that jar and
+ * flutter inside it, pale blue for copy and warm red-orange for cut ([funnel]), until they are let out
+ * ([release]).
  *
  * Positions are in the keyboard's pixels, drawn on the sprite grid ([unit]) like everything else. The
  * numbers it needs to move are a few small arrays, and a frame costs a few dozen rectangles.
@@ -47,27 +48,49 @@ internal class Fireflies(private val unit: Float, private val random: Random = R
     /** The colours while text is being selected: amber, not the usual yellow-green. */
     var amber = false
 
-    /** The two spots they split between once there is a selection: even-numbered ones circle the first (copy), odd-numbered the second (cut). */
-    var choosing = false
+    /** Hovering together round a spot between the two jars, waiting for one to be chosen. */
+    var hovering = false
         private set
-    private var copyX = 0f
-    private var copyY = 0f
-    private var cutX = 0f
-    private var cutY = 0f
+    private var hoverX = 0f
+    private var hoverY = 0f
 
-    /** The whole swarm goes to circle [copyX], [copyY] (the first half) and [cutX], [cutY] (the second). */
-    fun choose(copyX: Float, copyY: Float, cutX: Float, cutY: Float) {
-        this.copyX = copyX
-        this.copyY = copyY
-        this.cutX = cutX
-        this.cutY = cutY
-        choosing = true
+    /** Streaming into a jar and fluttering inside it (copy or cut), since [funnelAt]. */
+    var funneling = false
+        private set
+    private var funnelX = 0f
+    private var funnelY = 0f
+    private var funnelCut = false
+    private var funnelAt = 0L
+
+    private fun lastHoverX() = hoverX
+    private fun lastHoverY() = hoverY
+
+    /** The whole swarm hovers round ([x], [y]), the middle between the jars. */
+    fun hover(x: Float, y: Float) {
+        hoverX = x
+        hoverY = y
+        hovering = true
+        funneling = false
+        amber = true
+    }
+
+    /** The swarm streams into the jar at ([x], [y]), one firefly after another, and stays in it ([cut]: the red-orange one). */
+    fun funnel(x: Float, y: Float, cut: Boolean, now: Long) {
+        funnelX = x
+        funnelY = y
+        funnelCut = cut
+        funnelAt = now
+        funneling = true
+        hovering = false
         amber = false
     }
 
-    /** The two groups join again. */
-    fun endChoice() {
-        choosing = false
+    /** The swarm is let out of the jar, or stops hovering, and goes back to wandering. */
+    fun release(now: Long = lastNow) {
+        hovering = false
+        funneling = false
+        amber = false
+        for (i in 0 until COUNT) retargetAt[i] = now
     }
 
     private var width = 0f
@@ -87,7 +110,8 @@ internal class Fireflies(private val unit: Float, private val random: Random = R
         lastNow = now
         lastFingerAt = Long.MIN_VALUE / 2
         amber = false
-        choosing = false
+        hovering = false
+        funneling = false
         for (i in 0 until COUNT) {
             x[i] = random.nextFloat() * w
             y[i] = random.nextFloat() * h
@@ -114,17 +138,24 @@ internal class Fireflies(private val unit: Float, private val random: Random = R
             lastFx = fx
             lastFy = fy
         }
-        val gather = gathered(now) && !choosing
-        val damp = exp(-dt * (if (gather || choosing) 5f else 1.6f))
-        val k = if (choosing) 9f else if (gather) 7f else 0.7f
+        val settled = hovering || funneling
+        val gather = gathered(now) && !settled
+        // Pouring into the jar they move briskly, so each one is in by the time the lid is due to close.
+        val damp = exp(-dt * (if (funneling) 8f else if (gather || settled) 5f else 1.6f))
+        val k = if (funneling) 18f else if (settled) 9f else if (gather) 7f else 0.7f
         for (i in 0 until COUNT) {
-            if (choosing) {
+            if (funneling && now >= funnelAt + i * FUNNEL_STAGGER_MS) {
+                // Inside the jar: flutters about its middle, in a space a few pixels wide and high.
+                val a = phase[i] + now * spin[i] * 2f / 1000f
+                val r = unit * (1.2f + (i % 4) * 0.8f)
+                targetX[i] = funnelX + cos(a) * r
+                targetY[i] = funnelY + sin(a) * r * 1.8f
+            } else if (hovering || funneling) {
+                // Waiting, round the spot between the jars (or, in the stagger, still round where they were).
                 val a = phase[i] + now * spin[i] / 1000f
-                val r = unit * (10f + (i % 5) * 1.8f)
-                val sx = if (i % 2 == 0) copyX else cutX
-                val sy = if (i % 2 == 0) copyY else cutY
-                targetX[i] = sx + cos(a) * r
-                targetY[i] = sy + sin(a) * r * 0.85f
+                val r = unit * (9f + (i % 5) * 1.8f)
+                targetX[i] = (if (funneling) lastHoverX() else hoverX) + cos(a) * r
+                targetY[i] = (if (funneling) lastHoverY() else hoverY) + sin(a) * r * 0.7f
             } else if (gather) {
                 val a = phase[i] + now * spin[i] / 1000f
                 targetX[i] = lastFx + cos(a) * orbit[i]
@@ -141,7 +172,7 @@ internal class Fireflies(private val unit: Float, private val random: Random = R
             if (x[i] < 0f) { x[i] = 0f; vx[i] = -vx[i] * 0.5f } else if (x[i] > width) { x[i] = width; vx[i] = -vx[i] * 0.5f }
             if (y[i] < 0f) { y[i] = 0f; vy[i] = -vy[i] * 0.5f } else if (y[i] > height) { y[i] = height; vy[i] = -vy[i] * 0.5f }
         }
-        if (fingerDown && !choosing) {
+        if (fingerDown && !settled) {
             // The first one is the finger's own: right under it.
             val f = 1f - exp(-dt * 28f)
             x[0] = (x[0] + (fx - x[0]) * f).coerceIn(0f, width)
@@ -166,7 +197,7 @@ internal class Fireflies(private val unit: Float, private val random: Random = R
             paint.color = (a shl 24) or spark
             dot(c, paint, sparkX[k], sparkY[k], 1)
         }
-        val gather = gathered(now) && !choosing
+        val gather = gathered(now) && !hovering && !funneling
         for (i in 0 until COUNT) {
             // Flickers between a dim glow and full light, each at its own pace.
             val s = sin(now * flicker[i] / 1000f + phase[i])
@@ -175,13 +206,13 @@ internal class Fireflies(private val unit: Float, private val random: Random = R
             val glow: Int
             val core: Int
             when {
-                choosing && i % 2 == 0 -> { glow = COPY_GLOW_RGB; core = COPY_CORE_RGB }
-                choosing -> { glow = CUT_GLOW_RGB; core = CUT_CORE_RGB }
-                amber -> { glow = AMBER_GLOW_RGB; core = AMBER_CORE_RGB }
+                funneling && now >= funnelAt + i * FUNNEL_STAGGER_MS && funnelCut -> { glow = CUT_GLOW_RGB; core = CUT_CORE_RGB }
+                funneling && now >= funnelAt + i * FUNNEL_STAGGER_MS -> { glow = COPY_GLOW_RGB; core = COPY_CORE_RGB }
+                amber || hovering || funneling -> { glow = AMBER_GLOW_RGB; core = AMBER_CORE_RGB }
                 else -> { glow = GLOW_RGB; core = CORE_RGB }
             }
             // The two groups that are to be chosen glow a little harder.
-            val halo = (((if (lead) 120 else if (choosing) 100 else 70) * f)).toInt()
+            val halo = (((if (lead) 120 else if (hovering || funneling) 100 else 70) * f)).toInt()
             paint.color = (halo shl 24) or glow
             val r = if (lead) 2 else 1
             val size = if (lead) 2 else 1
@@ -210,6 +241,8 @@ internal class Fireflies(private val unit: Float, private val random: Random = R
         const val GATHER_MS = 1400L
         const val SPARK_MS = 700L
         const val SPARK_EVERY_MS = 22L
+        /** Each firefly enters the jar this long (ms) after the one before. */
+        const val FUNNEL_STAGGER_MS = 38L
         private const val CORE_RGB = 0xF2FF9A
         private const val GLOW_RGB = 0xB4E640
         private const val SPARK_RGB = 0xFFE27A

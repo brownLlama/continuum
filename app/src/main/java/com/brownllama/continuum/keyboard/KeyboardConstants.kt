@@ -109,11 +109,20 @@ internal const val CHOOSE_DELAY_MS = 450L
 internal const val SPOT_GAP_DP = 80f
 internal const val SPOT_EDGE_DP = 56f
 internal const val SPOT_TOUCH_DP = 44f
-/** The choices' constellations are this many sprite pixels across and high, the twins this far apart (sprite pixels), the cut one has a shooting star every [SHOOT_PERIOD_MS] that takes [SHOOT_MS]; the colours: pale blue for copy, warm red-orange for cut. */
-internal const val CONSTELLATION_W = 14
-internal const val CONSTELLATION_H = 9
-internal const val TWIN_GAP = 5
-internal const val SHOOT_PERIOD_MS = 1800L
-internal const val SHOOT_MS = 450L
+/** The jars: 14 sprite pixels wide, 16 high, a paper label of 6 under each (23 in all with the gap); when one is chosen the lid is open for [JAR_LID_MS] while the fireflies pour in, clicks shut at [JAR_SHUT_MS], the jar fades from [JAR_FADE_MS] and is gone at [JAR_TOTAL_MS], the other jar fades in [JAR_OTHER_FADE_MS] (all ms). */
+internal const val JAR_W = 14
+internal const val JAR_ROWS = 16
+internal const val TAG_H = 6
+internal const val JAR_TOTAL_H = JAR_ROWS + 1 + TAG_H
+internal const val JAR_LID_MS = 480L
+internal const val JAR_SHUT_MS = 600L
+internal const val JAR_FADE_MS = 900L
+internal const val JAR_TOTAL_MS = 1100L
+internal const val JAR_OTHER_FADE_MS = 300L
+/** Colours: the copy jar's pale blue and the cut jar's warm red-orange, the lid's metal, the paper label and its ink. */
+internal const val LID_LIGHT = 0xFFC3CAD6.toInt()
+internal const val LID_DARK = 0xFF8D96A6.toInt()
+internal const val TAG_PAPER = 0xFFF3E6C8.toInt()
+internal const val TAG_INK = 0xFF3A2A1A.toInt()
 internal const val COPY_ICON = 0xFFBFE0FF.toInt()
 internal const val CUT_ICON = 0xFFFF9A78.toInt()

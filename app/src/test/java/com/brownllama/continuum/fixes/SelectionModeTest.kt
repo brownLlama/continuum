@@ -8,6 +8,8 @@ import android.os.SystemClock
 import android.view.MotionEvent
 import com.brownllama.continuum.Prefs
 import com.brownllama.continuum.keyboard.CHOOSE_DELAY_MS
+import com.brownllama.continuum.keyboard.JAR_SHUT_MS
+import com.brownllama.continuum.keyboard.JAR_TOTAL_MS
 import com.brownllama.continuum.keyboard.Selection
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -173,14 +175,14 @@ class SelectionModeTest {
         assertEquals(Selection.SELECTING, k.view.selection)
     }
 
-    @Test fun `a moment after the last finger lifts the swarm splits into copy and cut, near the finger and well apart`() {
+    @Test fun `a moment after the last finger lifts two jars appear, copy and cut, near the finger and well apart`() {
         val k = keyboard().night("hello brave new world", 8)
         k.doubleTap()
         k.wait(CHOOSE_DELAY_MS - 100)
         assertEquals("not yet", Selection.SELECTING, k.view.selection)
         k.wait(200)
         assertEquals(Selection.CHOOSING, k.view.selection)
-        assertTrue(k.view.fireflies.choosing)
+        assertTrue("the fireflies hover between the jars", k.view.fireflies.hovering)
         val v = k.view
         assertTrue("copy is on the left of cut", v.spotCopyX < v.spotCutX)
         assertTrue("well apart", v.spotCutX - v.spotCopyX >= 100f)
@@ -188,23 +190,58 @@ class SelectionModeTest {
         k.frame() // and it draws
     }
 
-    @Test fun `the choices are constellations made from the selection, more stars for more text`() {
-        val short = keyboard().night("hello brave new world", 8)
-        short.doubleTap()
-        short.wait(CHOOSE_DELAY_MS + 100)
-        assertEquals("five characters: five stars", 5, short.view.choiceStars)
-        val all = keyboard().night("hello brave new world, and a good deal more text to select in all", 8)
-        val (x, y) = all.spot()
-        all.tapAt(x, y); all.wait(80); all.tapAt(x, y); all.wait(80); all.tapAt(x, y)
-        all.wait(CHOOSE_DELAY_MS + 100)
-        assertEquals("a long selection: nine, the most", 9, all.view.choiceStars)
-        // They draw: lines and stars for each (the twins, and the cut one with its slash).
+    @Test fun `the choices are two glass jars with a label each`() {
+        val k = keyboard().night("hello brave new world", 8)
+        k.doubleTap()
+        k.wait(CHOOSE_DELAY_MS + 100)
+        val labels = ArrayList<String>()
         val rects = intArrayOf(0)
         val canvas = object : Canvas(Bitmap.createBitmap(1080, 600, Bitmap.Config.ARGB_8888)) {
+            override fun drawText(text: String, x: Float, y: Float, paint: android.graphics.Paint) {
+                labels += text
+                super.drawText(text, x, y, paint)
+            }
             override fun drawRect(left: Float, top: Float, right: Float, bottom: Float, paint: android.graphics.Paint) { rects[0]++ }
         }
-        all.view.draw(canvas)
-        assertTrue("many small rectangles: ${rects[0]}", rects[0] > 150)
+        k.view.draw(canvas)
+        assertTrue("labelled Copy: $labels", "Copy" in labels)
+        assertTrue("and Cut: $labels", "Cut" in labels)
+        assertTrue("drawn in pixels: ${rects[0]}", rects[0] > 100)
+    }
+
+    @Test fun `choosing a jar pours the fireflies into it, the lid clicks shut, and then they are let out`() {
+        for (cut in listOf(false, true)) {
+            val k = keyboard().night("hello brave new world", 8)
+            k.doubleTap()
+            k.wait(CHOOSE_DELAY_MS + 100)
+            val x = if (cut) k.view.spotCutX else k.view.spotCopyX
+            k.tapAt(x, k.offY + k.view.spotY)
+            assertEquals("the right jar", if (cut) 2 else 1, k.view.jarChosen)
+            assertTrue("the fireflies stream in", k.view.fireflies.funneling)
+            assertFalse(k.view.fireflies.hovering)
+            k.wait(JAR_SHUT_MS + 100)
+            k.frame()
+            assertEquals("lid shut, still lit", if (cut) 2 else 1, k.view.jarChosen)
+            k.wait(JAR_TOTAL_MS)
+            assertEquals("the jar is gone", 0, k.view.jarChosen)
+            assertFalse("and the fireflies are out", k.view.fireflies.funneling)
+            assertTrue("the mode goes on", k.view.cursorMode)
+        }
+    }
+
+    @Test fun `all the fireflies end up inside the chosen jar`() {
+        val k = keyboard().night("hello brave new world", 8)
+        k.doubleTap()
+        k.wait(CHOOSE_DELAY_MS + 100)
+        val v = k.view
+        k.tapAt(v.spotCopyX, k.offY + v.spotY)
+        // Run the swarm's own clock to well after they have all gone in (from wherever they were, which can be the far end of the keyboard).
+        var t = SystemClock.uptimeMillis()
+        repeat(120) { t += 33; v.fireflies.step(t, false, 0f, 0f) }
+        val u = v.spritePx
+        for (i in 0 until com.brownllama.continuum.keyboard.Fireflies.COUNT) {
+            assertTrue("firefly $i x ${v.fireflies.x[i]} near the jar at ${v.spotCopyX}", kotlin.math.abs(v.fireflies.x[i] - v.spotCopyX) <= 8 * u)
+        }
     }
 
     @Test fun `the choices stay on the screen even when the finger lifted at its edge`() {
@@ -230,8 +267,7 @@ class SelectionModeTest {
         assertEquals("brave", k.clip())
         assertEquals("hello brave new world", k.text)
         assertEquals(Selection.NONE, k.view.selection)
-        assertFalse(k.view.fireflies.amber)
-        assertFalse(k.view.fireflies.choosing)
+        assertTrue("the fireflies go into the jar", k.view.fireflies.funneling)
         assertEquals("the selection is dropped, the cursor at its end", 11, k.edit.selectionStart)
         assertEquals(k.edit.selectionStart, k.edit.selectionEnd)
         // The mode goes on: a slide moves the cursor again.
@@ -261,7 +297,8 @@ class SelectionModeTest {
         assertEquals(Selection.NONE, k.view.selection)
         assertEquals("nothing was copied or cut", "hello brave new world", k.text)
         assertEquals(k.edit.selectionStart, k.edit.selectionEnd)
-        assertFalse(k.view.fireflies.choosing)
+        assertFalse(k.view.fireflies.hovering)
+        assertEquals("no jar was chosen", 0, k.view.jarChosen)
         assertTrue(k.view.cursorMode)
     }
 
