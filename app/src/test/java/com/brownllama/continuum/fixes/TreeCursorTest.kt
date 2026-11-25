@@ -152,8 +152,8 @@ class TreeCursorTest {
             k.slide(x + 300f, y, -28f, 0f)
             assertEquals(mode, 4, k.edit.selectionStart)
             assertEquals("no letters were typed", "hello world", k.text)
-            k.slide(x, y, 12f, 0f) // three back
-            assertEquals(mode, 7, k.edit.selectionStart)
+            k.slide(x, y, 20f, 0f) // five forward
+            assertEquals(mode, 9, k.edit.selectionStart)
         }
     }
 

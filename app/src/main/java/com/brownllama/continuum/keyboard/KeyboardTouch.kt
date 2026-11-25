@@ -265,6 +265,21 @@ internal fun KeyboardView.release(p: Pointer) {
     if (p.area == Area.CURSOR) {
         // Let go: the cursor stops where it is; the mode waits for the next slide (or times out).
         flushCursorMoves()
+        val now = SystemClock.uptimeMillis()
+        if (p.button != 0) {
+            if (!p.moved) performSelectionButton(cut = p.button == 2)
+        } else {
+            if (!p.moved && now - p.downAt <= TAP_MAX_MS) {
+                lastTapUpAt = now
+                lastTapX = p.downX
+                lastTapY = p.downY
+            } else {
+                lastTapUpAt = 0L
+                tapCount = 0
+            }
+            // A selection was made: its choices come a moment after the last finger lifts.
+            if (selection == Selection.SELECTING) scheduleChoosing()
+        }
         timer.removeCallbacks(cursorTimeout)
         timer.postDelayed(cursorTimeout, CURSOR_MODE_TIMEOUT_MS)
         invalidate()
@@ -332,6 +347,7 @@ internal fun KeyboardView.treeOrCursorPointer(id: Int, x: Float, y: Float): Poin
     if (gifSearching || panel.big) return null
     if (tree.hit(x, y, dpu(TREE_SLACK_DP), keyboardHeight, grassBottom)) return Pointer(this, id, x, y, Area.TREE, null)
     if (cursorMode && y >= 0f) {
+        val now = SystemClock.uptimeMillis()
         val p = Pointer(this, id, x, y, Area.CURSOR, null)
         p.cursorX = x
         p.cursorY = y
@@ -339,6 +355,29 @@ internal fun KeyboardView.treeOrCursorPointer(id: Int, x: Float, y: Float): Poin
         cursorFingerY = y
         // A finger is down: the mode does not time out under it.
         timer.removeCallbacks(cursorTimeout)
+        if (selection == Selection.CHOOSING) {
+            // A finger on one of the two swarms chooses it; anywhere else drops the selection and starts afresh.
+            val b = buttonAt(x, y)
+            if (b != 0) {
+                p.button = b
+                return p
+            }
+            endSelection(collapse = true)
+        }
+        timer.removeCallbacks(chooseTick)
+        // Taps in a row, close together: the second selects the word, the third everything. The second
+        // tap can also slide, to stretch the selection.
+        val chained = lastTapUpAt != 0L && now - lastTapUpAt <= DOUBLE_TAP_MS &&
+            hypot(x - lastTapX, y - lastTapY) <= dpu(56f)
+        tapCount = if (chained) tapCount + 1 else 1
+        when (tapCount) {
+            2 -> if (listener.onSelectWord()) beginSelecting() else tapCount = 0
+            3 -> {
+                listener.onSelectAll()
+                beginSelecting()
+                tapCount = 0
+            }
+        }
         return p
     }
     return null
@@ -365,9 +404,12 @@ internal fun KeyboardView.treeTapped(p: Pointer) {
  * collected and sent once a frame, so a fast slide asks the editor for one move, not many.
  */
 internal fun KeyboardView.cursorMove(p: Pointer, x: Float, y: Float) {
-    p.moved = true
     cursorFingerX = x
     cursorFingerY = y
+    // A tap wobbles a little: nothing moves until the finger has really gone somewhere (then the cursor
+    // catches up with all of the way from where it landed).
+    if (!p.moved && hypot(x - p.downX, y - p.downY) > slop) p.moved = true
+    if (!p.moved || p.button != 0) return
     val stride = dpu(CURSOR_STRIDE_DP)
     val steps = ((x - p.cursorX) / stride).toInt()
     if (steps != 0) {

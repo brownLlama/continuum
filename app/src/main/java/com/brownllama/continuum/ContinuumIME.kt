@@ -136,6 +136,10 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
     internal val saveLearned = Runnable { user.save() }
     /** Where the app says the cursor (or the ends of the selection) is, as the position in its text; -1 when unknown. */
     internal var selStart = -1
+    /** In the cursor mode, after a double tap: the selection has a fixed end ([selAnchor]) and an end the finger moves ([selFocus]); -1 when not selecting or not known. */
+    internal var selecting = false
+    internal var selAnchor = -1
+    internal var selFocus = -1
     internal var selEnd = -1
     @Volatile internal var decoder: Decoder? = null
     internal var dict: Dictionary? = null
@@ -513,6 +517,18 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
 
     /** The tree is carried up or down: the cursor moves [lines] lines (negative: up). */
     override fun onCursorLines(lines: Int) = handleCursorLines(lines)
+
+    /** A double tap in the cursor mode: selects the word at the cursor. */
+    override fun onSelectWord() = handleSelectWord()
+
+    /** A triple tap in the cursor mode: selects everything. */
+    override fun onSelectAll() = handleSelectAll()
+
+    /** Copy or cut the selection to the clipboard. */
+    override fun onSelectionAction(cut: Boolean) = handleSelectionAction(cut)
+
+    /** The selecting is over. */
+    override fun onSelectionEnd(collapse: Boolean) = handleSelectionEnd(collapse)
 
     /** Swipe left: drops the word being typed, or deletes the word before the cursor. */
     override fun onDeleteWord() = handleDeleteWord()

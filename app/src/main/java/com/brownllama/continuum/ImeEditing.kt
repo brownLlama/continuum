@@ -423,6 +423,7 @@ internal fun ContinuumIME.handleCursorMove(steps: Int) {
     lastExpansion = null
     autoSpace = false
     deletedSlots = null
+    if (selecting) return stretchSelection(ic, steps)
     val left = steps < 0
     val n = kotlin.math.abs(steps)
     val span = selectionOf(ic)
@@ -471,11 +472,134 @@ internal fun ContinuumIME.handleCursorLines(lines: Int) {
     deletedSlots = null
     val up = lines < 0
     val key = if (up) KeyEvent.KEYCODE_DPAD_UP else KeyEvent.KEYCODE_DPAD_DOWN
+    // While selecting, the arrow keys carry shift, so they stretch the selection a line at a time.
+    val meta = if (selecting) KeyEvent.META_SHIFT_ON or KeyEvent.META_SHIFT_LEFT_ON else 0
     repeat(kotlin.math.abs(lines)) {
         val room = if (up) ic.getTextBeforeCursor(1, 0) else ic.getTextAfterCursor(1, 0)
-        if (room.isNullOrEmpty()) return
+        if (room.isNullOrEmpty()) return@repeat
         val now = SystemClock.uptimeMillis()
-        ic.sendKeyEvent(KeyEvent(now, now, KeyEvent.ACTION_DOWN, key, 0))
-        ic.sendKeyEvent(KeyEvent(now, now, KeyEvent.ACTION_UP, key, 0))
+        ic.sendKeyEvent(KeyEvent(now, now, KeyEvent.ACTION_DOWN, key, 0, meta))
+        ic.sendKeyEvent(KeyEvent(now, now, KeyEvent.ACTION_UP, key, 0, meta))
     }
+    if (selecting) resyncSelection(ic)
+}
+
+/** Selecting a word: how many characters each side of the cursor are looked at. */
+private const val WORD_SCAN = 60
+
+/** Whether [c] is part of a word for selecting it: letters, digits, apostrophes and hyphens. */
+private fun inWord(c: Char) = c.isLetterOrDigit() || c == '\'' || c == '\u2019' || c == '-'
+
+/**
+ * A double tap in the cursor mode: selects the word the cursor is in or at the end of, else the one just
+ * before it (skipping spaces and punctuation). Returns false when there is no word. The selection then has
+ * a fixed end and an end the finger moves ([stretchSelection]).
+ */
+internal fun ContinuumIME.handleSelectWord(): Boolean {
+    if (queryEditor != null) return false
+    val ic = editor() ?: return false
+    finishComposing()
+    lastCommit = null
+    lastExpansion = null
+    autoSpace = false
+    deletedSlots = null
+    val span = selectionOf(ic) ?: return false
+    val at = span.second
+    // Where the cursor was, the word's letters before and after it.
+    var before = ic.getTextBeforeCursor(WORD_SCAN, 0)?.toString().orEmpty()
+    if (span.first != span.second) before = "" // a selection already: look from its end
+    var back = before.takeLastWhile(::inWord).length
+    val ahead = ic.getTextAfterCursor(WORD_SCAN, 0)?.takeWhile(::inWord)?.length ?: 0
+    var start = at - back
+    var end = at + ahead
+    if (back + ahead == 0) {
+        // Between words: the one before it.
+        val skipped = before.trimEnd { !inWord(it) }
+        back = skipped.takeLastWhile(::inWord).length
+        if (back == 0) return false
+        end = at - (before.length - skipped.length)
+        start = end - back
+    }
+    ic.setSelection(start, end)
+    selecting = true
+    selAnchor = start
+    selFocus = end
+    selStart = start
+    selEnd = end
+    return true
+}
+
+/** A triple tap in the cursor mode: selects everything. */
+internal fun ContinuumIME.handleSelectAll() {
+    if (queryEditor != null) return
+    val ic = editor() ?: return
+    finishComposing()
+    lastCommit = null
+    autoSpace = false
+    ic.performContextMenuAction(android.R.id.selectAll)
+    selecting = true
+    resyncSelection(ic)
+}
+
+/** Reads the selection from the field into [selAnchor] and [selFocus] (which end the finger moves is not known: the end), or forgets them if the field does not say. */
+private fun ContinuumIME.resyncSelection(ic: InputConnection) {
+    val ex = ic.getExtractedText(ExtractedTextRequest().apply { hintMaxChars = 2000 }, 0)
+    if (ex != null && ex.selectionStart >= 0 && ex.selectionEnd >= 0) {
+        selAnchor = ex.startOffset + ex.selectionStart
+        selFocus = ex.startOffset + ex.selectionEnd
+        selStart = selAnchor
+        selEnd = selFocus
+    } else if (selStart >= 0 && selEnd >= 0 && !(selAnchor >= 0 && selFocus >= 0)) {
+        selAnchor = selStart
+        selFocus = selEnd
+    }
+}
+
+/**
+ * Sliding while selecting: the end the finger moves goes [steps] characters (negative: left), never out
+ * of the text, and may cross the fixed end (the selection then grows the other way).
+ */
+private fun ContinuumIME.stretchSelection(ic: InputConnection, steps: Int) {
+    if (selAnchor < 0 || selFocus < 0) return
+    val lo = minOf(selAnchor, selFocus)
+    val hi = maxOf(selAnchor, selFocus)
+    var to = selFocus + steps
+    if (to > hi) to = hi + (ic.getTextAfterCursor(to - hi, 0)?.length ?: (to - hi))
+    if (to < lo) to = lo - (ic.getTextBeforeCursor(lo - to, 0)?.length ?: (lo - to))
+    if (to == selFocus) return
+    ic.setSelection(selAnchor, to)
+    selFocus = to
+    selStart = selAnchor
+    selEnd = to
+}
+
+/** Copy or cut: the selected text goes to the clipboard (not from a password or private field), and the selecting ends. */
+internal fun ContinuumIME.handleSelectionAction(cut: Boolean) {
+    val ic = editor() ?: return
+    if (!privateField) {
+        val text = ic.getSelectedText(0)
+        if (!text.isNullOrEmpty()) {
+            getSystemService(android.content.ClipboardManager::class.java)
+                ?.setPrimaryClip(android.content.ClipData.newPlainText(null, text))
+            if (cut) ic.commitText("", 1)
+        }
+    }
+    handleSelectionEnd(collapse = !cut)
+}
+
+/** Selecting is over; the selection is dropped, the cursor at its end, if [collapse]. */
+internal fun ContinuumIME.handleSelectionEnd(collapse: Boolean) {
+    val wasSelecting = selecting
+    selecting = false
+    if (collapse && wasSelecting) {
+        val ic = editor() ?: return
+        val end = maxOf(selAnchor, selFocus)
+        if (end >= 0) {
+            ic.setSelection(end, end)
+            selStart = end
+            selEnd = end
+        }
+    }
+    selAnchor = -1
+    selFocus = -1
 }

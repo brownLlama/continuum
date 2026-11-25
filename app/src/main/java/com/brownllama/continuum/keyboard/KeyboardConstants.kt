@@ -103,3 +103,13 @@ internal const val FIREFLY_FRAME_MS = 33L
 /** At night the tree is a lamp: the warm haze round its apples reaches this far (dp) (its light on the grass reaches the far end of the keyboard), and the lit grass and animal are drawn this far (dp) up over the keys (for the animal's head). */
 internal const val NIGHT_HAZE_REACH_DP = 190f
 internal const val NIGHT_GLOW_RISE_DP = 60f
+/** The copy and cut choices appear this long (ms) after the last finger lifts, a touch longer than a double tap's window. */
+internal const val CHOOSE_DELAY_MS = 450L
+/** They sit this far (dp) either side of where the finger lifted, at least this far (dp) from the screen's edges, and a finger within this radius (dp) chooses one. */
+internal const val SPOT_GAP_DP = 80f
+internal const val SPOT_EDGE_DP = 56f
+internal const val SPOT_TOUCH_DP = 44f
+/** The scissors snip this often (ms); the icons' colours: pale blue for copy, warm red-orange for cut. */
+internal const val SNIP_MS = 220L
+internal const val COPY_ICON = 0xFFBFE0FF.toInt()
+internal const val CUT_ICON = 0xFFFF9A78.toInt()

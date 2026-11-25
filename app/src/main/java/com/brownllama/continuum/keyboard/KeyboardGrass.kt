@@ -299,6 +299,7 @@ internal fun KeyboardView.drawCursorMode(c: Canvas) {
     val down = pointers.values.any { it.area == Area.CURSOR }
     fireflies.step(now, down, cursorFingerX, cursorFingerY)
     fireflies.draw(c, fill, now)
+    drawSelectionChoices(c)
     // A frame at a time while it lasts (a few seconds at most); with the system's animations off, only as fingers move.
     if (animating) postInvalidateDelayed(FIREFLY_FRAME_MS)
 }

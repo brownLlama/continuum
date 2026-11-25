@@ -80,6 +80,8 @@ internal class Pointer(private val view: KeyboardView, val id: Int, val downX: F
     /** Sliding the cursor ([Area.CURSOR]): where it was last moved a character ([cursorX]) or a line ([cursorY]). */
     var cursorX = downX
     var cursorY = downY
+    /** In the cursor mode: 1 or 2 if this finger landed on the copy or the cut choice (a tap on it acts), else 0. */
+    var button = 0
     /** Backspace auto-repeat while held. */
     var repeat: Runnable? = null
 

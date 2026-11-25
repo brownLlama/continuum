@@ -95,6 +95,14 @@ class KeyboardView(context: Context, internal val listener: Listener) : View(con
         fun onCursorMove(steps: Int)
         /** In the cursor mode, sliding up or down: move the cursor [lines] lines (negative: up). */
         fun onCursorLines(lines: Int)
+        /** In the cursor mode, a double tap: select the word the cursor is in or next to; false if there is none. Moves then stretch the selection. */
+        fun onSelectWord(): Boolean
+        /** In the cursor mode, a triple tap: select everything. */
+        fun onSelectAll()
+        /** The selection is copied ([cut] false) or cut to the clipboard, and the selection ends. */
+        fun onSelectionAction(cut: Boolean)
+        /** Selecting is over: moves are plain cursor moves again, and the selection is dropped (the cursor stays at its end) if [collapse]. */
+        fun onSelectionEnd(collapse: Boolean)
         /** Space key or swipe right. */
         fun onSpace()
         /** Enter key or swipe up and right. */
@@ -678,6 +686,16 @@ class KeyboardView(context: Context, internal val listener: Listener) : View(con
     internal var cursorMode = false
         private set
     internal var lastTreeTapAt = 0L
+    /** Selecting text in the cursor mode (see [Selection]); taps counted towards a double or triple tap; where the copy and cut choices are. */
+    internal var selection = Selection.NONE
+    internal var tapCount = 0
+    internal var lastTapUpAt = 0L
+    internal var lastTapX = 0f
+    internal var lastTapY = 0f
+    internal var spotCopyX = 0f
+    internal var spotCutX = 0f
+    internal var spotY = 0f
+    internal val chooseTick = Runnable { startChoosing() }
     /** In the cursor mode: where the sliding finger is (keyboard coordinates), and the night's fireflies that gather round it. */
     internal var cursorFingerX = -1f
     internal var cursorFingerY = -1f
@@ -689,8 +707,11 @@ class KeyboardView(context: Context, internal val listener: Listener) : View(con
     /** Turns the cursor mode on or off (the tree shows which); off by itself after a while without a touch. */
     internal fun setCursorMode(on: Boolean) {
         if (cursorMode == on) return
+        if (!on) endSelection(collapse = false)
         cursorMode = on
         tree.active = on
+        tapCount = 0
+        lastTapUpAt = 0L
         cursorFingerX = -1f
         cursorFingerY = -1f
         if (on) fireflies.reset(width.toFloat(), grassBottom, SystemClock.uptimeMillis())
@@ -760,6 +781,7 @@ class KeyboardView(context: Context, internal val listener: Listener) : View(con
         endAnimal(cancel = true)
         timer.removeCallbacks(windTick)
         timer.removeCallbacks(cursorTimeout)
+        timer.removeCallbacks(chooseTick)
         for (p in pointers.values) {
             timer.removeCallbacks(p.longPress)
             p.repeat?.let(timer::removeCallbacks)
