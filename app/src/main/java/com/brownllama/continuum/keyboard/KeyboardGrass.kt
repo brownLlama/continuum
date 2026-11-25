@@ -1,32 +1,36 @@
-// The grass in the space under the keys.
+// The grass under the keys: pixel art in the same pixels as the visiting animals, who walk on it.
 package com.brownllama.continuum.keyboard
 
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
-import android.graphics.Path
 import androidx.core.graphics.ColorUtils
 import androidx.core.graphics.createBitmap
+import com.brownllama.continuum.prediction.Mode
+import kotlin.math.ceil
+import kotlin.math.floor
 import kotlin.math.min
 import kotlin.math.roundToInt
 
 /**
- * Grass filling the space under the keys (setting "Space below keyboard"): soft blades standing on
- * the bottom of that space and growing up towards the keys, the tallest reaching them. A bigger
- * setting is taller grass; 0 is none. It only decorates: a touch there goes to the keys above it,
- * as it always has.
+ * Pixel-art grass, in the same chunky pixels as the animals ([unit] screen pixels each, on the same
+ * grid, so their pixels line up). It stands on the bottom of the keyboard's window, which from
+ * Android 15 is the bottom of the screen, behind Android's gesture handle or navigation buttons,
+ * and grows up to the keys. The setting "Space below keyboard" sets how far up the keys are, so
+ * how tall the grass is; at 0 there is none.
  *
- * Three layers of blades, back to front: dense short ones (the darkest), the tall ones, and a few
- * light ones in front. Each blade's place, height, width and lean come from a hash of its number,
- * so the grass looks the same every time. It is drawn once into a bitmap for its size and colours
- * ([image]); a frame only copies that bitmap, and nothing moves, so it costs nothing in between.
+ * Every column of pixels is one blade. Its height comes from a slow wave (patches of taller and
+ * shorter grass) plus a hash of the column (so neighbours differ, as blades do); now and then its
+ * tip bends over onto the next column. A blade is dark at the root, one of two greens along the
+ * stem, and light at the tip. It is drawn once into a bitmap for its size and colours, so a frame
+ * only copies that bitmap; nothing moves.
  */
-internal class Grass(private val density: Float) {
+internal class Grass(private val unit: Float) {
     private var image: Bitmap? = null
     private var builtLight = false
     private var builtBackground = 0
-    private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
-    private val path = Path()
+    /** No anti-aliasing: hard pixel edges, like the animals. */
+    private val paint = Paint()
 
     /** The size of the bitmap last drawn, for tests (0 × 0 before the first). */
     internal val imageWidth get() = image?.width ?: 0
@@ -43,72 +47,84 @@ internal class Grass(private val density: Float) {
             it.width == width && it.height == height && builtLight == light && builtBackground == background
         }?.let { return it }
         val bmp = createBitmap(width, height)
-        val c = Canvas(bmp)
-        val colors = colors(light, background)
-        for ((i, layer) in LAYERS.withIndex()) {
-            path.reset()
-            addBlades(layer, width.toFloat(), height.toFloat())
-            paint.color = colors[i]
-            c.drawPath(path, paint)
-        }
+        paintBlades(Canvas(bmp), width, height, colors(light, background))
         image = bmp
         builtLight = light
         builtBackground = background
         return bmp
     }
 
-    /** One row of blades across [width], standing on the bottom of a strip [height] px tall. */
-    private fun addBlades(layer: Layer, width: Float, height: Float) {
-        val step = layer.spacingDp * density
-        val maxLean = min(height * 0.35f, 6f * density)
-        val s = layer.salt
-        // From a little left of the edge to a little right of it, so neither edge looks cut off.
-        var i = 0
-        while (true) {
-            val x = (i - 1) * step + (noise(i, s) - 0.5f) * step * 0.8f
-            if (x > width + step) break
-            val h = height * (layer.shortest + (layer.tallest - layer.shortest) * noise(i, s + 1))
-            val w = (1.4f + 1.4f * noise(i, s + 2)) * density
-            val lean = (noise(i, s + 3) - 0.5f) * 2f * maxLean
-            addBlade(x, height, h, w, lean)
-            i++
+    /** Every blade, columns of [unit] from the left, rows of [unit] from the bottom up. */
+    private fun paintBlades(c: Canvas, width: Int, height: Int, colors: IntArray) {
+        val rows = ceil(height / unit).toInt()
+        val columns = ceil(width / unit).toInt()
+        val heights = IntArray(columns) { bladeHeight(it, rows) }
+
+        /** The pixel in [col], [row] (0: the bottom row), [count] rows tall, in [color]. */
+        fun pixels(col: Int, row: Int, count: Int, color: Int) {
+            if (count <= 0) return
+            paint.color = color
+            val left = col * unit
+            c.drawRect(left, height - (row + count) * unit, min(width.toFloat(), left + unit), height - row * unit, paint)
+        }
+
+        for (col in 0 until columns) {
+            var h = heights[col]
+            // Bent over: the top pixel sits on the next column, where that blade is lower.
+            if (h >= 4 && noise(col, BEND) < BEND_SHARE) {
+                val next = col + if (noise(col, BEND + 1) < 0.5f) -1 else 1
+                if (next in 0 until columns && heights[next] < h - 1) {
+                    h--
+                    pixels(next, h, 1, colors[TIP])
+                }
+            }
+            val root = maxOf(1, h / 4)
+            val tip = if (h >= 3) 1 else 0
+            pixels(col, 0, root, colors[SHADOW])
+            pixels(col, root, h - root - tip, colors[if (noise(col, SHADE) < 0.5f) STEM else STEM_LIGHT])
+            pixels(col, h - tip, tip, colors[TIP])
         }
     }
 
-    /**
-     * A blade [w] wide at its base ([x], [bottom]) and [h] tall, its tip [lean] px to the side:
-     * two curved edges meeting in a point, bending the way it leans.
-     */
-    private fun addBlade(x: Float, bottom: Float, h: Float, w: Float, lean: Float) {
-        val left = x - w / 2
-        val right = x + w / 2
-        path.moveTo(left, bottom)
-        path.quadTo(left + lean * 0.15f, bottom - h * 0.6f, x + lean, bottom - h)
-        path.quadTo(right + lean * 0.4f, bottom - h * 0.55f, right, bottom)
-        path.close()
+    /** How many rows tall the blade in [col] is: the patch it is in, and a little of its own. */
+    private fun bladeHeight(col: Int, rows: Int): Int {
+        val at = col / PATCH_COLUMNS
+        val i = floor(at).toInt()
+        val t = (at - i).let { it * it * (3 - 2 * it) }
+        val patch = noise(i, PATCH) * (1 - t) + noise(i + 1, PATCH) * t
+        val share = 0.3f + 0.3f * patch + 0.4f * noise(col, HEIGHT)
+        return (rows * share).roundToInt().coerceIn(1, rows)
     }
 
-    /** A layer of blades: how far apart (dp), how tall as a share of the strip, and its own hash salt. */
-    private class Layer(val spacingDp: Float, val shortest: Float, val tallest: Float, val salt: Int)
-
     private companion object {
-        val LAYERS = listOf(
-            Layer(spacingDp = 1.8f, shortest = 0.35f, tallest = 0.75f, salt = 11),
-            Layer(spacingDp = 2.6f, shortest = 0.55f, tallest = 1f, salt = 23),
-            Layer(spacingDp = 4.2f, shortest = 0.3f, tallest = 0.8f, salt = 37),
-        )
+        /** Colour slots: the root, the stem's two greens, the tip. */
+        const val SHADOW = 0
+        const val STEM = 1
+        const val STEM_LIGHT = 2
+        const val TIP = 3
+
+        /** Hash salts, one per decision. */
+        const val HEIGHT = 11
+        const val PATCH = 23
+        const val SHADE = 37
+        const val BEND = 51
+
+        /** About how wide (in columns) a patch of taller or shorter grass is. */
+        const val PATCH_COLUMNS = 7f
+        /** The share of tall blades whose tip bends over. */
+        const val BEND_SHARE = 0.22f
 
         /**
-         * The layers' greens, back to front. Under a dark keyboard they are deep and pulled towards
-         * its background, so the grass stays calm; under a light one, fresh but soft.
+         * The greens, by colour slot. Under a dark keyboard they are deep and pulled towards its
+         * background, so the grass stays calm; under a light one, fresh but soft.
          */
         fun colors(light: Boolean, background: Int): IntArray =
             if (light) {
-                intArrayOf(0xFF6E9F58.toInt(), 0xFF86B86C.toInt(), 0xFFA6CF8A.toInt())
-                    .map { ColorUtils.blendARGB(it, background, 0.12f) }.toIntArray()
+                intArrayOf(0xFF4C8741.toInt(), 0xFF64A050.toInt(), 0xFF78B45E.toInt(), 0xFFA3D07D.toInt())
+                    .map { ColorUtils.blendARGB(it, background, 0.1f) }.toIntArray()
             } else {
-                intArrayOf(0xFF2F5631.toInt(), 0xFF3F6E3C.toInt(), 0xFF5A8C4F.toInt())
-                    .map { ColorUtils.blendARGB(it, background, 0.3f) }.toIntArray()
+                intArrayOf(0xFF1F3B24.toInt(), 0xFF2D5631.toInt(), 0xFF386A3A.toInt(), 0xFF5B9150.toInt())
+                    .map { ColorUtils.blendARGB(it, background, 0.25f) }.toIntArray()
             }
 
         /** A number in 0..1 that looks random but is always the same for the same [i] and [salt]. */
@@ -121,13 +137,47 @@ internal class Grass(private val density: Float) {
     }
 }
 
-/** The grass's top, in keyboard coordinates: the bottom of the keys. */
+/** The bottom of the grass, in keyboard coordinates: the bottom of the view (from Android 15, of the screen). */
+internal val KeyboardView.grassBottom: Float get() = height - overlayH - gifHeaderH
+
+/** The top of the grass, in keyboard coordinates: the bottom of the keys. */
 internal val KeyboardView.grassTop: Float get() = keyboardHeight
 
-/** How tall the grass is, in px: the setting "Space below keyboard"; 0 draws none. */
-internal val KeyboardView.grassHeight: Int get() = dpu(bottomSpaceDp).roundToInt()
+/**
+ * How tall the grass is, in px: from the bottom of the screen up to the keys, so the setting "Space
+ * below keyboard" plus Android's bar under it. 0 (no grass) when the setting is 0.
+ */
+internal val KeyboardView.grassHeight: Int
+    get() = if (bottomSpaceDp <= 0f) 0 else (grassBottom - grassTop).roundToInt().coerceAtLeast(0)
 
-/** The grass in the space under the keys (above Android's navigation bar or gesture handle). */
+/**
+ * The grass under the keys. Its top is placed so that its bottom is the view's last pixel: whole
+ * screen pixels, so its own pixels stay crisp.
+ */
 internal fun KeyboardView.drawGrass(c: Canvas) {
-    grass.draw(c, width, grassTop, grassHeight, theme.isLight, theme.background)
+    val h = grassHeight
+    if (h <= 0) return
+    grass.draw(c, width, grassBottom - h, h, theme.isLight, theme.background)
+}
+
+/** How many sprite pixels above the bottom of the grass the animals walk, so there is grass under their feet. */
+internal const val ANIMAL_FEET_ROWS = 3
+
+/**
+ * Where a visiting animal's feet are (keyboard coordinates). With grass, on it: [ANIMAL_FEET_ROWS]
+ * pixels above its bottom, on its pixel grid (in grass shorter than twice that, half its height).
+ * Without, along the letter row in mini mode, or along one of the four rows, picked at random, in
+ * full mode.
+ */
+internal fun KeyboardView.animalFeet(): Float {
+    val h = grassHeight
+    if (h > 0) {
+        val rows = if (h >= 2 * ANIMAL_FEET_ROWS * spritePx) ANIMAL_FEET_ROWS else (h / spritePx / 2).toInt()
+        return grassBottom - rows * spritePx
+    }
+    return if (mode == Mode.MINI) {
+        letterRect.bottom - dp(4f)
+    } else {
+        barH + fullRowH * (1 + kotlin.random.Random.nextInt(4)) - dp(3f)
+    }
 }

@@ -7,7 +7,6 @@ import android.view.View
 import androidx.core.graphics.ColorUtils
 import com.brownllama.continuum.keyboard.KeyboardView.Panel
 import com.brownllama.continuum.prediction.Language
-import com.brownllama.continuum.prediction.Mode
 import kotlin.math.abs
 import kotlin.math.max
 
@@ -42,13 +41,8 @@ internal fun KeyboardView.maybeStartAnimal() {
     val idle = pointers.isEmpty() && zoom == null && !gifSearching && panel == Panel.LETTERS &&
         now - lastTouchAt >= ANIMAL_IDLE_MS && listener.animalMayVisit()
     if (!idle) return scheduleAnimal()
-    // Mini mode: along the letter row. Full mode: a random one of the four rows.
-    val feet = if (mode == Mode.MINI) {
-        letterRect.bottom - dp(4f)
-    } else {
-        barH + fullRowH * (1 + kotlin.random.Random.nextInt(4)) - dp(3f)
-    }
-    animal.start(animals.random(), width.toFloat(), feet, now)
+    // On the grass under the keys (without grass, along a row of keys).
+    animal.start(animals.random(), width.toFloat(), animalFeet(), now)
     // "Every time": the next one comes when the keyboard opens again.
     nextAnimalAt = animalFrequency.gapMs?.let { now + randomBetween(it) } ?: Long.MAX_VALUE
     invalidate()
