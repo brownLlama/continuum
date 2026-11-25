@@ -190,7 +190,7 @@ class SelectionModeTest {
         k.frame() // and it draws
     }
 
-    @Test fun `the choices are two glass jars with a label each`() {
+    @Test fun `the choices are two glass jars with their names on stickers`() {
         val k = keyboard().night("hello brave new world", 8)
         k.doubleTap()
         k.wait(CHOOSE_DELAY_MS + 100)
@@ -209,7 +209,7 @@ class SelectionModeTest {
         assertTrue("drawn in pixels: ${rects[0]}", rects[0] > 100)
     }
 
-    @Test fun `choosing a jar pours the fireflies into it, the lid clicks shut, and then they are let out`() {
+    @Test fun `choosing a jar pours the fireflies into it, the lid clicks shut, and then the cursor mode ends`() {
         for (cut in listOf(false, true)) {
             val k = keyboard().night("hello brave new world", 8)
             k.doubleTap()
@@ -225,8 +225,30 @@ class SelectionModeTest {
             k.wait(JAR_TOTAL_MS)
             assertEquals("the jar is gone", 0, k.view.jarChosen)
             assertFalse("and the fireflies are out", k.view.fireflies.funneling)
-            assertTrue("the mode goes on", k.view.cursorMode)
+            assertFalse("and it is day again", k.view.cursorMode)
+            assertFalse(k.view.tree.active)
         }
+    }
+
+    @Test fun `the other jar stays until the fireflies are in and the lid has shut, and only then disappears`() {
+        val k = keyboard().night("hello brave new world", 8)
+        k.doubleTap()
+        k.wait(CHOOSE_DELAY_MS + 100)
+        k.tapAt(k.view.spotCopyX, k.offY + k.view.spotY)
+        fun labels(): List<String> {
+            val l = ArrayList<String>()
+            val canvas = object : Canvas(Bitmap.createBitmap(1080, 600, Bitmap.Config.ARGB_8888)) {
+                override fun drawText(text: String, x: Float, y: Float, paint: android.graphics.Paint) { l += text; super.drawText(text, x, y, paint) }
+            }
+            k.view.draw(canvas)
+            return l
+        }
+        k.wait(300)
+        assertTrue("while the fireflies pour in, both jars are there: ${labels()}", labels().containsAll(listOf("Copy", "Cut")))
+        k.wait(JAR_SHUT_MS - 300 + com.brownllama.continuum.keyboard.JAR_OTHER_FADE_MS + 50)
+        val after = labels()
+        assertTrue("the chosen jar is still there: $after", "Copy" in after)
+        assertFalse("and the other is gone: $after", "Cut" in after)
     }
 
     @Test fun `all the fireflies end up inside the chosen jar`() {
@@ -258,7 +280,7 @@ class SelectionModeTest {
         }
     }
 
-    @Test fun `tapping the copy swarm copies the selection and ends the selecting`() {
+    @Test fun `tapping the copy jar copies the selection and ends the selecting`() {
         val k = keyboard().night("hello brave new world", 8)
         k.doubleTap()
         k.wait(CHOOSE_DELAY_MS + 100)
@@ -270,16 +292,11 @@ class SelectionModeTest {
         assertTrue("the fireflies go into the jar", k.view.fireflies.funneling)
         assertEquals("the selection is dropped, the cursor at its end", 11, k.edit.selectionStart)
         assertEquals(k.edit.selectionStart, k.edit.selectionEnd)
-        // The mode goes on: a slide moves the cursor again.
-        val (x, y2) = k.spot()
-        k.touch(MotionEvent.ACTION_DOWN, x + 400f, y2)
-        for (i in 1..20) k.touch(MotionEvent.ACTION_MOVE, x + 400f - 2f * i, y2)
-        k.wait(50)
-        assertEquals("ten characters back from 11", 1, k.edit.selectionStart)
-        k.touch(MotionEvent.ACTION_UP, x + 360f, y2)
+        k.wait(JAR_TOTAL_MS + 100)
+        assertFalse("the cursor mode ends when the jar has shut", k.view.cursorMode)
     }
 
-    @Test fun `tapping the cut swarm cuts the selection`() {
+    @Test fun `tapping the cut jar cuts the selection`() {
         val k = keyboard().night("hello brave new world", 8)
         k.doubleTap()
         k.wait(CHOOSE_DELAY_MS + 100)

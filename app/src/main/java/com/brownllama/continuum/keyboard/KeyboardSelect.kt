@@ -77,9 +77,9 @@ internal fun KeyboardView.endSelection(collapse: Boolean) {
 }
 
 /**
- * A jar was tapped: the selection is copied or cut, the fireflies stream into that jar one after another, the other
- * jar fades, and the lid clicks shut ([JAR_SHUT_MS] on) with a flash and a tick; a moment later the jar fades and
- * the fireflies are let out ([JAR_TOTAL_MS]).
+ * A jar was tapped: the selection is copied or cut, and the fireflies stream into that jar one after another
+ * (the other jar stays until they are in). Then the lid clicks shut ([JAR_SHUT_MS]) with a flash and a tick, the
+ * other jar fades away, the chosen jar glows a moment and fades, and the cursor mode ends ([JAR_TOTAL_MS]).
  */
 internal fun KeyboardView.performSelectionButton(cut: Boolean) {
     listener.onSelectionAction(cut)
@@ -90,7 +90,7 @@ internal fun KeyboardView.performSelectionButton(cut: Boolean) {
     jarChosen = if (cut) 2 else 1
     jarAt = now
     val u = spritePx
-    fireflies.funnel(if (cut) spotCutX else spotCopyX, jarTop() + 9 * u, cut, now)
+    fireflies.funnel(if (cut) spotCutX else spotCopyX, jarTop() + 13 * u, cut, now)
     timer.removeCallbacks(jarClick)
     timer.removeCallbacks(jarDone)
     timer.postDelayed(jarClick, JAR_SHUT_MS)
@@ -105,10 +105,11 @@ internal fun KeyboardView.jarClicked() {
     postInvalidateOnAnimation()
 }
 
-/** The fireflies are let out of the jar. */
+/** The jar has shut and faded: that was the last thing to do, so the day comes back (the cursor mode ends). */
 internal fun KeyboardView.jarFinished() {
     jarChosen = 0
     fireflies.release(SystemClock.uptimeMillis())
+    setCursorMode(false)
     invalidate()
 }
 
@@ -120,13 +121,14 @@ internal fun KeyboardView.dropJars() {
 }
 
 /** The top of the jars, which are centred on the height the finger lifted at. */
-internal fun KeyboardView.jarTop() = spotY - JAR_TOTAL_H * spritePx / 2f
+internal fun KeyboardView.jarTop() = spotY - JAR_ROWS * spritePx / 2f
 
 /**
- * The two choices are glass jars, each with a paper label under it: copy on the left (pale blue glass), cut on the
- * right (red-orange). Their lids hover open, bobbing a little, while the fireflies wait between them. When one is
- * chosen the other fades; the fireflies pour into the chosen jar and light it up from inside, the lid drops and
- * clicks shut (a flash of sparks), and then it fades. (The fireflies themselves are drawn by [Fireflies].)
+ * The two choices are glass jars, each with its name on a paper sticker stuck to the glass: copy on the left (pale blue
+ * glass), cut on the right (red-orange). Their lids hover open, bobbing a little, while the fireflies wait between
+ * them. When one is chosen the fireflies pour into it first and light it up from inside; once they are in, the lid
+ * drops and clicks shut (a flash of sparks) and the other jar disappears; then the chosen one fades too. (The
+ * fireflies themselves are drawn by [Fireflies].)
  */
 internal fun KeyboardView.drawJars(c: Canvas) {
     val choosing = selection == Selection.CHOOSING
@@ -144,8 +146,11 @@ internal fun KeyboardView.drawJars(c: Canvas) {
         var glow = 0f
         var sparks = 0f
         if (!choosing) {
-            if (!chosen) alpha = (255 * (1f - t / JAR_OTHER_FADE_MS.toFloat())).toInt().coerceIn(0, 255)
-            else {
+            if (!chosen) {
+                // The other jar stays until the fireflies are in and the lid has shut, then it goes.
+                if (t > JAR_SHUT_MS) alpha = (255 * (1f - (t - JAR_SHUT_MS) / JAR_OTHER_FADE_MS.toFloat())).toInt().coerceIn(0, 255)
+                lift = if (t < JAR_LID_MS) lift else 5f * u
+            } else {
                 lift = when {
                     t < JAR_LID_MS -> 5f * u
                     t < JAR_SHUT_MS -> 5f * u * (1f - (t - JAR_LID_MS).toFloat() / (JAR_SHUT_MS - JAR_LID_MS))
@@ -211,31 +216,32 @@ private fun KeyboardView.drawJar(c: Canvas, cx: Float, top: Float, cut: Boolean,
         c.drawRect(mx - d, my - d * 0.7f, mx - d + u, my - d * 0.7f + u, fill)
         c.drawRect(mx + d, my - d * 0.7f, mx + d + u, my - d * 0.7f + u, fill)
     }
-    // The label: a paper tag under the jar with its name.
-    val tagTop = top + (JAR_ROWS + 1) * u
+    // The label: a paper sticker on the glass, with the name on it and a stripe of the jar's colour along its foot.
+    val stickerLeft = left + STICKER_COL * u
+    val stickerTop = top + STICKER_ROW * u
     fillColor(TAG_PAPER)
-    c.drawRect(left + u, tagTop, left + (JAR_W - 1) * u, tagTop + TAG_H * u, fill)
+    c.drawRect(stickerLeft, stickerTop, stickerLeft + STICKER_W * u, stickerTop + STICKER_H * u, fill)
     fillColor(accent)
-    c.drawRect(left + u, tagTop + (TAG_H - 1) * u, left + (JAR_W - 1) * u, tagTop + TAG_H * u, fill)
-    drawText(c, label, cx, tagTop + (TAG_H - 1) * u / 2f, dpu(11f), ColorUtils.setAlphaComponent(TAG_INK, alpha), medium)
+    c.drawRect(stickerLeft, stickerTop + (STICKER_H - 1) * u, stickerLeft + STICKER_W * u, stickerTop + STICKER_H * u, fill)
+    drawText(c, label, cx, stickerTop + (STICKER_H - 1) * u / 2f, dpu(11f), ColorUtils.setAlphaComponent(TAG_INK, alpha), medium)
 }
 
-/** The jar, 14 sprite pixels wide: the lid (rows 0-2: '#' light, 'l' dark), then the glass ('#' its edge, 'g' inside, 'h' a highlight). */
-private val JAR = arrayOf(
-    "...LLLLLLLL...",
-    "...LlLlLlLL...",
-    "...LLLLLLLL...",
-    "....#....#....",
-    "..#gggggggg#..",
-    ".#hggggggggg#.",
-    ".#hggggggggg#.",
-    ".#hggggggggg#.",
-    ".#hggggggggg#.",
-    ".#hggggggggg#.",
-    ".#hggggggggg#.",
-    ".#hggggggggg#.",
-    ".#gggggggggg#.",
-    ".#gggggggggg#.",
-    "..#gggggggg#..",
-    "...########...",
-).map { it.padEnd(JAR_W, '.').take(JAR_W) }.toTypedArray()
+/**
+ * The jar, [JAR_W] sprite pixels wide and [JAR_ROWS] high: the lid (rows 0-2: 'L' light, 'l' dark), then the neck
+ * and the glass ('#' its edge, 'g' inside, 'h' a highlight down its left).
+ */
+private val JAR: Array<String> = run {
+    val w = JAR_W
+    fun centred(core: String) = core.padStart((w + core.length) / 2, '.').padEnd(w, '.')
+    val rows = ArrayList<String>()
+    val lid = 12
+    rows += centred("L".repeat(lid))
+    rows += centred("Ll".repeat(lid / 2))
+    rows += centred("L".repeat(lid))
+    rows += centred("#" + ".".repeat(lid / 2) + "#")
+    rows += centred("#" + "g".repeat(w - 4) + "#")
+    for (r in 5 until JAR_ROWS - 2) rows += "." + "#" + (if (r in 6..JAR_ROWS - 5) "h" + "g".repeat(w - 5) else "g".repeat(w - 4)) + "#" + "."
+    rows += centred("#" + "g".repeat(w - 4) + "#")
+    rows += centred("#".repeat(w - 4))
+    rows.toTypedArray()
+}

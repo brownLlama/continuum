@@ -109,15 +109,22 @@ internal const val CHOOSE_DELAY_MS = 450L
 internal const val SPOT_GAP_DP = 80f
 internal const val SPOT_EDGE_DP = 56f
 internal const val SPOT_TOUCH_DP = 44f
-/** The jars: 14 sprite pixels wide, 16 high, a paper label of 6 under each (23 in all with the gap); when one is chosen the lid is open for [JAR_LID_MS] while the fireflies pour in, clicks shut at [JAR_SHUT_MS], the jar fades from [JAR_FADE_MS] and is gone at [JAR_TOTAL_MS], the other jar fades in [JAR_OTHER_FADE_MS] (all ms). */
-internal const val JAR_W = 14
-internal const val JAR_ROWS = 16
-internal const val TAG_H = 6
-internal const val JAR_TOTAL_H = JAR_ROWS + 1 + TAG_H
-internal const val JAR_LID_MS = 480L
-internal const val JAR_SHUT_MS = 600L
-internal const val JAR_FADE_MS = 900L
-internal const val JAR_TOTAL_MS = 1100L
+/**
+ * The jars: [JAR_W] sprite pixels wide and [JAR_ROWS] high, with the name on a paper sticker ([STICKER_W] by [STICKER_H], its top left
+ * at column [STICKER_COL], row [STICKER_ROW]) stuck on the glass. When one is chosen the lid stays open for
+ * [JAR_LID_MS] while the fireflies pour in, clicks shut at [JAR_SHUT_MS] (when the other jar starts to fade, for
+ * [JAR_OTHER_FADE_MS]), the chosen jar fades from [JAR_FADE_MS], and at [JAR_TOTAL_MS] the cursor mode ends (all ms).
+ */
+internal const val JAR_W = 18
+internal const val JAR_ROWS = 22
+internal const val STICKER_W = 14
+internal const val STICKER_H = 7
+internal const val STICKER_COL = 2
+internal const val STICKER_ROW = 9
+internal const val JAR_LID_MS = 700L
+internal const val JAR_SHUT_MS = 820L
+internal const val JAR_FADE_MS = 1250L
+internal const val JAR_TOTAL_MS = 1450L
 internal const val JAR_OTHER_FADE_MS = 300L
 /** Colours: the copy jar's pale blue and the cut jar's warm red-orange, the lid's metal, the paper label and its ink. */
 internal const val LID_LIGHT = 0xFFC3CAD6.toInt()
