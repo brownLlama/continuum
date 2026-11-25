@@ -1,8 +1,7 @@
 # Next words: how much likelier a word is after the word before it.
 # Blended from Google Books Ngram Corpus (English Fiction, 2020 version, counts from 1970 on), CC BY 3.0
 # (https://creativecommons.org/licenses/by/3.0/), and Tatoeba sentences (https://tatoeba.org),
-# CC BY 2.0 FR (https://creativecommons.org/licenses/by/2.0/fr/). Built by tools/next_words/build.py;
-# see THIRD_PARTY_NOTICES.md.
+# CC BY 2.0 FR (https://creativecommons.org/licenses/by/2.0/fr/). See THIRD_PARTY_NOTICES.md.
 <s>	-0.55	i 1.73 you 0.23 the 0.27 we 1.45 it 0.70 he 1.39 what 1.03 oh 1.84 this 0.84 she 1.47 but 1.18 yeah 1.76 im 1.86 they 1.30 its 1.52 my 0.56 no 0.68 there 1.01 how 1.29 yes 1.54 if 1.03 why 1.41 can 0.30 do 0.08 are 0.02 when 0.99 well 0.53 where 0.99 please 1.40 thats 1.58 did 0.65 maybe 1.73 ill 1.53 thank 1.36 let 0.57 who 0.44 uh 1.51 lets 1.81 then 0.59 okay 0.46 youre 1.31 whats 1.59 dont 0.25 thanks 1.56 were 0.29 our 0.38 hes 1.45 these 0.88
 a	-0.29	good 2.73 little 3.34 lot 3.74 man 2.23 great 2.93 big 3.02 few 3.56 bit 3.41 new 2.72 very 1.94 long 2.55 nice 2.55 minute 3.30 couple 3.49 bad 2.45 thing 1.73 woman 2.48 real 2.54 kid 2.95 look 0.86 friend 2.32 second 2.77 doctor 2.71 while 2.45 girl 1.99 haven 2.39 baby 2.27 moment 2.74 day 1.35 child 2.73 way 0.84 chance 2.62 small 2.97 job 1.99 gun 2.74 beautiful 2.32 damn 2.39 really 0.53 place 1.50 fine 1.60 better 1.33 hurry 2.70 car 1.73 boy 1.81 problem 2.06 guy 1.38 bitch 2.81 wonderful 2.96
 aaron	-0.51	and 1.66 was 1.46 is 0.86 burr 9.54 did 2.13 take 2.34 said 2.56 in 0.15 had 1.70 could 1.39 would 1.17 has 1.37 went 2.44 took 2.62 says 2.60 asked 2.78 told 1.57 thought 1.38 knew 1.66 looked 2.21 turned 1.97 felt 1.74 stood 2.31 sat 2.26 shook 2.74 smiled 2.59 nodded 3.06

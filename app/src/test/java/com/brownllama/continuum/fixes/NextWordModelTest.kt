@@ -98,7 +98,7 @@ class NextWordModelTest {
     }
 
     @Test fun `the model knows how messages go, not only how novels do`() {
-        // Tatoeba's everyday sentences are mixed into the books' word pairs (tools/next_words).
+        // Tatoeba's everyday sentences are mixed into the books' word pairs (see THIRD_PARTY_NOTICES.md).
         val start = WITH.context(null, true, 1f)!!.followers.map { WITH.key(it) }.toSet()
         for (w in listOf("i", "im", "ill", "how", "can", "what")) assertTrue(w, w in start)
         assertTrue(WITH.nextFor("how").take(6).toString(), WITH.nextFor("how").take(6).any { it == "are" || it == "much" })

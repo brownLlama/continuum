@@ -1,8 +1,7 @@
 # Next words: how much likelier a word is after the word before it.
 # Blended from Google Books Ngram Corpus (German, 2020 version, counts from 1970 on), CC BY 3.0
 # (https://creativecommons.org/licenses/by/3.0/), and Tatoeba sentences (https://tatoeba.org),
-# CC BY 2.0 FR (https://creativecommons.org/licenses/by/2.0/fr/). Built by tools/next_words/build.py;
-# see THIRD_PARTY_NOTICES.md.
+# CC BY 2.0 FR (https://creativecommons.org/licenses/by/2.0/fr/). See THIRD_PARTY_NOTICES.md.
 <s>	-0.62	ich 1.57 sie 0.93 das 0.91 was 1.41 wir 1.37 es 0.97 er 1.38 die 0.70 du 0.49 wenn 1.49 nein 1.52 der 0.45 wie 1.02 ja 0.81 oh 1.84 da 1.02 hast 0.93 warum 1.60 aber 0.35 mein 1.14 danke 1.59 komm 1.70 wer 1.59 wo 1.24 meine 0.84 ihr 0.34 na 1.81 vielleicht 1.27 haben 0.01 hallo 1.71 diese 1.17 lass 1.74 bitte 0.88 bist 0.48 jetzt 0.27 ach 1.80 wieso 1.68 also 0.57 hor 1.71 mach 1.65 weisst 1.16 sag 1.66 man 0.41 okay 0.83 im 0.08 alle 0.58 willst 0.88 dieser 0.97
 aa	-0.63	pa 7.70 und 1.21 ist 0.53 an 1.94 vom 3.51 in 0.62 no 5.89 mit 0.65 fur 0.80 noch 1.01 oder 1.15 am 1.73 im 0.51 als 0.39 bei 0.83 net 6.65 vi 7.12 iv 6.86 ss 6.18 bonn 6.50
 ab	-1.25	und 3.13 jetzt 3.10 was 1.49 morgen 3.89 wie 1.50 sofort 4.15 ob 3.49 das 0.01 wann 4.06 wenn 1.46 die 0.06 dem 1.73 um 1.81 heute 2.47 bevor 3.47 aber 0.72 weil 2.38 hier 0.67 in 0.18 dass 0.42 als 1.13 ins 2.71 dann 0.94 auf 0.08 von 0.29 da 0.45 nachster 5.64 oder 0.83 damit 1.59 denn 1.04 einem 0.99 doch 0.26 vom 1.79 wo 0.14 ohne 1.18 bis 0.65 nachdem 2.68 dort 0.92 wahrend 1.83 dieser 0.27 indem 2.91 zeile 5.39 mitternacht 3.79 ende 1.24 sieben 2.35 diesem 0.65 sondern 1.74 halb 2.90

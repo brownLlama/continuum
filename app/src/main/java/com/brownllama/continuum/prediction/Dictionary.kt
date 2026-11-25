@@ -25,8 +25,7 @@ import kotlin.math.roundToInt
  * Either way, each word's emoji comes from `assets/emoji_keywords.tsv` (CLDR annotations).
  *
  * With the open list, which words follow which comes from `assets/next_words.tsv` (Tatoeba's
- * everyday sentences mixed with Google Books Ngram word pairs by tools/next_words/build.py, see
- * THIRD_PARTY_NOTICES.md): for a previous word, its likeliest
+ * everyday sentences mixed with Google Books Ngram word pairs, see THIRD_PARTY_NOTICES.md): for a previous word, its likeliest
  * next words with ln(lift), how many times likelier each is after it than in general, and a
  * backoff, ln(alpha) ≤ 0, for every word not listed. [context] serves it to the decoder.
  *
