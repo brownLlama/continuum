@@ -258,56 +258,34 @@ internal fun KeyboardView.drawTree(c: Canvas) {
 }
 
 /**
- * In the cursor mode the suggestion bar and the keys are all but gone under a veil (just a little of
- * them shows through), and a big pixel text caret takes their place: it blinks while you wait, glides
- * after your finger as you slide, leaves a few motion dashes behind it, and the arrow on the side it is
- * heading lights up. The tree, drawn after it, glows. (How to use it is in the app's Guide.)
+ * The cursor mode is night. A deep blue veil hides the suggestion bar and the keys all but a little
+ * (and tints the grass and everything in it like dusk), a few stars come out, the tree glows, and
+ * fireflies drift about; sliding a finger, in any direction, brings them round it in a swirl and the
+ * finger leaves sparks behind. It is drawn over everything. (How to use it is in the app's Guide.)
  */
 internal fun KeyboardView.drawCursorMode(c: Canvas) {
     if (!cursorMode || panel.big || gifSearching) return
     val now = SystemClock.uptimeMillis()
-    fill.color = ColorUtils.setAlphaComponent(theme.background, CURSOR_VEIL_ALPHA)
+    fill.color = ColorUtils.setAlphaComponent(NIGHT, CURSOR_VEIL_ALPHA)
     c.drawRect(0f, 0f, width.toFloat(), keyboardHeight, fill)
-
+    fill.color = ColorUtils.setAlphaComponent(NIGHT, DUSK_ALPHA)
+    c.drawRect(0f, keyboardHeight, width.toFloat(), grassBottom, fill)
+    // Stars over the keys, in fixed places, a few twinkling.
     val u = spritePx
-    val fingerDown = pointers.values.any { it.area == Area.CURSOR }
-    // Where the caret stands: under the finger, else where it was left, else in the middle of the free part.
-    val free = if (tree.present) tree.homeLeft - dpu(12f) else width.toFloat()
-    val x = if (cursorFingerX >= 0f) cursorFingerX.coerceIn(dpu(24f), width - dpu(24f)) else free / 2f
-    val cx = kotlin.math.floor(x / u) * u
-    val rows = (min(keyboardHeight * 0.55f, dpu(64f)) / u).toInt().coerceAtLeast(8)
-    val top = kotlin.math.floor((keyboardHeight / 2f - rows * u / 2f) / u) * u
-    val bottom = top + rows * u
-    val recent = now - cursorDirAt < CARET_TRAIL_MS && cursorDir != 0
-    // A blink while it waits; solid while the finger moves it.
-    val lit = fingerDown || (now / CARET_BLINK_MS) % 2L == 0L
-    val color = ColorUtils.setAlphaComponent(theme.accent, if (lit) 255 else 70)
-    fill.color = color
-    c.drawRect(cx - u, top + u, cx + u, bottom - u, fill) // the stem
-    c.drawRect(cx - 3 * u, top, cx + 3 * u, top + u, fill) // the serifs
-    c.drawRect(cx - 3 * u, bottom - u, cx + 3 * u, bottom, fill)
-    // Motion dashes trailing behind it, fainter the further back.
-    if (recent) {
-        for (k in 1..3) {
-            fill.color = ColorUtils.setAlphaComponent(theme.accent, 200 - 55 * k)
-            val dx = -cursorDir * (3 * k + 2) * u
-            c.drawRect(cx + dx - u, (top + bottom) / 2f - u, cx + dx + u, (top + bottom) / 2f + u, fill)
-        }
+    for (k in 0 until STARS) {
+        val sx = kotlin.math.floor(GrassField.noise(k, 301) * width / u) * u
+        val sy = kotlin.math.floor(GrassField.noise(k, 302) * keyboardHeight * 0.92f / u) * u
+        val bright = (k * 7 + now / 650) % 4L == 0L
+        fill.color = ColorUtils.setAlphaComponent(0xFFFFFF, if (bright) 220 else 90)
+        c.drawRect(sx, sy, sx + u, sy + u, fill)
     }
-    // The arrows either side: the one it is heading for lights up.
-    for (side in intArrayOf(-1, 1)) {
-        val on = recent && cursorDir == side
-        fill.color = if (on) theme.accent else ColorUtils.setAlphaComponent(theme.accent, 90)
-        val ax = cx + side * (CARET_ARROW_GAP + if (on) 1 else 0) * u
-        val ay = (top + bottom) / 2f
-        // A little pixel triangle pointing away from the caret: its tall side nearest the caret.
-        for (i in 0..3) {
-            val x0 = if (side > 0) ax + i * u else ax - (i + 1) * u
-            c.drawRect(x0, ay - (3 - i) * u, x0 + u, ay + (3 - i) * u + u, fill)
-        }
-    }
-    // Keeps itself going just long enough to blink and to fade the dashes; the mode ends by itself soon.
-    if (!fingerDown) postInvalidateDelayed(CARET_BLINK_MS) else if (recent) postInvalidateDelayed(CARET_TRAIL_MS)
+    // The tree, glowing, above the night; then the fireflies above that.
+    drawTree(c)
+    val down = pointers.values.any { it.area == Area.CURSOR }
+    fireflies.step(now, down, cursorFingerX, cursorFingerY)
+    fireflies.draw(c, fill, now)
+    // A frame at a time while it lasts (a few seconds at most); with the system's animations off, only as fingers move.
+    if (animating) postInvalidateDelayed(FIREFLY_FRAME_MS)
 }
 
 /**

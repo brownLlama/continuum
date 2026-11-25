@@ -91,13 +91,13 @@ internal fun KeyboardView.drawContent(canvas: Canvas) {
     if (mode == Mode.MINI) {
         drawText(canvas, languageCode, slotCenter(25), letterRect.bottom - miniRowH * 0.12f, miniRowH * 0.3f, languageLabelColor(), regular)
     }
-    drawCursorMode(canvas)
-    drawTree(canvas)
+    if (!cursorMode) drawTree(canvas)
     drawAnimal(canvas)
     drawGrassFront(canvas)
     drawPreviews(canvas)
     drawLanguageHint(canvas)
     drawZoom(canvas)
+    drawCursorMode(canvas)
 }
 
 internal fun KeyboardView.isPressed(k: Key) = pointers.values.any { it.key === k && !it.consumed }

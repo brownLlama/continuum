@@ -678,10 +678,10 @@ class KeyboardView(context: Context, internal val listener: Listener) : View(con
     internal var cursorMode = false
         private set
     internal var lastTreeTapAt = 0L
-    /** In the cursor mode: where the sliding finger is (x; -1: none yet, so the middle), and which way (-1, 1) and when the cursor last stepped. */
+    /** In the cursor mode: where the sliding finger is (keyboard coordinates), and the night's fireflies that gather round it. */
     internal var cursorFingerX = -1f
-    internal var cursorDir = 0
-    internal var cursorDirAt = 0L
+    internal var cursorFingerY = -1f
+    internal val fireflies = Fireflies(spritePx)
     internal val cursorTimeout = Runnable { cursorModeIdle() }
 
     /** Turns the cursor mode on or off (the tree shows which); off by itself after a while without a touch. */
@@ -690,7 +690,8 @@ class KeyboardView(context: Context, internal val listener: Listener) : View(con
         cursorMode = on
         tree.active = on
         cursorFingerX = -1f
-        cursorDir = 0
+        cursorFingerY = -1f
+        if (on) fireflies.reset(width.toFloat(), grassBottom, SystemClock.uptimeMillis())
         timer.removeCallbacks(cursorTimeout)
         if (on) timer.postDelayed(cursorTimeout, CURSOR_MODE_TIMEOUT_MS) else flushCursorMoves()
         keyVibration.tap()

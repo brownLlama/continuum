@@ -7,6 +7,7 @@ import android.os.SystemClock
 import android.view.MotionEvent
 import com.brownllama.continuum.Prefs
 import com.brownllama.continuum.keyboard.CURSOR_MODE_TIMEOUT_MS
+import com.brownllama.continuum.keyboard.NIGHT
 import com.brownllama.continuum.keyboard.Tree
 import com.brownllama.continuum.keyboard.grassBottom
 import com.brownllama.continuum.keyboard.grassTop
@@ -240,29 +241,38 @@ class TreeCursorTest {
         assertFalse(k.view.cursorMode)
     }
 
-    @Test fun `in the cursor mode the bar and the keys are all but hidden under a veil, with a caret that follows the finger`() {
+    @Test fun `in the cursor mode it is night, with a deep blue veil over the bar and the keys that hides all but a little`() {
         for (mode in listOf("mini", "full")) {
             val k = keyboard(mode).withTree("hello")
             k.doubleTapTree()
-            val veils = ArrayList<Triple<Float, Float, Int>>() // top, bottom, alpha
+            val veils = ArrayList<Triple<Float, Float, Int>>() // top, bottom, colour
             val canvas = object : Canvas(Bitmap.createBitmap(1080, 700, Bitmap.Config.ARGB_8888)) {
                 override fun drawRect(left: Float, top: Float, right: Float, bottom: Float, paint: android.graphics.Paint) {
-                    if (right - left >= 1000f) veils += Triple(top, bottom, paint.color ushr 24)
+                    if (right - left >= 1000f) veils += Triple(top, bottom, paint.color)
                     super.drawRect(left, top, right, bottom, paint)
                 }
             }
             k.view.draw(canvas)
-            val veil = veils.firstOrNull { it.third in 200..250 }
-            assertTrue("$mode: a veil", veil != null)
-            assertEquals("$mode: it starts at the top of the suggestion bar", 0f, veil!!.first, 0.5f)
-            assertEquals("$mode: and covers the keys", k.view.keyboardHeight, veil.second, 0.5f)
-            // The caret goes where the finger goes.
-            val (x, y) = k.onKeys()
-            k.slide(x, y, 200f, 0f, lift = false)
-            assertEquals(x + 200f, k.view.cursorFingerX, 0.5f)
-            assertEquals(1, k.view.cursorDir)
-            k.touch(MotionEvent.ACTION_UP, x + 200f, y)
+            val night = veils.firstOrNull { (it.third ushr 24) in 200..250 }
+            assertTrue("$mode: a veil", night != null)
+            assertEquals("$mode: it is night blue", NIGHT and 0xFFFFFF, night!!.third and 0xFFFFFF)
+            assertEquals("$mode: it starts at the top of the suggestion bar", 0f, night.first, 0.5f)
+            assertEquals("$mode: and covers the keys", k.view.keyboardHeight, night.second, 0.5f)
+            assertTrue("$mode: the grass below is only dusk", veils.any { (it.third ushr 24) in 80..180 && it.first >= k.view.keyboardHeight - 0.5f })
         }
+    }
+
+    @Test fun `the fireflies follow the finger in two dimensions`() {
+        val k = keyboard().withTree("hello world")
+        k.doubleTapTree()
+        val (x, y) = k.onKeys()
+        k.touch(MotionEvent.ACTION_DOWN, x, y)
+        k.touch(MotionEvent.ACTION_MOVE, x + 120f, y - 20f)
+        assertEquals(x + 120f, k.view.cursorFingerX, 0.5f)
+        assertEquals(y - 20f - k.offY, k.view.cursorFingerY, 0.5f)
+        k.touch(MotionEvent.ACTION_MOVE, x + 120f, y + 40f)
+        assertEquals("up and down count too", y + 40f - k.offY, k.view.cursorFingerY, 0.5f)
+        k.touch(MotionEvent.ACTION_UP, x + 120f, y + 40f)
     }
 
     @Test fun `hiding the keyboard turns the mode off`() {
