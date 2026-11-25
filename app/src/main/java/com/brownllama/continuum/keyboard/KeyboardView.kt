@@ -180,9 +180,9 @@ class KeyboardView(context: Context, internal val listener: Listener) : View(con
     var barScale = 1f
         set(value) { if (field != value) { field = value; requestLayout(); relayout() } }
     /**
-     * Space between the keys and whatever system bar is under them (settings slider), filled with
-     * grass as tall as the space ([Grass]; 0: no space, no grass). From Android 15 the IME window is
-     * edge-to-edge, so the bars' own height is added separately ([systemBottom]).
+     * Space between the keys and whatever system bar is under them (settings slider). From Android 15
+     * the IME window is edge-to-edge, so the bars' own height is added separately ([systemBottom]).
+     * Grass ([Grass]) grows from the bottom of the window up to the keys, through both; at 0 there is none.
      */
     var bottomSpaceDp = Prefs.BOTTOM_SPACE_DEFAULT.toFloat()
         set(value) { if (field != value) { field = value; requestLayout(); invalidate() } }
@@ -245,6 +245,7 @@ class KeyboardView(context: Context, internal val listener: Listener) : View(con
      * visit comes in a moment, and with "Every time" one is always due.
      */
     fun keyboardShown() {
+        meadow.regrow()
         if (animalFrequency.gapMs == null) nextAnimalAt = 0L
         scheduleAnimal(randomBetween(animalFrequency.openMs))
     }
@@ -659,11 +660,14 @@ class KeyboardView(context: Context, internal val listener: Listener) : View(con
 
     // ---- visiting animals --------------------------------------------------------------------
 
-    /** 2 dp per sprite pixel, in whole screen pixels so it stays crisp. */
-    internal val animal = Animal(max(1f, (2f * density).roundToInt().toFloat()))
+    /** 2 dp per sprite pixel, in whole screen pixels so it stays crisp: the animals' and the grass's. */
+    internal val spritePx = max(1f, (2f * density).roundToInt().toFloat())
+    /** The flowers in the grass, which the animals eat. Random places; eaten ones regrow when the keyboard opens. */
+    internal val meadow = Meadow()
+    internal val animal = Animal(spritePx).also { it.meadow = meadow }
     internal val animalCheck = Runnable { maybeStartAnimal() }
-    /** The grass in the space under the keys ([drawGrass]). */
-    internal val grass = Grass(density)
+    /** The grass under the keys, where the animals walk ([drawGrass], [drawGrassFront], [animalFeet]). */
+    internal val grass = Grass(spritePx)
     internal var lastTouchAt = 0L
 
     // ---- the language hint ------------------------------------------------------------------
