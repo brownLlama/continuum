@@ -30,7 +30,7 @@ internal object Wind {
         val startMs: Long, val durationMs: Long, val sweepMs: Long,
         /** The stretch of the grass it blows over, as fractions of the width. */
         val from: Float, val to: Float,
-        /** 0.35..1: how much of the most the tips lean. */
+        /** 0.5..1: how much of the most the tips lean. */
         val force: Float, val dir: Int,
     ) {
         val endMs get() = startMs + durationMs + sweepMs
@@ -45,11 +45,11 @@ internal object Wind {
         val start = (n(3) * (SLOT_MS - duration - sweep - 200L)).toLong()
         val span = 0.4f + 0.6f * n(4)
         val from = n(5) * (1f - span)
-        return Gust(start, duration, sweep, from, from + span, 0.35f + 0.65f * n(6), if (n(7) < 0.25f) -1 else 1)
+        return Gust(start, duration, sweep, from, from + span, 0.5f + 0.5f * n(6), if (n(7) < 0.25f) -1 else 1)
     }
 
-    /** How many pixels the tips lean at most, in grass [rows] tall (for the strongest gust). */
-    private fun maxLean(rows: Int) = when { rows >= 14 -> 3f; rows >= 9 -> 2f; else -> 1f }
+    /** How many pixels the tips lean at most, in grass [rows] tall (for the strongest gust): about a third of its height, up to 3. */
+    private fun maxLean(rows: Int) = (rows * 0.3f).coerceIn(1f, 3f)
 
     /** How hard the wind blows at [col] of [columns] at [now] (uptime ms, 0: calm .. 1: the gust's peak, times its force). */
     fun strength(col: Int, columns: Int, now: Long): Float {

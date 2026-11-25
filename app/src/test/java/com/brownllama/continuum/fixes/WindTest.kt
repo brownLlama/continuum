@@ -49,4 +49,11 @@ class WindTest {
         val t = times.first { Wind.blowing(it) }
         assertEquals(Wind.FRAME_MS, Wind.nextIn(t))
     }
+
+    @Test fun `grass of the default height (about 8 pixels) visibly sways`() {
+        // The phone's default: 15 dp of grass is about 8 sprite pixels tall. A gust must move its tips.
+        val moved = times.count { Wind.blowing(it) && Wind.lean(60, 7, 200, 8, it) != 0 }
+        val blowing = times.count { Wind.blowing(it) }
+        assertTrue("tips move in most of a gust ($moved of $blowing)", moved > blowing / 3)
+    }
 }
