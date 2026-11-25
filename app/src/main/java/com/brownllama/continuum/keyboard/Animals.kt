@@ -567,7 +567,9 @@ internal class Animal(private val px: Float) {
         }
         // Whole sprite pixels only, so it stays crisp. Each run of one colour is one rectangle.
         val left = floor(x / px) * px
-        val top = feet - s.height * px
+        // Walking, the body rises a pixel as the legs pass each other, and sinks as they stride: a bounce, not a glide.
+        val walking = meal == null && stopUntil <= now
+        val top = feet - s.height * px - if (walking && frame % 2 == 1) px else 0f
         for (r in face.indices) {
             val row = face[r]
             fun at(col: Int) = row[if (dir > 0) col else W - 1 - col]
