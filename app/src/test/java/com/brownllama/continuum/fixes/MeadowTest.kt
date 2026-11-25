@@ -30,7 +30,12 @@ import kotlin.random.Random
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [36])
 class MeadowTest {
-    private val canvas = Canvas(Bitmap.createBitmap(1080, 400, Bitmap.Config.ARGB_8888))
+    /**
+     * A canvas to draw a visit on. Robolectric's canvas keeps a record of everything drawn on it, so
+     * each visit gets its own, and visits step 50 ms at a time (as in AnimalsTest): a whole test on one
+     * canvas in 20 ms steps drew over three million rectangles and ran out of memory.
+     */
+    private fun canvas() = Canvas(Bitmap.createBitmap(1080, 400, Bitmap.Config.ARGB_8888))
 
     /** Grass 180 × 15 pixels, the animals' feet 3 up: a phone's default grass. */
     private fun meadow(seed: Int) = Meadow(Random(seed)).also { it.fit(180, 15, 3) }
@@ -72,10 +77,11 @@ class MeadowTest {
             val m = meadow(run)
             val animal = Animal(6f).also { it.meadow = m }
             animal.start(s, 1080f, 90f - 3 * 6f, now = 0L, groundRows = 3)
+            val canvas = canvas()
             var now = 0L
             val bites = HashMap<Flower, Int>()
             while (animal.visiting && now < 10 * 60_000L) {
-                now += 20
+                now += 50
                 val next = animal.draw(canvas, 1080f, now)
                 assertTrue("${s.key}: redraw delay $next", next == -1L || next >= 1L)
                 val f = animal.eating ?: continue
@@ -94,9 +100,10 @@ class MeadowTest {
         val m = meadow(3)
         val animal = Animal(6f).also { it.meadow = m }
         animal.start(Species.ALEX, 1080f, 300f, now = 0L)
+        val canvas = canvas()
         var now = 0L
         while (animal.visiting) {
-            now += 20
+            now += 50
             animal.draw(canvas, 1080f, now)
             assertEquals(null, animal.eating)
         }
@@ -107,9 +114,10 @@ class MeadowTest {
         val m = meadow(5)
         val animal = Animal(6f).also { it.meadow = m }
         animal.start(Species.NIBU, 1080f, 72f, now = 0L, groundRows = 3)
+        val canvas = canvas()
         var now = 0L
         while (animal.visiting && (animal.eating?.bites ?: 0) < 2) {
-            now += 20
+            now += 50
             animal.draw(canvas, 1080f, now)
         }
         val f = animal.eating!!
