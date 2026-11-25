@@ -10,16 +10,16 @@ import com.brownllama.continuum.prediction.Language
 import kotlin.math.abs
 import kotlin.math.max
 
-/** When the animal next sets off for a walk (uptime ms). Kept while the app runs. */
-internal var nextWanderAt = 0L
+/** When the next animal visit is due (uptime ms; 0: the first time the keyboard opens). Kept while the app runs. */
+internal var nextAnimalAt = 0L
 
-/** Checks on the animal (puts it on the grass, or sends it for a walk when it is due) after [delay]. */
+/** Checks for a visit after a pause in typing of [ANIMAL_IDLE_MS] (or after [delay]). */
 internal fun KeyboardView.scheduleAnimal(delay: Long = ANIMAL_IDLE_MS) {
     timer.removeCallbacks(animalCheck)
     if (animals.isNotEmpty() && isAttachedToWindow && windowVisibility == View.VISIBLE) timer.postDelayed(animalCheck, delay)
 }
 
-/** Takes the animal off the grass at once (the keyboard changed under it); [cancel] also drops the next check. */
+/** Ends a visit at once (the keyboard changed under it); [cancel] also drops the next check. */
 internal fun KeyboardView.endAnimal(cancel: Boolean = false) {
     if (cancel) timer.removeCallbacks(animalCheck)
     if (animal.visiting) {
@@ -29,31 +29,23 @@ internal fun KeyboardView.endAnimal(cancel: Boolean = false) {
 }
 
 /**
- * The animal lives on the grass while the keyboard shows the letters or numbers: it is put there if
- * it is not, and when a walk is due ([nextWanderAt]) in a pause in typing (no finger down, no zoom,
- * and the IME agrees) it takes a short one. Mostly it just stands, so it costs next to nothing.
+ * Starts a visit if one is due ([nextAnimalAt]) and the letters are showing in a pause in typing
+ * (no finger down, no zoom, no GIF search, and the IME agrees).
  */
 internal fun KeyboardView.maybeStartAnimal() {
-    if (animals.isEmpty() || !isAttachedToWindow || width <= 0) return
+    if (animals.isEmpty() || !animating || animal.visiting) return
     val now = SystemClock.uptimeMillis()
-    // No grass, no animal (it has nowhere to stand); nor over the emoji or GIF panels, or in password fields.
-    if (grassHeight <= 0 || panel.big || gifSearching || !listener.animalMayVisit()) return endAnimal()
-    if (!animal.visiting) {
-        animal.start(animals.random(), width.toFloat(), animalFeet(), now, groundRows = animalFeetRows(), resident = true)
-        nextWanderAt = now + randomBetween(animalFrequency.wanderMs)
-        invalidate()
-    }
-    if (animal.resting && now >= nextWanderAt) {
-        val idle = animating && pointers.isEmpty() && zoom == null && panel == Panel.LETTERS &&
-            now - lastTouchAt >= ANIMAL_IDLE_MS
-        if (idle) {
-            animal.wander(width.toFloat(), now)
-            nextWanderAt = now + randomBetween(animalFrequency.wanderMs)
-            invalidate()
-            return
-        }
-    }
-    scheduleAnimal(max(ANIMAL_IDLE_MS, nextWanderAt - now))
+    // "Every time" and this opening's visit is over: nothing to wait for until the keyboard opens again.
+    if (nextAnimalAt == Long.MAX_VALUE) return
+    if (now < nextAnimalAt) return scheduleAnimal(max(ANIMAL_IDLE_MS, nextAnimalAt - now))
+    val idle = pointers.isEmpty() && zoom == null && !gifSearching && panel == Panel.LETTERS &&
+        now - lastTouchAt >= ANIMAL_IDLE_MS && listener.animalMayVisit()
+    if (!idle) return scheduleAnimal()
+    // On the grass under the keys, eating its flowers (without grass, along a row of keys).
+    animal.start(animals.random(), width.toFloat(), animalFeet(), now, groundRows = if (grassHeight > 0) animalFeetRows() else 0)
+    // "Every time": the next one comes when the keyboard opens again.
+    nextAnimalAt = animalFrequency.gapMs?.let { now + randomBetween(it) } ?: Long.MAX_VALUE
+    invalidate()
 }
 
 internal fun KeyboardView.randomBetween(range: LongRange) = range.first + kotlin.random.Random.nextLong(range.last - range.first)
@@ -118,13 +110,7 @@ internal fun KeyboardView.drawLanguageHint(c: Canvas) {
 
 internal fun KeyboardView.drawAnimal(c: Canvas) {
     if (!animal.visiting) return
-    val now = SystemClock.uptimeMillis()
-    val next = animal.draw(c, width.toFloat(), now)
-    when {
-        // Redraw only when it next moves a pixel or changes frame, not every display frame.
-        next >= 0 -> postInvalidateDelayed(next)
-        // At rest (or held by a finger, which redraws it as it moves): nothing to draw until the next walk is due.
-        next == Animal.REST -> scheduleAnimal(max(ANIMAL_IDLE_MS, nextWanderAt - now))
-        else -> scheduleAnimal()
-    }
+    val next = animal.draw(c, width.toFloat(), SystemClock.uptimeMillis())
+    // Redraw only when it next moves a pixel or changes frame, not every display frame.
+    if (next >= 0) postInvalidateDelayed(next) else scheduleAnimal()
 }

@@ -48,6 +48,13 @@ internal class Grass(private val unit: Float) : Sway {
     /** Whether any grass in column [col] stands in front of a passing animal (for tests). */
     internal fun inFront(col: Int) = field.hasFront(col)
 
+    /** The tree's colours: the grass's greens, a brown trunk, red apples and the grass's outline. */
+    internal fun treePalette() = Tree.Palette(
+        outline = colors[GrassField.OUTLINE], dark = colors[GrassField.BACK_GREEN], mid = colors[GrassField.MID_GREEN],
+        light = colors[GrassField.LIGHT], highlight = colors[GrassField.HIGHLIGHT],
+        trunk = 0xFF8A5A33.toInt(), trunkDark = 0xFF5E3B20.toInt(), apple = 0xFFD6303F.toInt(),
+    )
+
     /** The flowers' stems and leaves, in the grass's own greens. */
     internal val stemColor get() = colors[GrassField.MID_GREEN]
     internal val leafColor get() = colors[GrassField.LIGHT]
@@ -210,6 +217,7 @@ internal val KeyboardView.grassHeight: Int
  */
 internal fun KeyboardView.drawGrass(c: Canvas) {
     val h = grassHeight
+    fitTree(h)
     if (h <= 0) return
     // The wind blows only while the keyboard is showing and animations are on; the system's battery saver stops it too.
     val now = SystemClock.uptimeMillis()
@@ -219,6 +227,29 @@ internal fun KeyboardView.drawGrass(c: Canvas) {
     meadow.fit(ceil(width / spritePx).toInt(), ceil(h / spritePx).toInt(), animalFeetRows())
     meadow.draw(c, fill, spritePx, grassBottom, grass.petals, grass.centres, grass.stemColor, grass.leafColor, if (wind) grass else null)
     if (wind) scheduleWind(Wind.nextIn(now), h)
+    drawTree(c, held = false)
+}
+
+/**
+ * Where the tree stands: on the right of the grass, its base just above Android's gesture bar (swipes
+ * there are Android's) and its top no higher than the keys; none where the grass is too short for it.
+ */
+internal fun KeyboardView.fitTree(grassH: Int = grassHeight) {
+    if (grassH <= 0) return tree.fit(0f, 0f, 0f, 0f)
+    tree.fit(width.toFloat(), treeBase(), grassTop, dpu(TREE_RIGHT_GAP_DP))
+}
+
+/** The bottom of the tree, and of the part of the grass a finger can pick it up from (keyboard coordinates). */
+internal fun KeyboardView.treeBase() = grassBottom - systemBottom - dpu(GESTURE_BAR_MARGIN_DP)
+
+/**
+ * The tree: standing in the grass ([held] false, drawn before the animals) or, while a finger carries it
+ * or it slides home ([held] true, drawn last, over the keys). It redraws only while it slides.
+ */
+internal fun KeyboardView.drawTree(c: Canvas, held: Boolean) {
+    if (!tree.present || held != (tree.carried || tree.returning)) return
+    val next = tree.draw(c, SystemClock.uptimeMillis(), grass.treePalette())
+    if (next >= 0) postInvalidateOnAnimation()
 }
 
 /**
@@ -234,7 +265,7 @@ private fun KeyboardView.scheduleWind(delay: Long, grassH: Int) {
 /** The tufts that stand in front of a visiting animal, drawn again over it (after it), so it walks through them. */
 internal fun KeyboardView.drawGrassFront(c: Canvas) {
     val h = grassHeight
-    if (h <= 0 || !animal.visiting || animal.carried) return
+    if (h <= 0 || !animal.visiting) return
     val from = animal.gridLeft
     grass.drawFront(c, grassBottom - h, from, from + Species.W - 1, meadow)
 }
@@ -242,18 +273,10 @@ internal fun KeyboardView.drawGrassFront(c: Canvas) {
 /** How many sprite pixels above the bottom of the grass the animals walk, so there is grass under their feet. */
 internal const val ANIMAL_FEET_ROWS = 3
 
-/**
- * How many sprite pixels above the ground of the grass the animal's feet are: it stands above
- * Android's gesture bar (touches there are Android's), so its legs and belly are in the grass between
- * that bar and the keys, where a finger can pick it up. At least [ANIMAL_FEET_ROWS], and never so high
- * that the grass has no room above it for flowers.
- */
+/** How many sprite pixels above the ground of the grass the animals' feet are: [ANIMAL_FEET_ROWS], or half in grass shorter than twice that. */
 internal fun KeyboardView.animalFeetRows(): Int {
     val h = grassHeight
-    if (h <= 0) return 0
-    val rows = (h / spritePx).toInt()
-    val above = ((systemBottom + dpu(GESTURE_BAR_MARGIN_DP)) / spritePx).roundToInt()
-    return maxOf(ANIMAL_FEET_ROWS, above).coerceAtMost(maxOf(ANIMAL_FEET_ROWS, rows - 8))
+    return if (h >= 2 * ANIMAL_FEET_ROWS * spritePx) ANIMAL_FEET_ROWS else (h / spritePx / 2).toInt()
 }
 
 /**

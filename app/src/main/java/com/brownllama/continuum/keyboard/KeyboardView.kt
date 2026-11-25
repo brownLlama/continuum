@@ -91,9 +91,9 @@ class KeyboardView(context: Context, internal val listener: Listener) : View(con
         fun onBackspace()
         /** Swipe left. */
         fun onDeleteWord()
-        /** The animal is carried sideways: move the cursor [steps] characters (negative: left). */
+        /** The tree is carried sideways: move the cursor [steps] characters (negative: left). */
         fun onCursorMove(steps: Int)
-        /** The animal is carried up or down: move the cursor [lines] lines (negative: up). */
+        /** The tree is carried up or down: move the cursor [lines] lines (negative: up). */
         fun onCursorLines(lines: Int)
         /** Space key or swipe right. */
         fun onSpace()
@@ -229,7 +229,7 @@ class KeyboardView(context: Context, internal val listener: Listener) : View(con
     /** The field takes an email address: full mode's "," key becomes "@". */
     var emailField = false
         set(value) { if (field != value) { field = value; relayout() } }
-    /** Settings "Animal" and "Animals": which one lives on the grass (picked at random from these; none: off). */
+    /** Settings "Animal visits" and "Animals": which may walk across the keys now and then (none: off). */
     internal var animals: List<Species> = Species.ALL
         set(value) {
             field = value
@@ -240,17 +240,18 @@ class KeyboardView(context: Context, internal val listener: Listener) : View(con
         set(value) {
             if (field == value) return
             field = value
-            nextWanderAt = 0L
+            nextAnimalAt = 0L
             scheduleAnimal()
         }
 
     /**
-     * The keyboard opened ([ContinuumIME.onWindowShown], and the window turning visible): the animal
-     * is on the grass in a moment.
+     * The keyboard opened ([ContinuumIME.onWindowShown], and the window turning visible): a due
+     * visit comes in a moment, and with "Every time" one is always due.
      */
     fun keyboardShown() {
         meadow.regrow()
-        scheduleAnimal(300L)
+        if (animalFrequency.gapMs == null) nextAnimalAt = 0L
+        scheduleAnimal(randomBetween(animalFrequency.openMs))
     }
 
     fun keyboardHidden() = endAnimal(cancel = true)
@@ -668,6 +669,8 @@ class KeyboardView(context: Context, internal val listener: Listener) : View(con
     /** The flowers in the grass, which the animals eat. Random places; eaten ones regrow when the keyboard opens. */
     internal val meadow = Meadow()
     internal val animal = Animal(spritePx).also { it.meadow = meadow }
+    /** The tree on the right of the grass: picked up and dragged to move the cursor ([pickUpTree], [treeMove]). */
+    internal val tree = Tree(spritePx)
     internal val animalCheck = Runnable { maybeStartAnimal() }
     /** The wind's next frame: redraws only the grass's strip ([windDirty]). */
     internal val windDirty = android.graphics.Rect()

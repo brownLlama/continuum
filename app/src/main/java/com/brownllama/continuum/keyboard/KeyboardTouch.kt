@@ -55,7 +55,7 @@ internal fun KeyboardView.handleTouch(e: MotionEvent) {
             for (p in pointers.values) {
                 timer.removeCallbacks(p.longPress)
                 p.repeat?.let(timer::removeCallbacks)
-                if (p.area == Area.PET) animal.drop(SystemClock.uptimeMillis(), width.toFloat())
+                if (p.area == Area.TREE) tree.drop(SystemClock.uptimeMillis())
             }
             pointers.clear()
             zoom = null
@@ -83,7 +83,7 @@ internal fun KeyboardView.down(id: Int, x: Float, y: Float) {
             return
         }
     }
-    val p = pickUpAnimal(id, x, y) ?: when {
+    val p = pickUpTree(id, x, y) ?: when {
         // The GIF search header: its keys, then the strip of GIFs.
         y < -gifStripH -> hitKey(headerKeys, x, y)?.let { Pointer(this, id, x, y, Area.KEY, it) }
         y < 0f -> Pointer(this, id, x, y, Area.GRID, null)
@@ -123,7 +123,7 @@ internal fun KeyboardView.move(p: Pointer, x: Float, y: Float) {
     p.x = x
     p.y = y
     val k = p.key
-    if (p.area == Area.PET) return petMove(p, x, y)
+    if (p.area == Area.TREE) return treeMove(p, x, y)
     if (p.area == Area.GRID) {
         // The emoji / GIF grid scrolls vertically (the search header's strip sideways); any real
         // movement means it's not a tap.
@@ -204,7 +204,7 @@ internal fun KeyboardView.onLongerPress(p: Pointer) {
 internal fun KeyboardView.onLongPress(p: Pointer) {
     if (pointers[p.id] !== p || p.moved) return
     when (p.area) {
-        Area.PET -> {}
+        Area.TREE -> {}
         Area.STRIP, Area.LETTERS -> startZoom(p)
         Area.GRID -> if (panel == Panel.CLIPBOARD) {
             clipAt(p.downX, p.downY)?.let {
@@ -255,9 +255,9 @@ internal fun KeyboardView.release(p: Pointer) {
     pointers.remove(p.id)
     timer.removeCallbacks(p.longPress)
     p.repeat?.let(timer::removeCallbacks)
-    if (p.area == Area.PET) {
-        // Let go: the animal drops where it is and stops.
-        animal.drop(SystemClock.uptimeMillis(), width.toFloat())
+    if (p.area == Area.TREE) {
+        // Let go: the cursor stops, and the tree slides back to where it stands.
+        tree.drop(SystemClock.uptimeMillis())
         invalidate()
         return
     }
@@ -314,13 +314,13 @@ internal fun KeyboardView.gesture(dx: Float, dy: Float, fromBar: Boolean) {
 }
 
 /**
- * The finger carrying the animal moved: it follows the finger, and the cursor moves with it, one
+ * The finger carrying the tree moved: the tree follows it, and the cursor moves with it, one
  * character for each [CURSOR_STRIDE_DP] sideways and one line for each [CURSOR_LINE_DP] up or down.
  */
-internal fun KeyboardView.petMove(p: Pointer, x: Float, y: Float) {
-    if (!animal.carried) return
+internal fun KeyboardView.treeMove(p: Pointer, x: Float, y: Float) {
+    if (!tree.carried) return
     p.moved = true
-    animal.carry(x, y)
+    tree.carry(x, y)
     val stride = dpu(CURSOR_STRIDE_DP)
     val steps = ((x - p.cursorX) / stride).toInt()
     if (steps != 0) {
@@ -339,19 +339,17 @@ internal fun KeyboardView.petMove(p: Pointer, x: Float, y: Float) {
 }
 
 /**
- * A finger landed on the resting animal (its legs and belly in the grass, above Android's gesture
- * bar, where the keys are not): it is picked up, and from then on it is carried by that finger. Returns
- * the pointer, or null when the touch is not on it.
+ * A finger landed on the tree (in the grass between the keys and Android's gesture bar, where nothing
+ * else is touched): it is picked up, and from then on carried by that finger. Returns the pointer, or
+ * null when the touch is not on the tree.
  */
-internal fun KeyboardView.pickUpAnimal(id: Int, x: Float, y: Float): Pointer? {
+internal fun KeyboardView.pickUpTree(id: Int, x: Float, y: Float): Pointer? {
     if (gifSearching || panel.big) return null
-    // The grass between the keys and Android's gesture bar: swipes in the bar are Android's.
-    val to = grassBottom - systemBottom - dpu(GESTURE_BAR_MARGIN_DP)
-    if (!animal.hit(x, y, dpu(PET_SLACK_DP), keyboardHeight, to)) return null
-    val p = Pointer(this, id, x, y, Area.PET, null)
+    if (!tree.hit(x, y, dpu(TREE_SLACK_DP), keyboardHeight, treeBase())) return null
+    val p = Pointer(this, id, x, y, Area.TREE, null)
     p.cursorX = x
     p.cursorY = y
-    animal.pickUp(x, y)
+    tree.pickUp(x, y)
     keyVibration.tap()
     return p
 }
@@ -370,6 +368,6 @@ internal fun KeyboardView.tap(p: Pointer) {
             }
         }
         Area.KEY -> keyTap(p.key!!, p)
-        Area.PET -> {}
+        Area.TREE -> {}
     }
 }

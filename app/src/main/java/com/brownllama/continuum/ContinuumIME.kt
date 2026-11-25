@@ -508,10 +508,10 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
     /** Deletes the last tap, reopens the word just committed, or deletes a character. */
     override fun onBackspace() = handleBackspace()
 
-    /** The animal is carried sideways: the cursor moves [steps] characters. */
+    /** The tree is carried sideways: the cursor moves [steps] characters. */
     override fun onCursorMove(steps: Int) = handleCursorMove(steps)
 
-    /** The animal is carried up or down: the cursor moves [lines] lines (negative: up). */
+    /** The tree is carried up or down: the cursor moves [lines] lines (negative: up). */
     override fun onCursorLines(lines: Int) = handleCursorLines(lines)
 
     /** Swipe left: drops the word being typed, or deletes the word before the cursor. */

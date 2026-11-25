@@ -2,7 +2,6 @@ package com.brownllama.continuum.keyboard
 
 import android.graphics.Canvas
 import android.graphics.Paint
-import android.os.SystemClock
 import kotlin.math.floor
 import kotlin.math.max
 import kotlin.math.min
@@ -404,11 +403,14 @@ internal class Species(
     }
 }
 
-/** Setting "How often": how long the animal stands before it walks a little way, [wanderMs] (from one walk to the next). */
-internal enum class AnimalFrequency(val key: String, val wanderMs: LongRange) {
-    ALWAYS("always", 15_000L..30_000L),
-    SOMETIMES("sometimes", 45_000L..90_000L),
-    RARELY("rarely", 180_000L..360_000L);
+/**
+ * Setting "How often" for the visiting animals: [gapMs] from one visit to when the next is due
+ * (null: once each time the keyboard opens), and how soon after the keyboard opens a due one comes.
+ */
+internal enum class AnimalFrequency(val key: String, val gapMs: LongRange?, val openMs: LongRange) {
+    ALWAYS("always", null, 1_000L..2_000L),
+    SOMETIMES("sometimes", 3 * 60_000L..6 * 60_000L, 2_000L..6_000L),
+    RARELY("rarely", 45 * 60_000L..75 * 60_000L, 2_000L..6_000L);
 
     companion object {
         fun named(key: String?) = entries.firstOrNull { it.key == key } ?: ALWAYS
@@ -432,23 +434,6 @@ internal class Animal(private val px: Float) {
 
     var visiting = false
         private set
-
-    /**
-     * A resident animal never leaves: it stands on the grass ([resting]), now and then walks a short
-     * way ([wander]) and stops again, and can be picked up with a finger, carried about ([carry]),
-     * and put down ([drop]). [draw] returns [REST] whenever there is nothing to redraw.
-     */
-    var resident = false
-        private set
-    var resting = false
-        private set
-    /** Held by a finger, which is at ([carryX], [carryY]); and, once let go, falling back to its feet since [dropAt]. */
-    var carried = false
-        private set
-    private var carryX = 0f
-    private var carryY = 0f
-    private var dropAt = 0L
-    private var dropping = false
 
     /** The flowers in the grass it walks on; null (or no grass under it) and it eats nothing. */
     var meadow: Meadow? = null
@@ -490,20 +475,14 @@ internal class Animal(private val px: Float) {
      * Starts a visit of [kind] across [width], feet on [feetY]. [groundRows]: how many sprite pixels
      * that is above the ground of the grass, when it walks on grass (0: it doesn't).
      */
-    fun start(kind: Species, width: Float, feetY: Float, now: Long, groundRows: Int = 0, resident: Boolean = false) {
+    fun start(kind: Species, width: Float, feetY: Float, now: Long, groundRows: Int = 0) {
         species = kind
         dir = if (Random.nextBoolean()) 1 else -1
         x = if (dir > 0) -W * px else width
-        this.resident = resident
-        resting = resident
-        carried = false
-        dropping = false
-        if (resident) x = Random.nextFloat() * (width - W * px).coerceAtLeast(0f)
-        looking = false
         feet = feetY
         frame = 0
         frameMs = 0L
-        stopsLeft = if (resident) 0 else 1 + Random.nextInt(3)
+        stopsLeft = 1 + Random.nextInt(3)
         stopUntil = 0L
         lastAt = now
         this.groundRows = groundRows
@@ -512,79 +491,9 @@ internal class Animal(private val px: Float) {
         visiting = true
     }
 
-    /** Sets off on a short walk, away from the nearer edge, when it is resting (a resident only). */
-    fun wander(width: Float, now: Long) {
-        settle(now)
-        if (!visiting || !resident || !resting || carried || dropping) return
-        val room = (width - W * px).coerceAtLeast(0f)
-        dir = when {
-            x < room * 0.3f -> 1
-            x > room * 0.7f -> -1
-            else -> if (Random.nextBoolean()) 1 else -1
-        }
-        resting = false
-        looking = false
-        stopsLeft = 1
-        stopUntil = 0L
-        lastAt = now
-        planStop(width)
-        // Not past an edge: the stop is where it halts.
-        stopAt = stopAt?.coerceIn(0f, room)
-    }
-
-    /** Whether (x, y) in keyboard coordinates is on the animal (widened by [slack] px) and within the rows [from]..[to], so it can be picked up. */
-    fun hit(x: Float, y: Float, slack: Float, from: Float, to: Float, now: Long = SystemClock.uptimeMillis()): Boolean {
-        settle(now)
-        if (!visiting || !resident || carried || dropping) return false
-        val left = floor(this.x / px) * px
-        val top = feet - species.height * px
-        return x >= left - slack && x <= left + W * px + slack && y >= maxOf(top, from) && y <= minOf(feet + slack, to)
-    }
-
-    /** A fall that has taken its time is over: it stands again (also settled when drawn). */
-    private fun settle(now: Long) {
-        if (dropping && now - dropAt >= DROP_MS) {
-            dropping = false
-            resting = true
-            looking = Random.nextBoolean()
-        }
-    }
-
-    /** A finger picked it up at ([x], [y]): whatever it was doing stops (a flower half eaten grows back whole). */
-    fun pickUp(x: Float, y: Float) {
-        meal?.bites = 0
-        meal = null
-        stopUntil = 0L
-        stopAt = null
-        resting = false
-        dropping = false
-        carried = true
-        carryX = x
-        carryY = y
-    }
-
-    /** The finger holding it moved to ([x], [y]); it faces the way it is going. */
-    fun carry(x: Float, y: Float) {
-        if (x - carryX > px) dir = 1 else if (carryX - x > px) dir = -1
-        carryX = x
-        carryY = y
-    }
-
-    /** The finger let go: it drops to the ground where it is, and rests there. */
-    fun drop(now: Long, width: Float) {
-        if (!carried) return
-        carried = false
-        dropping = true
-        dropAt = now
-        x = (carryX - W * px / 2f).coerceIn(0f, (width - W * px).coerceAtLeast(0f))
-    }
-
     /** Gone at once (the keyboard changed under it). A flower it was eating grows back whole. */
     fun end() {
         visiting = false
-        carried = false
-        dropping = false
-        resting = false
         meal?.bites = 0
         meal = null
     }
@@ -602,23 +511,9 @@ internal class Animal(private val px: Float) {
         val s = species
         val dt = (now - lastAt).coerceIn(0L, MAX_STEP_MS)
         lastAt = now
-        var next: Long
+        val next: Long
         val eaten = meal
-        if (carried) {
-            // Held: drawn where the finger is (below); the finger's moves redraw it.
-            next = REST
-        } else if (dropping) {
-            if (now - dropAt >= DROP_MS) {
-                dropping = false
-                resting = true
-                looking = Random.nextBoolean()
-                next = REST
-            } else {
-                next = 16L
-            }
-        } else if (resting) {
-            next = REST
-        } else if (eaten != null) {
+        if (eaten != null) {
             val t = now - eatStart
             if (t < EAT_MS) {
                 eaten.bites = (t * Flower.BITES / EAT_MS).toInt()
@@ -635,11 +530,6 @@ internal class Animal(private val px: Float) {
             if (stopUntil != 0L) {
                 stopUntil = 0L
                 planStop(width)
-                // A resident that has walked as far as it meant to stands still again, now and then looking at you.
-                if (resident && stopAt == null) {
-                    resting = true
-                    looking = Random.nextBoolean()
-                }
             }
             val mouthBefore = mouthColumn
             x += dir * s.speed * px * dt / 1000f
@@ -653,8 +543,7 @@ internal class Animal(private val px: Float) {
                 stopUntil = now + 700 + Random.nextLong(1500)
                 looking = Random.nextBoolean()
             }
-            if (resident) x = x.coerceIn(0f, (width - W * px).coerceAtLeast(0f))
-            else if (if (dir > 0) x > width else x < -W * px) return (-1L).also { visiting = false }
+            if (if (dir > 0) x > width else x < -W * px) return (-1L).also { visiting = false }
             // Its mouth came to a flower: it stops right there, mouth on it, and eats it.
             val flower = if (groundRows > 0) meadow?.reached(mouthBefore, mouthColumn, dir) else null
             if (flower != null) {
@@ -669,10 +558,7 @@ internal class Animal(private val px: Float) {
                 next = if (stopUntil > now) stopUntil - now else min(s.frameMs - frameMs, 1000L / s.speed)
             }
         }
-        val still = carried || dropping || resting
         val face = when {
-            carried -> s.lookFrame
-            still -> if (looking) s.lookFrame else s.stand
             // Chewing: the head bobs one row further down and back up.
             meal != null -> s.graze(dip + ((now - eatStart) / CHEW_MS % 2).toInt())
             stopUntil <= now -> s.cycle[frame]
@@ -680,20 +566,10 @@ internal class Animal(private val px: Float) {
             else -> s.stand
         }
         // Whole sprite pixels only, so it stays crisp. Each run of one colour is one rectangle.
-        // Held, it hangs from the finger by its back, centred on it; let go, it falls to its feet.
-        val heldTop = carryY - s.height * px * HELD_AT
-        val left = floor((if (carried) carryX - W * px / 2f else x) / px) * px
+        val left = floor(x / px) * px
         // Walking, the body rises a pixel as the legs pass each other, and sinks as they stride: a bounce, not a glide.
-        val walking = !still && meal == null && stopUntil <= now
-        val groundTop = feet - s.height * px - if (walking && frame % 2 == 1) px else 0f
-        val top = when {
-            carried -> heldTop
-            dropping -> {
-                val t = ((now - dropAt).toFloat() / DROP_MS).coerceIn(0f, 1f)
-                heldTop + (groundTop - heldTop) * t * t
-            }
-            else -> groundTop
-        }
+        val walking = meal == null && stopUntil <= now
+        val top = feet - s.height * px - if (walking && frame % 2 == 1) px else 0f
         for (r in face.indices) {
             val row = face[r]
             fun at(col: Int) = row[if (dir > 0) col else W - 1 - col]
@@ -710,7 +586,7 @@ internal class Animal(private val px: Float) {
                 col = end
             }
         }
-        return if (next == REST) REST else max(1L, next)
+        return max(1L, next)
     }
 
     internal companion object {
@@ -721,10 +597,5 @@ internal class Animal(private val px: Float) {
         /** How long eating a flower takes, and how often the head bobs meanwhile (a bite every other bob). */
         const val EAT_MS = 2_000L
         const val CHEW_MS = 250L
-        /** What [draw] returns when nothing needs redrawing until something happens (a resident at rest). */
-        const val REST = -2L
-        /** How long it takes to fall when let go, and where on its body the finger holds it (0 top .. 1 feet). */
-        const val DROP_MS = 180L
-        const val HELD_AT = 0.45f
     }
 }

@@ -70,11 +70,11 @@
     <!-- Appearance -->
     <string name="pref_theme">Theme</string>
     <string name="pref_layout">Layout</string>
-    <string name="pref_animals">Animal</string>
-    <string name="pref_animals_summary">A little animal lives in the grass under the keys and walks around now and then. Pick it up from the grass and drag it to move the cursor: sideways for characters, up or down for lines; let go and it stops. Needs the grass (Space below keyboard above 0).</string>
+    <string name="pref_animals">Animal visits</string>
+    <string name="pref_animals_summary">Now and then a little animal walks across the keys. Your taps go through it to the keys.</string>
     <string name="pref_animal_kinds">Animals</string>
-    <string name="pref_animal_kinds_none">None picked, so no animal</string>
-    <string name="pref_animal_frequency">How often it walks around</string>
+    <string name="pref_animal_kinds_none">None picked, so none visit</string>
+    <string name="pref_animal_frequency">How often</string>
 
     <!-- Size & position -->
     <string name="cat_height">Height</string>
@@ -83,7 +83,7 @@
     <string name="pref_bar_height">Suggestion bar (%)</string>
     <string name="cat_position">Position</string>
     <string name="pref_bottom_space_dp">Space below keyboard (dp)</string>
-    <string name="pref_bottom_space_dp_summary">Pixel grass grows from the bottom of the screen up to the keys, with a few flowers in it; the animal walks through it and stops to eat the flowers. A higher value is taller grass (and lifts the keys); 0 is no grass. The keys never overlap Android\'s navigation bar or gesture handle.</string>
+    <string name="pref_bottom_space_dp_summary">Pixel grass grows from the bottom of the screen up to the keys, with a few flowers in it; the visiting animals walk through it and stop to eat the flowers. A tree stands at the right: pick it up and drag it to move the cursor (sideways for characters, up or down for lines); let go and it goes back. A higher value is taller grass (and lifts the keys); 0 is no grass and no tree. The keys never overlap Android\'s navigation bar or gesture handle.</string>
     <string name="pref_hide_system_buttons">Hide system buttons</string>
     <string name="pref_hide_system_buttons_summary">Removes Android\'s keyboard-switch and hide-keyboard buttons from under the keys (Android 16+), giving the space back. Hold shift, or the space bar in the full keyboard, to switch keyboards.</string>
 
@@ -305,9 +305,9 @@
     </string-array>
     <!-- Values are AnimalFrequency.key. -->
     <string-array name="animal_frequency_names">
-        <item>Often (every half minute or so)</item>
-        <item>Now and then (every minute or so)</item>
-        <item>Rarely (every few minutes)</item>
+        <item>Every time the keyboard opens</item>
+        <item>Now and then (every few minutes)</item>
+        <item>Rarely (about once an hour)</item>
     </string-array>
     <string-array name="animal_frequency_values" translatable="false">
         <item>always</item>

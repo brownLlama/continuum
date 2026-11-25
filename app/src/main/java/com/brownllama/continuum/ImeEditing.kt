@@ -449,7 +449,7 @@ internal fun ContinuumIME.handleCursorMove(steps: Int) {
 }
 
 /**
- * The animal was carried up or down: the cursor moves [lines] lines, as arrow keys would, but not
+ * The tree was carried up or down: the cursor moves [lines] lines, as arrow keys would, but not
  * out of the text (an arrow key at its first or last line can leave the field for another one).
  */
 internal fun ContinuumIME.handleCursorLines(lines: Int) {

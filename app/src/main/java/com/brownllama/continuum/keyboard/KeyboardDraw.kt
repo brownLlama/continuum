@@ -21,7 +21,6 @@ internal fun KeyboardView.markPanelChange(ms: Long = FADE_MS, slide: Float = 0f)
     fadeMs = ms
     fadeSlide = slide
     endAnimal()
-    scheduleAnimal(FADE_MS)
 }
 
 /** 0..1 progress of an animation that started at [since]; keeps redrawing until it's done. */
@@ -93,6 +92,7 @@ internal fun KeyboardView.drawContent(canvas: Canvas) {
     }
     drawAnimal(canvas)
     drawGrassFront(canvas)
+    drawTree(canvas, held = true)
     drawPreviews(canvas)
     drawLanguageHint(canvas)
     drawZoom(canvas)
