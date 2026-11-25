@@ -7,7 +7,7 @@ import kotlin.math.sin
 
 /**
  * Gusts at random. Time is cut into slots of [SLOT_MS]; each slot holds at most one gust, or none
- * (about one slot in four is calm), starting at a random moment in the slot and lasting a random
+ * (about one slot in ten is calm), starting at a random moment in the slot and lasting a random
  * time. Every gust has its own random strength (how many pixels the tips lean, [lean]), direction
  * (mostly right, sometimes left), and reach (it may sweep the whole grass or only a stretch of it),
  * and sweeps across that stretch like a real gust. Everything comes from a hash of the slot, so the
@@ -17,13 +17,13 @@ import kotlin.math.sin
  * then at [FRAME_MS] steps over the grass's own strip.
  */
 internal object Wind {
-    const val SLOT_MS = 9_000L
+    const val SLOT_MS = 6_000L
     const val FRAME_MS = 125L
     /** Columns that lean together, so neighbours stay joined up and it looks like grass, not static. */
     const val SEGMENT = 10
     private const val MAX_GUST_MS = 3_400L
     private const val MAX_SWEEP_MS = 1_800L
-    private const val CALM_SHARE = 0.25f
+    private const val CALM_SHARE = 0.1f
 
     /** One gust, in a slot: when it starts (ms into the slot) and how long, its reach, strength and direction. */
     internal class Gust(

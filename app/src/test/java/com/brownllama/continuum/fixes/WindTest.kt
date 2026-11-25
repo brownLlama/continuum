@@ -15,7 +15,7 @@ class WindTest {
         assertTrue(real.map { it.dir }.toSet().size == 2)
         assertTrue(real.map { (it.force * 10).toInt() }.toSet().size > 3)
         assertTrue(real.map { ((it.to - it.from) * 10).toInt() }.toSet().size > 3)
-        assertTrue(real.map { it.startMs / 1000 }.toSet().size > 3)
+        assertTrue(real.map { it.startMs / 500 }.toSet().size > 3)
         for (g in real) assertTrue("a gust ends inside its slot", g.endMs <= Wind.SLOT_MS && g.startMs >= 0)
     }
 
@@ -51,7 +51,7 @@ class WindTest {
     }
 
     @Test fun `grass of the default height (about 8 pixels) visibly sways`() {
-        // The phone's default: 15 dp of grass is about 8 sprite pixels tall. A gust must move its tips.
+        // A short strip of grass, 8 sprite pixels tall (the setting at about 15 dp). A gust must move its tips.
         val moved = times.count { Wind.blowing(it) && Wind.lean(60, 7, 200, 8, it) != 0 }
         val blowing = times.count { Wind.blowing(it) }
         assertTrue("tips move in most of a gust ($moved of $blowing)", moved > blowing / 3)

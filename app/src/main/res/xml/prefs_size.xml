@@ -33,8 +33,8 @@
     </PreferenceCategory>
     <PreferenceCategory app:title="@string/cat_position">
         <SeekBarPreference
-            android:max="30"
-            app:defaultValue="15"
+            android:max="50"
+            app:defaultValue="25"
             app:key="bottom_space_dp"
             app:min="0"
             app:seekBarIncrement="1"

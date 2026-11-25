@@ -20,7 +20,7 @@ import kotlin.math.roundToInt
 
 /**
  * Pixel grass grows from the bottom of the keyboard's window (the bottom of the screen) up to the
- * keys, through the space under them (0–30 dp, 15 by default): a higher value is taller grass, 0 is
+ * keys, through the space under them (0–50 dp, 25 by default, the middle): a higher value is taller grass, 0 is
  * none. The visiting animals walk on it. It only decorates: a tap on it still reaches the keys.
  */
 @RunWith(RobolectricTestRunner::class)
@@ -33,12 +33,12 @@ class SpaceBelowTest {
     /** Draws the grass as a frame would, so its bitmap is built. */
     private fun Keyboard.paintGrass() = view.drawGrass(Canvas(Bitmap.createBitmap(1080, 2000, Bitmap.Config.ARGB_8888)))
 
-    @Test fun `the space below the keyboard is 15 dp by default and at most 30`() {
-        assertEquals(15, Prefs.BOTTOM_SPACE_DEFAULT)
+    @Test fun `the space below the keyboard is 25 dp by default and at most 50`() {
+        assertEquals(25, Prefs.BOTTOM_SPACE_DEFAULT)
         val plain = keyboard()
-        assertEquals(15f, plain.view.bottomSpaceDp, 0f)
+        assertEquals(25f, plain.view.bottomSpaceDp, 0f)
         val saved = keyboard(mapOf(Prefs.BOTTOM_SPACE to 60))
-        assertEquals("a 60 saved by an older version is cut back to the slider's top", 30f, saved.view.bottomSpaceDp, 0f)
+        assertEquals("a 60 saved by an older version is cut back to the slider's top", 50f, saved.view.bottomSpaceDp, 0f)
     }
 
     @Test fun `the grass grows from the bottom of the window up to the keys`() {
@@ -48,15 +48,15 @@ class SpaceBelowTest {
         assertEquals("it stands on the window's last pixel", v.height.toFloat(), v.overlayH + v.gifHeaderH + v.grassBottom, 0.01f)
         assertEquals((v.grassBottom - v.grassTop).roundToInt(), v.grassHeight)
         // Here Android has no bar under the keys, so the grass is just the space above it.
-        assertEquals(k.px(15), v.grassHeight.toFloat(), 1f)
+        assertEquals(k.px(25), v.grassHeight.toFloat(), 1f)
         k.paintGrass()
         assertEquals("drawn across the whole width", 1080, v.grass.imageWidth)
         assertEquals(v.grassHeight, v.grass.imageHeight)
     }
 
     @Test fun `a higher value is taller grass, and 0 is none`() {
-        val tall = keyboard(mapOf(Prefs.BOTTOM_SPACE to 30))
-        assertEquals(tall.px(30), tall.view.grassHeight.toFloat(), 1f)
+        val tall = keyboard(mapOf(Prefs.BOTTOM_SPACE to 50))
+        assertEquals(tall.px(50), tall.view.grassHeight.toFloat(), 1f)
         val none = keyboard(mapOf(Prefs.BOTTOM_SPACE to 0))
         assertEquals(0, none.view.grassHeight)
         none.paintGrass()
@@ -66,11 +66,11 @@ class SpaceBelowTest {
     @Test fun `moving the slider changes the grass at once`() {
         val k = keyboard()
         k.paintGrass()
-        PreferenceManager.getDefaultSharedPreferences(k.context).edit().putInt(Prefs.BOTTOM_SPACE, 25).commit()
+        PreferenceManager.getDefaultSharedPreferences(k.context).edit().putInt(Prefs.BOTTOM_SPACE, 40).commit()
         k.idle()
-        assertEquals(25f, k.view.bottomSpaceDp, 0f)
+        assertEquals(40f, k.view.bottomSpaceDp, 0f)
         k.layoutView()
-        assertEquals(k.px(25), k.view.grassHeight.toFloat(), 1f)
+        assertEquals(k.px(40), k.view.grassHeight.toFloat(), 1f)
         k.paintGrass()
         assertEquals("redrawn at the new height", k.view.grassHeight, k.view.grass.imageHeight)
     }
