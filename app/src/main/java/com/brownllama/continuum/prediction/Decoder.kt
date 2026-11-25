@@ -9,7 +9,11 @@ import kotlin.math.ln
  * Full mode: [x], [y] are in key units (see [KeyLayout.fullX]).
  * [exact] is a letter code 0..25 when the user picked it precisely (zoom / long-press), else -1.
  */
-data class Tap(val x: Float, val y: Float, val exact: Int = -1, val upper: Boolean = false)
+/**
+ * A touch on the letters: [x] and [y] say where, [exact] the letter if it was picked by name (else -1); [picked]: it
+ * was picked in the mini zoom (held, then slid onto one letter), the one way to say "this letter, whatever else fits".
+ */
+data class Tap(val x: Float, val y: Float, val exact: Int = -1, val upper: Boolean = false, val picked: Boolean = false)
 
 enum class Mode { MINI, FULL }
 

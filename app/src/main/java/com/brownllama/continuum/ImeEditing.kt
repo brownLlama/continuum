@@ -27,6 +27,13 @@ internal fun ContinuumIME.handleLetterTap(tap: Tap) {
         if (shift == Shift.ON) setShift(Shift.OFF)
         return
     }
+    // A letter picked in the mini zoom in the middle of a word: the word so far stays exactly as shown,
+    // as it does for a German letter, and the letter follows it as it is; the rest of the word is typed after it.
+    // (Otherwise the whole word would be worked out again with the letter in it, and could turn into another word.)
+    if (t.picked && t.exact >= 0 && taps.isNotEmpty()) {
+        val letter = ('a' + t.exact).let { if (upper) it.uppercaseChar() else it }
+        return handleText(letter.toString(), insideWord = true)
+    }
     deletedSlots = null
     if (taps.isEmpty()) {
         lastCommit = null
@@ -44,14 +51,14 @@ internal fun ContinuumIME.handleLetterTap(tap: Tap) {
     redecode()
 }
 
-internal fun ContinuumIME.handleText(text: String) {
+internal fun ContinuumIME.handleText(text: String, insideWord: Boolean = false) {
     val ic = editor() ?: return
     lastExpansion = null
-    if (taps.isEmpty() && text.length == 1 && expandShortcut(text[0])) return
-    val german = text.length == 1 && text[0] in GERMAN_LETTERS
+    if (taps.isEmpty() && text.length == 1 && !insideWord && expandShortcut(text[0])) return
+    val german = insideWord || (text.length == 1 && text[0] in GERMAN_LETTERS)
     if (german) {
-        // A German letter inside a word ("Gr" + "ü"): the letters so far stay exactly as shown,
-        // and the rest of the word is typed as is after it (see Glue), not corrected apart.
+        // A German letter, or a letter picked exactly, inside a word ("Gr" + "ü"): the letters so far stay exactly
+        // as shown, and the rest of the word is typed as is after it (see Glue), not corrected apart.
         val before = pendingGlue?.takeIf { taps.isEmpty() && ic.getTextBeforeCursor(it.prefix.length, 0)?.toString() == it.prefix }
         if (taps.isNotEmpty()) commitWord(spaced = false, choice = null, keepShown = true)
         val last = lastCommit?.takeIf { !it.spaced }
@@ -200,11 +207,19 @@ internal fun ContinuumIME.handleDeleteWord() {
     // A word just committed is reopened first, so its alternatives can be offered once it's gone.
     if (taps.isEmpty()) reopenLastCommit(ic)
     if (taps.isNotEmpty()) {
+        // A word joined by a letter or sign typed from a popup ("mü" + "nchen", "zazzy" + "'" + "s") is one word:
+        // its first parts go with the last one.
+        val glue = wordGlue
         rememberDeletedWord()
         taps.clear()
         deletedTaps.clear()
         fixing = true
         ic.commitText("", 1)
+        if (glue != null && ic.getTextBeforeCursor(glue.prefix.length, 0)?.toString() == glue.prefix) {
+            ic.deleteSurroundingText(glue.prefix.length, 0)
+        }
+        wordGlue = null
+        pendingGlue = null
         result = null
         lastCommit = null
         autoSpace = false

@@ -74,6 +74,6 @@ internal fun KeyboardView.commitZoom() {
         text(Layouts.MINI_STRIP[z.slot])
     } else {
         val letter = layout.miniOrder[z.slot]
-        listener.onLetterTap(Tap(z.slot.toFloat(), 0f, exact = letter - 'a'))
+        listener.onLetterTap(Tap(z.slot.toFloat(), 0f, exact = letter - 'a', picked = true))
     }
 }
