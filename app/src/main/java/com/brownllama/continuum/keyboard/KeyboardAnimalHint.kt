@@ -41,8 +41,8 @@ internal fun KeyboardView.maybeStartAnimal() {
     val idle = pointers.isEmpty() && zoom == null && !gifSearching && panel == Panel.LETTERS &&
         now - lastTouchAt >= ANIMAL_IDLE_MS && listener.animalMayVisit()
     if (!idle) return scheduleAnimal()
-    // On the grass under the keys (without grass, along a row of keys).
-    animal.start(animals.random(), width.toFloat(), animalFeet(), now)
+    // On the grass under the keys, eating its flowers (without grass, along a row of keys).
+    animal.start(animals.random(), width.toFloat(), animalFeet(), now, groundRows = if (grassHeight > 0) animalFeetRows() else 0)
     // "Every time": the next one comes when the keyboard opens again.
     nextAnimalAt = animalFrequency.gapMs?.let { now + randomBetween(it) } ?: Long.MAX_VALUE
     invalidate()

@@ -19,6 +19,8 @@ import kotlin.random.Random
 internal class Species(
     val key: String, val speed: Int, val frameMs: Long, private val colors: Map<Char, Int>,
     body: List<String>, look: List<String>, legs: List<List<String>>,
+    /** The head, for grazing: the body's pixels from column [headFrom] on, in its rows up to [headTo]. */
+    private val headFrom: Int, private val headTo: Int,
 ) {
     val stand = outlined(body + legs[0])
     val lookFrame = outlined(look + legs[0])
@@ -26,13 +28,53 @@ internal class Species(
     val cycle = listOf(outlined(body + legs[1]), stand, outlined(body + legs[2]), stand)
     val height = stand.size
 
+    /** Standing with the head lowered by 0..[MAX_DIP] + 1 rows (over the body, in front of it), to eat. */
+    private val grazing = (0..MAX_DIP + 1).map { lowered(body + legs[0], it) }
+
+    /**
+     * The mouth, facing right: the lowest pixel of the head's two front columns (the frontmost if
+     * both go as low). [mouthCol] is its column; [mouthLift], with the head up, how many rows it is
+     * above the bottom of the frame (where the feet stand). Lowered by d rows, it is d less.
+     */
+    val mouthCol: Int
+    val mouthLift: Int
+
+    init {
+        var front = -1
+        for (r in 0..headTo) for (c in headFrom until W) if (body[r][c] != '.') front = maxOf(front, c)
+        var row = -1
+        var col = -1
+        for (c in maxOf(headFrom, front - 1)..front) for (r in 0..headTo) {
+            if (body[r][c] != '.' && r >= row) { row = r; col = c }
+        }
+        require(row >= 0) { "$key: no head at column $headFrom, rows 0..$headTo" }
+        mouthCol = col
+        // The frame has an empty row above the body (the outline's), and the mouth pixel itself.
+        mouthLift = height - 1 - (row + 1)
+    }
+
+    /** The grazing frame with the head [dip] rows down (see [MAX_DIP]). */
+    fun graze(dip: Int) = grazing[dip.coerceIn(0, MAX_DIP + 1)]
+
+    /** [rows] with the head moved [dip] rows down, drawn over what is there, then outlined. */
+    private fun lowered(rows: List<String>, dip: Int): List<String> {
+        val out = Array(rows.size) { r -> CharArray(W) { c -> if (r <= headTo && c >= headFrom) '.' else rows[r][c] } }
+        for (r in 0..headTo) for (c in headFrom until W) {
+            val ch = rows[r][c]
+            if (ch != '.' && r + dip < rows.size) out[r + dip][c] = ch
+        }
+        return outlined(out.map { String(it) })
+    }
+
     fun color(ch: Char) = if (ch == OUTLINE_CHAR) OUTLINE else colors.getValue(ch)
 
     /** All frames of the sprite: what the tests check, and what a new animal has to get right. */
-    internal val frames: List<List<String>> get() = listOf(stand, lookFrame) + cycle
+    internal val frames: List<List<String>> get() = listOf(stand, lookFrame) + cycle + grazing
 
     companion object {
         const val W = 24
+        /** How far an animal lowers its head to eat a flower, at most (it bobs one row further as it chews). */
+        const val MAX_DIP = 9
         private const val OUTLINE_CHAR = '#'
         private const val OUTLINE = 0xFF2B211C.toInt()
 
@@ -60,6 +102,7 @@ internal class Species(
         /** Alex, the golden puppy: floppy ears, a big black nose, a brown patch on his back, a brown striped tail. */
         val ALEX = Species(
             "alex", speed = 17, frameMs = 110L,
+            headFrom = 12, headTo = 8,
             colors = mapOf('B' to 0xFFF3D58E.toInt(), 'L' to 0xFFFBEBC4.toInt(), 'D' to 0xFFDDB566.toInt(), 'P' to 0xFF8D5B2E.toInt(), 'K' to 0xFF1C1511.toInt()),
             body = listOf(
                 "...............BBBB.....",
@@ -112,6 +155,7 @@ internal class Species(
         /** Schibu, the llama: fluffy orange wool all over, a very long straight neck with a small red scarf, a tan face, tall banana ears. */
         val SCHIBU = Species(
             "schibu", speed = 13, frameMs = 140L,
+            headFrom = 13, headTo = 8,
             colors = mapOf('O' to 0xFFD9822F.toInt(), 'o' to 0xFFB3621D.toInt(), 'H' to 0xFFF0AC5E.toInt(), 'T' to 0xFFD9B88E.toInt(), 't' to 0xFFBB966B.toInt(), 'F' to 0xFFEBD3AE.toInt(), 'K' to 0xFF1C1511.toInt(), 'R' to 0xFFD6303F.toInt(), 'r' to 0xFF9E1F2C.toInt()),
             body = listOf(
                 "................T..T....",
@@ -172,6 +216,7 @@ internal class Species(
         /** Schimba, the leopard cub: golden with black spots, a white muzzle, chest and paws, a pink nose. */
         val SCHIMBA = Species(
             "schimba", speed = 16, frameMs = 120L,
+            headFrom = 13, headTo = 8,
             colors = mapOf('Y' to 0xFFF2B22A.toInt(), 'y' to 0xFFD9941A.toInt(), 'S' to 0xFF2A2220.toInt(), 'W' to 0xFFFBF6EA.toInt(), 'P' to 0xFFE69A9A.toInt(), 'K' to 0xFF1C1511.toInt()),
             body = listOf(
                 "..............YYY..YY...",
@@ -224,6 +269,7 @@ internal class Species(
         /** Nibu, the sheep with the bell: cream wool, big floppy ears, a green ribbon and golden bell, brown boots. */
         val NIBU = Species(
             "nibu", speed = 10, frameMs = 150L,
+            headFrom = 12, headTo = 9,
             colors = mapOf('C' to 0xFFFBF0D8.toInt(), 'D' to 0xFFE3D2AE.toInt(), 'F' to 0xFFFFF8EC.toInt(), 'E' to 0xFFC48A5C.toInt(), 'K' to 0xFF1C1511.toInt(), 'N' to 0xFFE8A0A0.toInt(), 'G' to 0xFF1F8A4C.toInt(), 'g' to 0xFF45BC7A.toInt(), 'Y' to 0xFFE3A82F.toInt(), 'R' to 0xFF8B5A33.toInt()),
             body = listOf(
                 "..............CCCCCC....",
@@ -278,6 +324,7 @@ internal class Species(
         /** Scheepu, the sheep in the green shirt: white curly wool, pink ears and feet, a pink cord on the shirt. */
         val SCHEEPU = Species(
             "scheepu", speed = 10, frameMs = 150L,
+            headFrom = 13, headTo = 9,
             colors = mapOf('W' to 0xFFF6F3EC.toInt(), 'D' to 0xFFD6D1C6.toInt(), 'F' to 0xFFFFF3EC.toInt(), 'P' to 0xFFF28CAE.toInt(), 'K' to 0xFF1C1511.toInt(), 'G' to 0xFF1E9244.toInt(), 'g' to 0xFF136B2C.toInt(), 'R' to 0xFFE5509A.toInt()),
             body = listOf(
                 "...............W.WW.....",
@@ -378,11 +425,18 @@ internal enum class AnimalFrequency(val key: String, val gapMs: LongRange?, val 
  * A visit: in from one side along the row whose bottom is at [start]'s feet, 1–3 stops at random
  * spots (standing still or turning to look at you), out the other side. [KeyboardView] decides
  * when one comes, which animal and which row.
+ *
+ * Walking on the grass, it eats the flowers of [meadow] it comes to: it stops with its mouth on
+ * the flower, lowers its head to it ([Species.graze]) and chews, bobbing its head, while the flower
+ * goes bite by bite ([Flower.bites]); then it walks on.
  */
 internal class Animal(private val px: Float) {
 
     var visiting = false
         private set
+
+    /** The flowers in the grass it walks on; null (or no grass under it) and it eats nothing. */
+    var meadow: Meadow? = null
 
     private var species = Species.SCHIBU
     private var x = 0f
@@ -398,8 +452,30 @@ internal class Animal(private val px: Float) {
     private var looking = false
     private var lastAt = 0L
     private val paint = Paint()
+    /** How many sprite pixels its feet are above the ground of the grass (0: not on grass). */
+    private var groundRows = 0
+    /** The flower it is eating, since [eatStart], with its head [dip] rows down. */
+    private var meal: Flower? = null
+    private var eatStart = 0L
+    private var dip = 0
 
-    fun start(kind: Species, width: Float, feetY: Float, now: Long) {
+    /** The flower it is eating, for tests. */
+    internal val eating: Flower? get() = meal
+
+    /** The grid column (of [px]-wide columns from the left edge) of its sprite's left edge. */
+    internal val gridLeft: Int get() = floor(x / px).toInt()
+
+    /** The grid column its mouth is in. */
+    internal val mouthColumn: Int get() = gridLeft + mouthOffset()
+
+    /** Where the mouth is in the sprite as it faces now. */
+    private fun mouthOffset() = if (dir > 0) species.mouthCol else W - 1 - species.mouthCol
+
+    /**
+     * Starts a visit of [kind] across [width], feet on [feetY]. [groundRows]: how many sprite pixels
+     * that is above the ground of the grass, when it walks on grass (0: it doesn't).
+     */
+    fun start(kind: Species, width: Float, feetY: Float, now: Long, groundRows: Int = 0) {
         species = kind
         dir = if (Random.nextBoolean()) 1 else -1
         x = if (dir > 0) -W * px else width
@@ -409,13 +485,17 @@ internal class Animal(private val px: Float) {
         stopsLeft = 1 + Random.nextInt(3)
         stopUntil = 0L
         lastAt = now
+        this.groundRows = groundRows
+        meal = null
         planStop(width)
         visiting = true
     }
 
-    /** Gone at once (the keyboard changed under it). */
+    /** Gone at once (the keyboard changed under it). A flower it was eating grows back whole. */
     fun end() {
         visiting = false
+        meal?.bites = 0
+        meal = null
     }
 
     private fun planStop(width: Float) {
@@ -432,13 +512,26 @@ internal class Animal(private val px: Float) {
         val dt = (now - lastAt).coerceIn(0L, MAX_STEP_MS)
         lastAt = now
         val next: Long
-        if (now < stopUntil) {
+        val eaten = meal
+        if (eaten != null) {
+            val t = now - eatStart
+            if (t < EAT_MS) {
+                eaten.bites = (t * Flower.BITES / EAT_MS).toInt()
+                next = CHEW_MS - t % CHEW_MS
+            } else {
+                // All gone: walk on.
+                eaten.gone = true
+                meal = null
+                next = 1L
+            }
+        } else if (now < stopUntil) {
             next = stopUntil - now
         } else {
             if (stopUntil != 0L) {
                 stopUntil = 0L
                 planStop(width)
             }
+            val mouthBefore = mouthColumn
             x += dir * s.speed * px * dt / 1000f
             frameMs += dt
             while (frameMs >= s.frameMs) {
@@ -451,9 +544,23 @@ internal class Animal(private val px: Float) {
                 looking = Random.nextBoolean()
             }
             if (if (dir > 0) x > width else x < -W * px) return (-1L).also { visiting = false }
-            next = if (stopUntil > now) stopUntil - now else min(s.frameMs - frameMs, 1000L / s.speed)
+            // Its mouth came to a flower: it stops right there, mouth on it, and eats it.
+            val flower = if (groundRows > 0) meadow?.reached(mouthBefore, mouthColumn, dir) else null
+            if (flower != null) {
+                x = (flower.col - mouthOffset()) * px
+                flower.from = dir
+                meal = flower
+                eatStart = now
+                // Low enough that the mouth is on the flower's head (and, bobbing, still above its feet).
+                dip = (s.mouthLift + groundRows - flower.row).coerceIn(1, minOf(Species.MAX_DIP, s.mouthLift - 2))
+                next = 1L
+            } else {
+                next = if (stopUntil > now) stopUntil - now else min(s.frameMs - frameMs, 1000L / s.speed)
+            }
         }
         val face = when {
+            // Chewing: the head bobs one row further down and back up.
+            meal != null -> s.graze(dip + ((now - eatStart) / CHEW_MS % 2).toInt())
             stopUntil <= now -> s.cycle[frame]
             looking -> s.lookFrame
             else -> s.stand
@@ -480,10 +587,13 @@ internal class Animal(private val px: Float) {
         return max(1L, next)
     }
 
-    private companion object {
+    internal companion object {
         const val W = Species.W
         const val MAX_STEP_MS = 100L
         /** 85%: the animal is easy to make out, and the keys under it still show a little. */
         const val ALPHA = 217
+        /** How long eating a flower takes, and how often the head bobs meanwhile (a bite every other bob). */
+        const val EAT_MS = 2_000L
+        const val CHEW_MS = 250L
     }
 }

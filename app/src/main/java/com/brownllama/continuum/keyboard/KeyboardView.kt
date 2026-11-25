@@ -245,6 +245,7 @@ class KeyboardView(context: Context, internal val listener: Listener) : View(con
      * visit comes in a moment, and with "Every time" one is always due.
      */
     fun keyboardShown() {
+        meadow.regrow()
         if (animalFrequency.gapMs == null) nextAnimalAt = 0L
         scheduleAnimal(randomBetween(animalFrequency.openMs))
     }
@@ -661,9 +662,11 @@ class KeyboardView(context: Context, internal val listener: Listener) : View(con
 
     /** 2 dp per sprite pixel, in whole screen pixels so it stays crisp: the animals' and the grass's. */
     internal val spritePx = max(1f, (2f * density).roundToInt().toFloat())
-    internal val animal = Animal(spritePx)
+    /** The flowers in the grass, which the animals eat. Random places; eaten ones regrow when the keyboard opens. */
+    internal val meadow = Meadow()
+    internal val animal = Animal(spritePx).also { it.meadow = meadow }
     internal val animalCheck = Runnable { maybeStartAnimal() }
-    /** The grass under the keys, where the animals walk ([drawGrass], [animalFeet]). */
+    /** The grass under the keys, where the animals walk ([drawGrass], [drawGrassFront], [animalFeet]). */
     internal val grass = Grass(spritePx)
     internal var lastTouchAt = 0L
 
