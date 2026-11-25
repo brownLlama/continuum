@@ -678,6 +678,10 @@ class KeyboardView(context: Context, internal val listener: Listener) : View(con
     internal var cursorMode = false
         private set
     internal var lastTreeTapAt = 0L
+    /** In the cursor mode: where the sliding finger is (x; -1: none yet, so the middle), and which way (-1, 1) and when the cursor last stepped. */
+    internal var cursorFingerX = -1f
+    internal var cursorDir = 0
+    internal var cursorDirAt = 0L
     internal val cursorTimeout = Runnable { cursorModeIdle() }
 
     /** Turns the cursor mode on or off (the tree shows which); off by itself after a while without a touch. */
@@ -685,6 +689,8 @@ class KeyboardView(context: Context, internal val listener: Listener) : View(con
         if (cursorMode == on) return
         cursorMode = on
         tree.active = on
+        cursorFingerX = -1f
+        cursorDir = 0
         timer.removeCallbacks(cursorTimeout)
         if (on) timer.postDelayed(cursorTimeout, CURSOR_MODE_TIMEOUT_MS) else flushCursorMoves()
         keyVibration.tap()

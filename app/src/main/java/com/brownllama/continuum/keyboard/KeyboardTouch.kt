@@ -335,6 +335,7 @@ internal fun KeyboardView.treeOrCursorPointer(id: Int, x: Float, y: Float): Poin
         val p = Pointer(this, id, x, y, Area.CURSOR, null)
         p.cursorX = x
         p.cursorY = y
+        cursorFingerX = x
         // A finger is down: the mode does not time out under it.
         timer.removeCallbacks(cursorTimeout)
         return p
@@ -364,11 +365,14 @@ internal fun KeyboardView.treeTapped(p: Pointer) {
  */
 internal fun KeyboardView.cursorMove(p: Pointer, x: Float, y: Float) {
     p.moved = true
+    cursorFingerX = x
     val stride = dpu(CURSOR_STRIDE_DP)
     val steps = ((x - p.cursorX) / stride).toInt()
     if (steps != 0) {
         p.cursorX += steps * stride
         pendingSteps += steps
+        cursorDir = if (steps > 0) 1 else -1
+        cursorDirAt = SystemClock.uptimeMillis()
     }
     val lineH = dpu(CURSOR_LINE_DP)
     val lines = ((y - p.cursorY) / lineH).toInt()
@@ -380,6 +384,8 @@ internal fun KeyboardView.cursorMove(p: Pointer, x: Float, y: Float) {
         cursorFlushPending = true
         timer.postDelayed(flushCursor, CURSOR_FLUSH_MS)
     }
+    // The pixel caret on the veil follows the finger: one redraw a frame.
+    postInvalidateOnAnimation()
 }
 
 /** Sends the cursor moves collected so far to the editor, with one tick. */

@@ -240,25 +240,28 @@ class TreeCursorTest {
         assertFalse(k.view.cursorMode)
     }
 
-    @Test fun `the instruction in the cursor mode is two short lines that fit between the left edge and the tree`() {
+    @Test fun `in the cursor mode the bar and the keys are all but hidden under a veil, with a caret that follows the finger`() {
         for (mode in listOf("mini", "full")) {
             val k = keyboard(mode).withTree("hello")
             k.doubleTapTree()
-            val drawn = ArrayList<Triple<String, Float, Float>>() // text, left, right
+            val veils = ArrayList<Triple<Float, Float, Int>>() // top, bottom, alpha
             val canvas = object : Canvas(Bitmap.createBitmap(1080, 700, Bitmap.Config.ARGB_8888)) {
-                override fun drawText(text: String, x: Float, y: Float, paint: android.graphics.Paint) {
-                    val w = paint.measureText(text)
-                    drawn += Triple(text, x - w / 2f, x + w / 2f)
-                    super.drawText(text, x, y, paint)
+                override fun drawRect(left: Float, top: Float, right: Float, bottom: Float, paint: android.graphics.Paint) {
+                    if (right - left >= 1000f) veils += Triple(top, bottom, paint.color ushr 24)
+                    super.drawRect(left, top, right, bottom, paint)
                 }
             }
             k.view.draw(canvas)
-            val lines = drawn.filter { it.first.startsWith("Slide") || it.first.startsWith("Double") }
-            assertEquals("$mode: both lines are shown", 2, lines.size)
-            for ((t, l, r) in lines) {
-                assertTrue("$mode: '$t' starts inside the screen", l >= 0f)
-                assertTrue("$mode: '$t' ends before the tree", r <= k.view.tree.homeLeft)
-            }
+            val veil = veils.firstOrNull { it.third in 200..250 }
+            assertTrue("$mode: a veil", veil != null)
+            assertEquals("$mode: it starts at the top of the suggestion bar", 0f, veil!!.first, 0.5f)
+            assertEquals("$mode: and covers the keys", k.view.keyboardHeight, veil.second, 0.5f)
+            // The caret goes where the finger goes.
+            val (x, y) = k.onKeys()
+            k.slide(x, y, 200f, 0f, lift = false)
+            assertEquals(x + 200f, k.view.cursorFingerX, 0.5f)
+            assertEquals(1, k.view.cursorDir)
+            k.touch(MotionEvent.ACTION_UP, x + 200f, y)
         }
     }
 
