@@ -41,7 +41,18 @@ class KeyLayout(val id: String, val top: String, val mid: String, val bot: Strin
         else -> 2
     }
 
+    /** [row] of each letter code 0..25, for the decoder. */
+    val rowOf = IntArray(26) { row('a' + it) }
+
     companion object {
+        /**
+         * Mini mode: where each row's letters are drawn, as a fraction of the letter row's height
+         * from its top: the top row at [MINI_ROW_TOP], each next row [MINI_ROW_STEP] lower. A tap's
+         * height is given to the decoder in these steps (0 = top row, 1 = home row, 2 = bottom row).
+         */
+        const val MINI_ROW_TOP = 0.26f
+        const val MINI_ROW_STEP = 0.18f
+
         // Long-press characters shown on the full keyboard's keys.
         private const val TOP_HINTS = "1234567890"
         private const val MID_HINTS = "@#€_&*()-"

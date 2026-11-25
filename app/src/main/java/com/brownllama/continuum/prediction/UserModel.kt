@@ -19,6 +19,10 @@ import java.util.concurrent.TimeUnit
  * after [CANDIDATE_DAYS] days unless used again.
  * [today] is the clock in days, replaceable for tests.
  *
+ * [total] (every word typed, counted once per use) and [followers] (the pairs after a word) let the
+ * decoder weigh the counts as shares of what the user types rather than raw numbers, which would
+ * grow with every word typed and push out every word the user hasn't typed yet.
+ *
  * With [background] the file is read on the writer thread (the keyboard does this, so the service
  * starts without waiting for it); the first use then waits for whatever is left of the read.
  */
@@ -35,6 +39,10 @@ class UserModel(
             return words
         }
     private val bigrams = HashMap<String, HashMap<String, Int>>()
+    /** Sum of [words]' counts. */
+    private var wordTotal = 0L
+    /** Sum of each word's [bigrams] counts, by the first word. */
+    private val pairTotals = HashMap<String, Int>()
     private val blocked = HashSet<String>()
     private val forms = HashMap<String, String>()
     /** Day (since 1970) each word was last typed. */
@@ -54,6 +62,7 @@ class UserModel(
      */
     private val loading = Loading(if (background) WRITER else null) {
         load()
+        recountAll()
         if (prune()) dirty++
     }
 
@@ -66,6 +75,27 @@ class UserModel(
         if (prev == null) return 0
         loading.await()
         return bigrams[prev]?.get(key) ?: 0
+    }
+
+    /** How many words the user has typed in all (each use of each word, as kept). */
+    val total: Long
+        get() {
+            loading.await()
+            return wordTotal
+        }
+
+    /** How many word pairs start with [prev] (the uses of the words typed after it). */
+    fun followers(prev: String?): Int {
+        if (prev == null) return 0
+        loading.await()
+        return pairTotals[prev] ?: 0
+    }
+
+    /** Typed within the last [RECENT_DAYS] days: likely to be typed again soon, whatever its count. */
+    fun isRecent(key: String): Boolean {
+        loading.await()
+        val day = lastUsed[key] ?: return false
+        return today() - day <= RECENT_DAYS
     }
 
     /** How the user writes the word with this key, if they have typed it. */
@@ -82,10 +112,12 @@ class UserModel(
         if (form != null && Dictionary.keyOf(form) == key) forms[key] = form
         val count = (words[key] ?: 0) + 1
         words[key] = count
+        wordTotal++
         lastUsed[key] = today()
         if (prev != null) {
             val m = bigrams.getOrPut(prev) { HashMap() }
             m[key] = (m[key] ?: 0) + 1
+            pairTotals[prev] = (pairTotals[prev] ?: 0) + 1
         }
         if (words.size > MAX_WORDS * COMPACT_AT || pairCount() > MAX_PAIRS * COMPACT_AT) prune()
         // A brand-new word is saved at once (or by [onNewWord] a moment later) so it survives the
@@ -101,6 +133,7 @@ class UserModel(
         val c = words[key] ?: return
         if (c < CONFIRMED_COUNT) {
             words[key] = CONFIRMED_COUNT
+            wordTotal += CONFIRMED_COUNT - c
             dirty++
         }
     }
@@ -142,12 +175,14 @@ class UserModel(
         } else {
             words[key] = c - 1
         }
+        wordTotal--
         if (prev != null) {
             val m = bigrams[prev]
             val b = m?.get(key)
             if (m != null && b != null) {
                 if (b <= 1) m.remove(key) else m[key] = b - 1
                 if (m.isEmpty()) bigrams.remove(prev)
+                recount(prev)
             }
         }
         dirty++
@@ -182,6 +217,8 @@ class UserModel(
         loading.await()
         words.clear()
         bigrams.clear()
+        wordTotal = 0
+        pairTotals.clear()
         blocked.clear()
         forms.clear()
         lastUsed.clear()
@@ -229,6 +266,7 @@ class UserModel(
             }
             pruned = true
         }
+        if (pruned) recountAll()
         return pruned
     }
 
@@ -246,6 +284,20 @@ class UserModel(
         val empty = ArrayList<String>()
         for ((p, m) in bigrams) if (m.keys.removeAll(keys) && m.isEmpty()) empty += p
         empty.forEach(bigrams::remove)
+        recountAll()
+    }
+
+    /** Works [pairTotals] out again for [prev]. */
+    private fun recount(prev: String) {
+        val m = bigrams[prev]
+        if (m == null) pairTotals.remove(prev) else pairTotals[prev] = m.values.sum()
+    }
+
+    /** Works [wordTotal] and [pairTotals] out again from the tables (after loading or dropping words). */
+    private fun recountAll() {
+        wordTotal = words.values.sumOf { it.toLong() }
+        pairTotals.clear()
+        for ((p, m) in bigrams) pairTotals[p] = m.values.sum()
     }
 
     /**
@@ -339,5 +391,12 @@ class UserModel(
         /** Unused words are forgotten after this many days; candidates sooner. */
         const val FORGET_DAYS = 300
         const val CANDIDATE_DAYS = 60
+        /**
+         * A word typed within this many days counts as at least a common word ([isRecent], see
+         * Decoder): words come in bursts (a name, a topic), so one just typed is likely again soon.
+         * Older words go by how often they are typed, so the thousands a long-time user has typed
+         * once don't all crowd in.
+         */
+        const val RECENT_DAYS = 7
     }
 }

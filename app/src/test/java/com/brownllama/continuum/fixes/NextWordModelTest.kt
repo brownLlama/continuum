@@ -54,7 +54,8 @@ class NextWordModelTest {
         assertEquals("in", best("interested", between('i', 'o'), on('n')))
         assertEquals("be", best("to", between('b', 'h'), on('e')))
         assertEquals("he", best("and", between('b', 'h'), on('e')))
-        assertEquals("if", best("what", between('i', 'o'), on('f')))
+        // "even if", not "what if": in everyday sentences "what it" ("what it means") is twice as common.
+        assertEquals("if", best("even", between('i', 'o'), on('f')))
         assertEquals("of", best("one", between('i', 'o'), on('f')))
     }
 
@@ -94,6 +95,59 @@ class NextWordModelTest {
         val without = hits(decoder(WITHOUT))
         val with = hits(decoder(WITH))
         assertTrue("$without -> $with of $words", with >= without + words / 10)
+    }
+
+    @Test fun `the model knows how messages go, not only how novels do`() {
+        // Tatoeba's everyday sentences are mixed into the books' word pairs (tools/next_words).
+        val start = WITH.context(null, true, 1f)!!.followers.map { WITH.key(it) }.toSet()
+        for (w in listOf("i", "im", "ill", "how", "can", "what")) assertTrue(w, w in start)
+        assertTrue(WITH.nextFor("how").take(6).toString(), WITH.nextFor("how").take(6).any { it == "are" || it == "much" })
+        // Read at the start of a message, from taps between H and N (column-mates in mini mode).
+        val d = decoder()
+        assertEquals("how", d.decode(listOf(between('h', 'n'), on('o'), on('w')), Mode.MINI, layout, null, start = true).words.first().key)
+        // No names: Tatoeba's sentences are full of Tom and Mary.
+        assertFalse(WITH.nextFor("with").any { it.equals("Tom", ignoreCase = true) || it.equals("Mary", ignoreCase = true) })
+    }
+
+    @Test fun `what the user typed after a word is mixed with the model, not put before it`() {
+        fun hits(d: Decoder, sentences: List<List<String>>): Int {
+            var hit = 0
+            for (s in sentences) {
+                var prev: String? = null
+                for ((i, w) in s.withIndex()) {
+                    val key = Dictionary.keyOf(w) ?: continue
+                    if (d.predict(prev, sentenceStart = i == 0, limit = 3).any { Dictionary.keyOf(it) == key }) hit++
+                    prev = key
+                }
+            }
+            return hit
+        }
+        fun typed(u: UserModel, sentences: List<List<String>>) {
+            for (s in sentences) {
+                var prev: String? = null
+                for ((i, w) in s.withIndex()) {
+                    val key = Dictionary.keyOf(w) ?: continue
+                    u.learn(if (i == 0) UserModel.START else prev, key, w)
+                    prev = key
+                }
+            }
+        }
+        val a = SENTENCES.filterIndexed { i, _ -> i % 2 == 0 }
+        val b = SENTENCES.filterIndexed { i, _ -> i % 2 == 1 }
+        val none = hits(decoder(), a) + hits(decoder(), b)
+        // Half the sentences typed, the other half predicted: a short history must help, not hurt.
+        var light = 0
+        for ((learned, tested) in listOf(a to b, b to a)) {
+            val u = UserModel(File.createTempFile("user", ".tsv").also { it.delete() })
+            typed(u, learned)
+            light += hits(Decoder(WITH, u), tested)
+        }
+        assertTrue("no history $none -> half typed $light of $words", light >= none)
+        // Sentences typed before come back: the user's own habits decide where they know a lot.
+        val u = UserModel(File.createTempFile("user", ".tsv").also { it.delete() })
+        repeat(3) { typed(u, SENTENCES) }
+        val again = hits(Decoder(WITH, u), SENTENCES)
+        assertTrue("$again of $words", again >= words / 2)
     }
 
     @Test fun `the model survives the binary copy the app keeps`() {

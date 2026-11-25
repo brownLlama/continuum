@@ -79,7 +79,7 @@ internal fun ContinuumIME.alternativesFor(word: String): List<String>? {
     if (letters.isEmpty() || letters.length > 20 || word.any { !it.isLetter() && it !in JOINERS }) return null
     val synthetic = letters.map { c ->
         val i = c - 'a'
-        if (mode == Mode.MINI) Tap(layout.miniSlot[i].toFloat(), 0f) else Tap(layout.fullX[i], layout.fullY[i])
+        if (mode == Mode.MINI) Tap(layout.miniSlot[i].toFloat(), layout.rowOf[i].toFloat()) else Tap(layout.fullX[i], layout.fullY[i])
     }
     val r = d.decode(synthetic, mode, layout, null, adapt = false)
     val cap = word.first().isUpperCase()

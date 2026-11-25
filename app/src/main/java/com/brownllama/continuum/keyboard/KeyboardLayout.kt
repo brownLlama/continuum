@@ -184,4 +184,12 @@ internal fun KeyboardView.slotAt(x: Float) = (x - letterRect.left) / slotW - 0.5
 
 internal fun KeyboardView.nearestSlot(x: Float) = slotAt(x).roundToInt().coerceIn(0, 25)
 
+/**
+ * The mini row's height at view y, in rows of the stagger: 0 where the top row's letters are drawn,
+ * 1 the home row, 2 the bottom row. A tap on the strip above or the gap below is held to just past
+ * the rows, so it doesn't count for more than a tap at the edge of the letters.
+ */
+internal fun KeyboardView.rowAt(y: Float) =
+    (((y - letterRect.top) / miniRowH - KeyLayout.MINI_ROW_TOP) / KeyLayout.MINI_ROW_STEP).coerceIn(-1f, 3f)
+
 internal fun KeyboardView.slotCenter(i: Int) = letterRect.left + (i + 0.5f) * slotW
