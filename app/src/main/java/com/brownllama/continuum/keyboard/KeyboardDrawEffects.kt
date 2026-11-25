@@ -93,7 +93,7 @@ internal fun KeyboardView.drawPreviews(c: Canvas) {
             drawShiftMenu(c, k, p)
             continue
         }
-        if (p.consumed || p.zooming || k.rect.top < barH) continue
+        if (p.consumed || p.zooming || p.grass || k.rect.top < barH) continue
         if (k.kind != Kind.LETTER && k.kind != Kind.TEXT) continue
         val hint = p.options ?: k.hint
         if (p.longPressed && hint != null && hint.length > 1) {

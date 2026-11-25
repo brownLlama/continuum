@@ -74,3 +74,6 @@ internal const val GERMAN_WAIT_MS = 700L
 /** Backspace: hold this long before it repeats, then repeat this often. */
 internal const val REPEAT_DELAY_MS = 400L
 internal const val REPEAT_MS = 55L
+
+/** Sliding on the grass: the finger travels this far (dp) for each character the cursor moves. */
+internal const val CURSOR_STRIDE_DP = 4f

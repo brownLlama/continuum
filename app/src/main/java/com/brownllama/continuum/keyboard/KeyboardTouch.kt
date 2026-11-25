@@ -96,10 +96,15 @@ internal fun KeyboardView.down(id: Int, x: Float, y: Float) {
         else -> hitKey(keys, x, y)?.let { Pointer(this, id, x, y, Area.KEY, it) }
     } ?: return
     pointers[id] = p
+    // Below the keys is the grass: a sideways slide that starts there moves the cursor. Nothing that
+    // starts on the keys is ever turned into one, so typing and swipes on the keys are as they were.
+    p.grass = grassHeight > 0 && y >= keyboardHeight && !gifSearching && !panel.big
     // A tick for a key or the letter row; not for the emoji / GIF / sticker grids, which scroll.
     if (p.area != Area.GRID) keyVibration.tap()
-    if (p.area == Area.LETTERS || p.area == Area.STRIP) glows += Glow(p)
-    if (p.key?.kind == Kind.BACKSPACE) {
+    if ((p.area == Area.LETTERS || p.area == Area.STRIP) && !p.grass) glows += Glow(p)
+    if (p.grass) {
+        // No hold on the grass (no zoom, no long-press popup, no key repeat): it is for sliding.
+    } else if (p.key?.kind == Kind.BACKSPACE) {
         backspace()
         val r = object : Runnable {
             override fun run() {
@@ -122,6 +127,7 @@ internal fun KeyboardView.move(p: Pointer, x: Float, y: Float) {
     p.x = x
     p.y = y
     val k = p.key
+    if (p.grass && cursorSlide(p, x, y)) return
     if (p.area == Area.GRID) {
         // The emoji / GIF grid scrolls vertically (the search header's strip sideways); any real
         // movement means it's not a tap.
@@ -252,6 +258,7 @@ internal fun KeyboardView.release(p: Pointer) {
     pointers.remove(p.id)
     timer.removeCallbacks(p.longPress)
     p.repeat?.let(timer::removeCallbacks)
+    if (p.cursoring) grass.push = 0
     when {
         p.consumed || p.key?.kind == Kind.BACKSPACE -> {}
         p.scrolling && p.area == Area.GRID -> {
@@ -302,6 +309,33 @@ internal fun KeyboardView.gesture(dx: Float, dy: Float, fromBar: Boolean) {
         dx < 0 -> listener.onLanguageToggle()
         else -> listener.onEnter()
     }
+}
+
+/**
+ * A finger on the grass sliding sideways moves the cursor, one character for each [CURSOR_STRIDE_DP]
+ * it travels, and the grass leans the way it goes. Returns whether this finger is sliding the cursor;
+ * a tap on the grass, or a finger that goes mostly up or down there, is handled as it always was.
+ */
+internal fun KeyboardView.cursorSlide(p: Pointer, x: Float, y: Float): Boolean {
+    if (!p.cursoring) {
+        val dx = x - p.downX
+        if (p.zooming || p.scrolling || abs(dx) <= slop || abs(dx) <= abs(y - p.downY)) return false
+        p.cursoring = true
+        p.consumed = true
+        p.moved = true
+        timer.removeCallbacks(p.longPress)
+        p.cursorX = p.downX
+    }
+    val stride = dpu(CURSOR_STRIDE_DP)
+    val steps = ((x - p.cursorX) / stride).toInt()
+    if (steps != 0) {
+        p.cursorX += steps * stride
+        grass.push = if (steps > 0) 1 else -1
+        listener.onCursorMove(steps)
+        keyVibration.tap()
+    }
+    invalidate()
+    return true
 }
 
 /** A finger lifted without swiping. */

@@ -29,6 +29,8 @@ import kotlin.math.roundToInt
 internal class Grass(private val unit: Float) : Sway {
     /** When the wind is sampled (uptime ms), or -1 for none: the grass stands still. */
     internal var windAt = -1L
+    /** While a finger slides the cursor along the grass: 1 (right) or -1 (left) leans it that way, 0 not at all. */
+    internal var push = 0
     private val src = Rect()
     private val dst = RectF()
     private var image: Bitmap? = null
@@ -62,12 +64,17 @@ internal class Grass(private val unit: Float) : Sway {
     fun draw(c: Canvas, width: Int, top: Float, height: Int, light: Boolean, background: Int) {
         if (width <= 0 || height <= 0) return
         val bmp = imageFor(width, height, light, background)
-        if (windAt < 0 || !Wind.blowing(windAt)) c.drawBitmap(bmp, 0f, top, null) else drawSwaying(c, bmp, top)
+        if (push == 0 && (windAt < 0 || !Wind.blowing(windAt))) c.drawBitmap(bmp, 0f, top, null) else drawSwaying(c, bmp, top)
     }
 
     /** How far the wind moves the pixel in [col], [row] (0: the ground), in grass pixels; 0 when still. */
-    override fun at(col: Int, row: Int): Int =
-        if (windAt < 0) 0 else Wind.lean(col, row, field.columns, field.rows, windAt)
+    override fun at(col: Int, row: Int): Int {
+        if (push != 0) {
+            val h = row / (field.rows - 1f).coerceAtLeast(1f)
+            return push * (h * h * Wind.maxLean(field.rows)).roundToInt()
+        }
+        return if (windAt < 0) 0 else Wind.lean(col, row, field.columns, field.rows, windAt)
+    }
 
     /**
      * The grass with its rows (and each stretch of [Wind.SEGMENT] columns) moved by the wind: the
@@ -203,7 +210,7 @@ internal fun KeyboardView.drawGrass(c: Canvas) {
     grass.windAt = if (wind) now else -1L
     grass.draw(c, width, grassBottom - h, h, theme.isLight, theme.background)
     meadow.fit(ceil(width / spritePx).toInt(), ceil(h / spritePx).toInt(), animalFeetRows())
-    meadow.draw(c, fill, spritePx, grassBottom, grass.petals, grass.centres, grass.stemColor, grass.leafColor, if (wind) grass else null)
+    meadow.draw(c, fill, spritePx, grassBottom, grass.petals, grass.centres, grass.stemColor, grass.leafColor, if (wind || grass.push != 0) grass else null)
     if (wind) scheduleWind(Wind.nextIn(now), h)
 }
 

@@ -77,6 +77,11 @@ internal class Pointer(private val view: KeyboardView, val id: Int, val downX: F
     val longerPress = Runnable { view.onLongerPress(this) }
     /** The long-press popup's characters once [longerPress] added the German letter, else null (the key's hint). */
     var options: String? = null
+    /** Landed on the grass under the keys: a sideways slide from there moves the cursor ([cursorSlide]). */
+    var grass = false
+    /** Sliding the cursor; [cursorX] is where the last step was taken. */
+    var cursoring = false
+    var cursorX = downX
     /** Backspace auto-repeat while held. */
     var repeat: Runnable? = null
 

@@ -49,7 +49,7 @@ internal object Wind {
     }
 
     /** How many pixels the tips lean at most, in grass [rows] tall (for the strongest gust): about a third of its height, up to 3. */
-    private fun maxLean(rows: Int) = (rows * 0.3f).coerceIn(1f, 3f)
+    internal fun maxLean(rows: Int) = (rows * 0.3f).coerceIn(1f, 3f)
 
     /** How hard the wind blows at [col] of [columns] at [now] (uptime ms, 0: calm .. 1: the gust's peak, times its force). */
     fun strength(col: Int, columns: Int, now: Long): Float {

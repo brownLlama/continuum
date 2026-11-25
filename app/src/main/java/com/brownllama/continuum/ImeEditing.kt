@@ -4,6 +4,7 @@ package com.brownllama.continuum
 import android.os.SystemClock
 import android.view.KeyEvent
 import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.ExtractedTextRequest
 import android.view.inputmethod.InputConnection
 import android.widget.Toast
 import androidx.core.content.edit
@@ -389,4 +390,60 @@ internal fun ContinuumIME.handleEmoji(emoji: String) {
     onText(emoji)
     if (learning) emojiHistory.use(emoji)
     view?.frequentEmoji = emojiHistory.top(FREQUENT_EMOJI)
+}
+
+/**
+ * Where the selection is in the app's text, as (start, end) with start <= end (equal: just a cursor),
+ * as the field says when asked, else what it last told us; null when neither is known.
+ */
+private fun ContinuumIME.selectionOf(ic: InputConnection): Pair<Int, Int>? {
+    val ex = ic.getExtractedText(ExtractedTextRequest().apply { hintMaxChars = 2000 }, 0)
+    if (ex != null && ex.selectionStart >= 0 && ex.selectionEnd >= 0) {
+        val a = ex.startOffset + ex.selectionStart
+        val b = ex.startOffset + ex.selectionEnd
+        return minOf(a, b) to maxOf(a, b)
+    }
+    return if (selStart >= 0 && selEnd >= 0) minOf(selStart, selEnd) to maxOf(selStart, selEnd) else null
+}
+
+/**
+ * The finger slid along the grass: the cursor moves [steps] characters, as arrow keys would move it,
+ * but only within the text (an arrow key at the end of a text can leave the field for another one).
+ * With text selected, it stretches or shrinks the selection (its right end) instead. A word in
+ * progress is finished first, as it stands. Not while the GIF search has the keyboard.
+ */
+internal fun ContinuumIME.handleCursorMove(steps: Int) {
+    if (queryEditor != null || steps == 0) return
+    val ic = editor() ?: return
+    finishComposing()
+    lastCommit = null
+    lastExpansion = null
+    autoSpace = false
+    deletedSlots = null
+    val left = steps < 0
+    val n = kotlin.math.abs(steps)
+    val span = selectionOf(ic)
+    if (span != null && span.first != span.second) {
+        val (s, e) = span
+        val room = if (left) e - s else ic.getTextAfterCursor(n, 0)?.length ?: n
+        ic.setSelection(s, if (left) e - minOf(n, room) else e + minOf(n, room))
+        return
+    }
+    if (span != null) {
+        // Just a cursor, and we know where: put it there, so it never leaves the text.
+        val room = if (left) span.first else ic.getTextAfterCursor(n, 0)?.length ?: n
+        val to = if (left) span.first - minOf(n, room) else span.first + minOf(n, room)
+        ic.setSelection(to, to)
+        return
+    }
+    // The app doesn't say where the cursor is: arrow keys, with shift held if text is selected.
+    val selected = if (span == null) ic.getSelectedText(0)?.length ?: 0 else 0
+    val room = if (left) (ic.getTextBeforeCursor(n, 0)?.length ?: n) + selected else ic.getTextAfterCursor(n, 0)?.length ?: n
+    val key = if (left) KeyEvent.KEYCODE_DPAD_LEFT else KeyEvent.KEYCODE_DPAD_RIGHT
+    val meta = if (selected > 0) KeyEvent.META_SHIFT_ON or KeyEvent.META_SHIFT_LEFT_ON else 0
+    val now = SystemClock.uptimeMillis()
+    repeat(minOf(n, room)) {
+        ic.sendKeyEvent(KeyEvent(now, now, KeyEvent.ACTION_DOWN, key, 0, meta))
+        ic.sendKeyEvent(KeyEvent(now, now, KeyEvent.ACTION_UP, key, 0, meta))
+    }
 }

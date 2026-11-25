@@ -91,6 +91,8 @@ class KeyboardView(context: Context, internal val listener: Listener) : View(con
         fun onBackspace()
         /** Swipe left. */
         fun onDeleteWord()
+        /** A finger slid along the grass: move the cursor [steps] characters (negative: left). */
+        fun onCursorMove(steps: Int)
         /** Space key or swipe right. */
         fun onSpace()
         /** Enter key or swipe up and right. */
