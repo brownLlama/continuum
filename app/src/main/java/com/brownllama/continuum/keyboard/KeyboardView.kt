@@ -671,6 +671,11 @@ class KeyboardView(context: Context, internal val listener: Listener) : View(con
     internal val animal = Animal(spritePx).also { it.meadow = meadow }
     /** The tree on the right of the grass: picked up and dragged to move the cursor ([pickUpTree], [treeMove]). */
     internal val tree = Tree(spritePx)
+    /** Cursor steps and lines the tree's finger has made since the last frame, sent to the editor together ([flushTreeCursor]). */
+    internal var pendingSteps = 0
+    internal var pendingLines = 0
+    internal var cursorFlushPending = false
+    internal val flushCursor = Runnable { flushTreeCursor() }
     internal val animalCheck = Runnable { maybeStartAnimal() }
     /** The wind's next frame: redraws only the grass's strip ([windDirty]). */
     internal val windDirty = android.graphics.Rect()

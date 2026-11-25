@@ -52,7 +52,7 @@ internal class Grass(private val unit: Float) : Sway {
     internal fun treePalette() = Tree.Palette(
         outline = colors[GrassField.OUTLINE], dark = colors[GrassField.BACK_GREEN], mid = colors[GrassField.MID_GREEN],
         light = colors[GrassField.LIGHT], highlight = colors[GrassField.HIGHLIGHT],
-        trunk = 0xFF8A5A33.toInt(), trunkDark = 0xFF5E3B20.toInt(), apple = 0xFFD6303F.toInt(),
+        trunk = 0xFF8A5A33.toInt(), trunkDark = 0xFF5E3B20.toInt(), trunkLight = 0xFFB07A4A.toInt(), apple = 0xFFD6303F.toInt(),
     )
 
     /** The flowers' stems and leaves, in the grass's own greens. */
@@ -236,8 +236,8 @@ internal fun KeyboardView.drawGrass(c: Canvas) {
  */
 internal fun KeyboardView.fitTree(grassH: Int = grassHeight) {
     val base = treeBase()
-    if (grassH <= 0 || base < grassTop + 2 * spritePx) return tree.fit(0f, 0f, 0f, 0f, 0)
-    tree.fit(width.toFloat(), base, barH + dpu(4f), dpu(TREE_RIGHT_GAP_DP), (dpu(TREE_HEIGHT_DP) / spritePx).roundToInt())
+    if (grassH <= 0 || base < grassTop + 2 * spritePx) return tree.fit(0f, 0f, 0f, 0f, 0f, 0)
+    tree.fit(width.toFloat(), base, barH + dpu(4f), dpu(TREE_RIGHT_GAP_DP), dpu(TREE_EDGE_GAP_DP), (dpu(TREE_HEIGHT_DP) / spritePx).roundToInt())
 }
 
 /** The bottom of the tree, and of the part of the grass a finger can pick it up from (keyboard coordinates). */
@@ -245,11 +245,12 @@ internal fun KeyboardView.treeBase() = grassBottom - systemBottom - dpu(GESTURE_
 
 /**
  * The tree: standing in the grass ([held] false, drawn over the keys, before the animals) or, while a finger carries it
- * or it slides home ([held] true, drawn last, over the keys). It redraws only while it slides.
+ * or it falls ([held] true, drawn last, over everything). It redraws only while it moves by itself.
  */
 internal fun KeyboardView.drawTree(c: Canvas, held: Boolean) {
-    if (!tree.present || panel.big || gifSearching || held != (tree.carried || tree.returning)) return
+    if (!tree.present || panel.big || gifSearching || held != (tree.carried || tree.falling)) return
     val next = tree.draw(c, SystemClock.uptimeMillis(), grass.treePalette())
+    // Redraws itself a frame at a time while it settles or falls; a finger's moves redraw it otherwise.
     if (next >= 0) postInvalidateOnAnimation()
 }
 

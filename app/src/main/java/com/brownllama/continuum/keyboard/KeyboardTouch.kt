@@ -55,7 +55,8 @@ internal fun KeyboardView.handleTouch(e: MotionEvent) {
             for (p in pointers.values) {
                 timer.removeCallbacks(p.longPress)
                 p.repeat?.let(timer::removeCallbacks)
-                if (p.area == Area.TREE) tree.drop(SystemClock.uptimeMillis())
+                timer.removeCallbacks(p.treeHold)
+                if (p.area == Area.TREE) dropTree()
             }
             pointers.clear()
             zoom = null
@@ -96,6 +97,8 @@ internal fun KeyboardView.down(id: Int, x: Float, y: Float) {
             ?: Pointer(this, id, x, y, Area.GRID, null)
         else -> hitKey(keys, x, y)?.let { Pointer(this, id, x, y, Area.KEY, it) }
     } ?: return
+    // On the tree but over the keys (not backspace, which acts as the finger lands): the key's until held.
+    p.treeCandidate = p.area != Area.TREE && p.key?.kind != Kind.BACKSPACE && onTree(x, y)
     pointers[id] = p
     // A tick for a key or the letter row; not for the emoji / GIF / sticker grids, which scroll.
     if (p.area != Area.GRID) keyVibration.tap()
@@ -110,6 +113,9 @@ internal fun KeyboardView.down(id: Int, x: Float, y: Float) {
         }
         p.repeat = r
         timer.postDelayed(r, REPEAT_DELAY_MS)
+    } else if (p.treeCandidate) {
+        // On the tree over the keys: no zoom or long-press popup, only the hold that picks the tree up.
+        timer.postDelayed(p.treeHold, TREE_HOLD_MS)
     } else if (p.area != Area.GRID || panel == Panel.CLIPBOARD || panel == Panel.STICKERS) {
         // Clip cards and the user's stickers can be held (to delete them); emoji and GIFs can't.
         timer.postDelayed(p.longPress, holdMs)
@@ -254,10 +260,11 @@ internal fun KeyboardView.onLongPress(p: Pointer) {
 internal fun KeyboardView.release(p: Pointer) {
     pointers.remove(p.id)
     timer.removeCallbacks(p.longPress)
+    timer.removeCallbacks(p.treeHold)
     p.repeat?.let(timer::removeCallbacks)
     if (p.area == Area.TREE) {
-        // Let go: the cursor stops, and the tree slides back to where it stands.
-        tree.drop(SystemClock.uptimeMillis())
+        // Let go: the cursor stops where it is, and the tree falls from where it hangs.
+        dropTree()
         invalidate()
         return
     }
@@ -313,9 +320,13 @@ internal fun KeyboardView.gesture(dx: Float, dy: Float, fromBar: Boolean) {
     }
 }
 
+/** Whether (x, y) is on the standing tree (and the tree can be picked up now). */
+internal fun KeyboardView.onTree(x: Float, y: Float) = !gifSearching && !panel.big && tree.hit(x, y, dpu(TREE_SLACK_DP), treeBase())
+
 /**
  * The finger carrying the tree moved: the tree follows it, and the cursor moves with it, one
  * character for each [CURSOR_STRIDE_DP] sideways and one line for each [CURSOR_LINE_DP] up or down.
+ * The steps are collected and sent once a frame, so a fast drag asks the editor for one move, not many.
  */
 internal fun KeyboardView.treeMove(p: Pointer, x: Float, y: Float) {
     if (!tree.carried) return
@@ -325,33 +336,68 @@ internal fun KeyboardView.treeMove(p: Pointer, x: Float, y: Float) {
     val steps = ((x - p.cursorX) / stride).toInt()
     if (steps != 0) {
         p.cursorX += steps * stride
-        listener.onCursorMove(steps)
-        keyVibration.tap()
+        pendingSteps += steps
     }
     val lineH = dpu(CURSOR_LINE_DP)
     val lines = ((y - p.cursorY) / lineH).toInt()
     if (lines != 0) {
         p.cursorY += lines * lineH
-        listener.onCursorLines(lines)
-        keyVibration.tap()
+        pendingLines += lines
     }
-    invalidate()
+    if ((steps != 0 || lines != 0) && !cursorFlushPending) {
+        cursorFlushPending = true
+        timer.postDelayed(flushCursor, CURSOR_FLUSH_MS)
+    }
+    postInvalidateOnAnimation()
+}
+
+/** Sends the cursor moves collected so far to the editor, with one tick. */
+internal fun KeyboardView.flushTreeCursor() {
+    cursorFlushPending = false
+    timer.removeCallbacks(flushCursor)
+    val steps = pendingSteps
+    val lines = pendingLines
+    pendingSteps = 0
+    pendingLines = 0
+    if (steps == 0 && lines == 0) return
+    if (steps != 0) listener.onCursorMove(steps)
+    if (lines != 0) listener.onCursorLines(lines)
+    keyVibration.tap()
+}
+
+/** Let go of the tree: the cursor moves still owed are sent, and the tree falls from where it hangs. */
+internal fun KeyboardView.dropTree() {
+    flushTreeCursor()
+    tree.drop(SystemClock.uptimeMillis(), width.toFloat(), treeBase(), dpu(TREE_EDGE_GAP_DP))
+    postInvalidateOnAnimation()
 }
 
 /**
- * A finger landed on the tree (anywhere on it, over the keys too, but not in Android's gesture bar):
- * it is picked up, and from then on carried by that finger. Returns the pointer, or
- * null when the touch is not on the tree.
+ * A finger landed on the tree where it stands over the grass, which has no keys: it is picked up at
+ * once, and from then on carried by that finger. Over the keys the tree is picked up by a hold
+ * ([onTreeHold]) instead. Returns the pointer, or null when the touch is not on the tree there.
  */
 internal fun KeyboardView.pickUpTree(id: Int, x: Float, y: Float): Pointer? {
-    if (gifSearching || panel.big) return null
-    if (!tree.hit(x, y, dpu(TREE_SLACK_DP), treeBase())) return null
+    if (y < keyboardHeight || !onTree(x, y)) return null
+    return grabTree(id, x, y)
+}
+
+private fun KeyboardView.grabTree(id: Int, x: Float, y: Float): Pointer {
     val p = Pointer(this, id, x, y, Area.TREE, null)
     p.cursorX = x
     p.cursorY = y
-    tree.pickUp(x, y)
+    tree.pickUp(x, y, SystemClock.uptimeMillis())
     keyVibration.tap()
+    postInvalidateOnAnimation()
     return p
+}
+
+/** A finger has held the tree over the keys for [TREE_HOLD_MS]: if it has not moved, the tree is picked up instead of the key. */
+internal fun KeyboardView.onTreeHold(p: Pointer) {
+    if (pointers[p.id] !== p || p.moved || p.longPressed || p.zooming || p.consumed || !onTree(p.x, p.y)) return
+    timer.removeCallbacks(p.longPress)
+    glows.removeAll { it.pointer === p }
+    pointers[p.id] = grabTree(p.id, p.x, p.y)
 }
 
 /** A finger lifted without swiping. */

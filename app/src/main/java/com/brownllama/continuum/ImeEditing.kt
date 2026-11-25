@@ -397,6 +397,9 @@ internal fun ContinuumIME.handleEmoji(emoji: String) {
  * as the field says when asked, else what it last told us; null when neither is known.
  */
 private fun ContinuumIME.selectionOf(ic: InputConnection): Pair<Int, Int>? {
+    // What the app last told us is kept up to date as the cursor moves (see handleCursorMove), and costs no
+    // round trip to the app; only when it said nothing is the field asked.
+    if (selStart >= 0 && selEnd >= 0) return minOf(selStart, selEnd) to maxOf(selStart, selEnd)
     val ex = ic.getExtractedText(ExtractedTextRequest().apply { hintMaxChars = 2000 }, 0)
     if (ex != null && ex.selectionStart >= 0 && ex.selectionEnd >= 0) {
         val a = ex.startOffset + ex.selectionStart
@@ -426,7 +429,10 @@ internal fun ContinuumIME.handleCursorMove(steps: Int) {
     if (span != null && span.first != span.second) {
         val (s, e) = span
         val room = if (left) e - s else ic.getTextAfterCursor(n, 0)?.length ?: n
-        ic.setSelection(s, if (left) e - minOf(n, room) else e + minOf(n, room))
+        val to = if (left) e - minOf(n, room) else e + minOf(n, room)
+        ic.setSelection(s, to)
+        selStart = s
+        selEnd = to
         return
     }
     if (span != null) {
@@ -434,6 +440,9 @@ internal fun ContinuumIME.handleCursorMove(steps: Int) {
         val room = if (left) span.first else ic.getTextAfterCursor(n, 0)?.length ?: n
         val to = if (left) span.first - minOf(n, room) else span.first + minOf(n, room)
         ic.setSelection(to, to)
+        // Counted at once, not when the app says so: the next move of a fast drag starts from here.
+        selStart = to
+        selEnd = to
         return
     }
     // The app doesn't say where the cursor is: arrow keys, with shift held if text is selected.
