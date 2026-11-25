@@ -18,17 +18,21 @@ Continuum includes the following third-party material. Everything not listed her
 
 ## Next words: `app/src/main/assets/next_words.tsv`
 
-- **Source:** the [Google Books Ngram Corpus](https://storage.googleapis.com/books/ngrams/books/datasetsv3.html) (version 3, 2020), English Fiction 2-grams and 3-grams, by Google.
-- **Licence:** [Creative Commons Attribution 3.0 Unported (CC BY 3.0)](https://creativecommons.org/licenses/by/3.0/).
-- **Changes:** counts from 1970 on, lower-cased and summed; only pairs of words in `words.txt` were kept. From those, for each common word, its likeliest next words and how many times likelier each is after it than in general (as a natural logarithm), plus how much less likely the words not listed are. Contractions Google splits ("it 's") were put back together, their next words taken from 3-grams. No text from the books is included, only these numbers.
-- `next_words.tsv` is shared under the same CC BY 3.0 licence.
+Blended from two sources by a build script (`tools/next_words/build.py`, kept with the development tools outside this repository):
+
+- **Source 1:** the [Google Books Ngram Corpus](https://storage.googleapis.com/books/ngrams/books/datasetsv3.html) (version 3, 2020), English Fiction 2-grams and 3-grams, by Google. **Licence:** [Creative Commons Attribution 3.0 Unported (CC BY 3.0)](https://creativecommons.org/licenses/by/3.0/). **Changes:** counts from 1970 on, lower-cased and summed; only pairs of words in `words.txt` were kept. From those, for each common word, its likeliest next words and how many times likelier each is after it than in general (as a natural logarithm), plus how much less likely the words not listed are. Contractions Google splits ("it 's") were put back together, their next words taken from 3-grams. These are the rows this file held before the blend (see the repository history).
+- **Source 2:** English sentences from [Tatoeba](https://tatoeba.org) ([per-language export](https://downloads.tatoeba.org/exports/per_language/eng/eng_sentences.tsv.bz2)), by the Tatoeba contributors. **Licence:** [Creative Commons Attribution 2.0 France (CC BY 2.0 FR)](https://creativecommons.org/licenses/by/2.0/fr/). **Changes:** word pairs counted (lower-cased, letters only), names left out, and the sentences of the app's typing tests removed; turned into the same likelihood ratios and mixed with source 1, more of Tatoeba's where it has more pairs for a word.
+- No text from the books or the sentences is included, only these numbers.
+- `next_words.tsv` is shared under CC BY 3.0 and CC BY 2.0 FR, with the attributions above.
 
 ## German next words: `app/src/main/assets/next_words_de.tsv`
 
-- **Source:** the [Google Books Ngram Corpus](https://storage.googleapis.com/books/ngrams/books/datasetsv3.html) (version 3, 2020), German 2-grams, by Google.
-- **Licence:** [Creative Commons Attribution 3.0 Unported (CC BY 3.0)](https://creativecommons.org/licenses/by/3.0/).
-- **Changes:** counts from 1970 on, lower-cased with ä, ö, ü and ß written as the letters they are typed with (a, o, u, ss) and summed; only pairs of words in `words_de.txt` were kept. From those, for each common word, its likeliest next words and how many times likelier each is after it than in general (as a natural logarithm), plus how much less likely the words not listed are. No text from the books is included, only these numbers.
-- `next_words_de.tsv` is shared under the same CC BY 3.0 licence.
+Blended the same way, by the same script:
+
+- **Source 1:** the [Google Books Ngram Corpus](https://storage.googleapis.com/books/ngrams/books/datasetsv3.html) (version 3, 2020), German 2-grams, by Google. **Licence:** [Creative Commons Attribution 3.0 Unported (CC BY 3.0)](https://creativecommons.org/licenses/by/3.0/). **Changes:** counts from 1970 on, lower-cased with ä, ö, ü and ß written as the letters they are typed with (a, o, u, ss) and summed; only pairs of words in `words_de.txt` were kept. From those, for each common word, its likeliest next words and how many times likelier each is after it than in general (as a natural logarithm), plus how much less likely the words not listed are. These are the rows this file held before the blend.
+- **Source 2:** German sentences from [Tatoeba](https://tatoeba.org) ([per-language export](https://downloads.tatoeba.org/exports/per_language/deu/deu_sentences.tsv.bz2)), by the Tatoeba contributors. **Licence:** [Creative Commons Attribution 2.0 France (CC BY 2.0 FR)](https://creativecommons.org/licenses/by/2.0/fr/). **Changes:** as for English, with ä, ö, ü and ß written as a, o, u, ss.
+- No text from the books or the sentences is included, only these numbers.
+- `next_words_de.tsv` is shared under CC BY 3.0 and CC BY 2.0 FR, with the attributions above.
 
 ## Common misspellings: `app/src/main/assets/misspellings.txt`
 

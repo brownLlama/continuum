@@ -79,7 +79,7 @@ internal fun KeyboardView.drawMiniLetters(c: Canvas) {
     for (i in 0 until 26) {
         val ch = layout.miniOrder[i]
         val row = layout.row(ch)
-        val y = letterRect.top + miniRowH * when (row) { 0 -> 0.26f; 1 -> 0.44f; else -> 0.62f }
+        val y = letterRect.top + miniRowH * (KeyLayout.MINI_ROW_TOP + KeyLayout.MINI_ROW_STEP * row)
         drawText(c, upper(ch.toString()), slotCenter(i), y, size, if (row == 1) t.homeRow else t.text, regular)
     }
 }

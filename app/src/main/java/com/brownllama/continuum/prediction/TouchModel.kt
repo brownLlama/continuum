@@ -29,6 +29,15 @@ import kotlin.math.sqrt
  * precise typist kept a sloppier one (typing while walking, someone else) worse off than the
  * default for hundreds of words, because only words that were read right are learned from.
  *
+ * Mini mode also learns how high each keyboard row's taps land ([Shape.rowY]): the letters are
+ * drawn staggered by row, and a user who aims at them says with each tap which row it was for
+ * (Q, A and Y share a slot column and differ only in height). The rows start at the overall
+ * average height and only move apart as the user's taps show they do ([PRIOR_ROW] taps of a row
+ * before its own average counts half), so a user who taps the middle of the row whatever the
+ * letter gets no difference between the rows, and the height changes nothing for them. Measured on
+ * simulated typists (noise 0.8 slots): one aiming with a scatter of 0.6 rows went from 95.0% to
+ * 96.9% of words right, 1.0 rows to 95.8%; one not aiming stayed at 95.0%.
+ *
  * Kept separately per layout and mode (a mini-mode slot and a full-mode key are different
  * things), in [file]: app-private, excluded from backups. With [io], the file is read and
  * written in the background. Internally offsets are in units of the decoder's default spread
@@ -36,8 +45,12 @@ import kotlin.math.sqrt
  */
 class TouchModel(private val file: File, private val io: Executor? = null) {
 
-    /** How far each letter's taps land from its key's centre, by letter code: across ([dx]) and down ([dy]). */
-    class Shape(val dx: FloatArray, val dy: FloatArray)
+    /**
+     * How far each letter's taps land from its key's centre, by letter code: across ([dx]) and down
+     * ([dy], full mode). Mini mode: [rowY] is where each keyboard row's taps land in height (in rows
+     * of the stagger, see [Tap.y]), with [rowSpread] their scatter; null until enough is known.
+     */
+    class Shape(val dx: FloatArray, val dy: FloatArray, val rowY: FloatArray? = null, val rowSpread: Float = 1f)
 
     /** A running mean of where taps landed, over about the latest [n] of them. */
     private class Mean {
@@ -52,8 +65,24 @@ class TouchModel(private val file: File, private val io: Executor? = null) {
         }
     }
 
+    /** A running mean and variance of one row's tap heights, over about the latest [MAX_ROW_N]. */
+    private class Height {
+        var n = 0f
+        var mean = 0f
+        var variance = 0f
+
+        fun add(y: Float) {
+            n = minOf(n + 1f, MAX_ROW_N)
+            val d = y - mean
+            mean += d / n
+            variance += (d * (y - mean) - variance) / n
+        }
+    }
+
     private class Group {
         val letters = Array(26) { Mean() }
+        /** Mini mode: tap heights by keyboard row. */
+        val rows = Array(3) { Height() }
         /** All letters together. */
         val all = Mean()
         /** [build]'s result, until the next [learn]. */
@@ -95,7 +124,10 @@ class TouchModel(private val file: File, private val io: Executor? = null) {
         }
         if (used.size < MIN_TAPS) return false
         val group = groups.getOrPut(groupKey(layout, mode)) { Group() }
-        for (i in used) add(group, key[i] - 'a', r[i])
+        for (i in used) {
+            add(group, key[i] - 'a', r[i])
+            if (mode == Mode.MINI) height(group, layout, key[i] - 'a', taps[i])
+        }
         changed(group)
         return true
     }
@@ -112,8 +144,14 @@ class TouchModel(private val file: File, private val io: Executor? = null) {
         if (!residual(layout, mode, tap, letter - 'a', shape(layout, mode), r)) return false
         val group = groups.getOrPut(groupKey(layout, mode)) { Group() }
         add(group, letter - 'a', r)
+        if (mode == Mode.MINI) height(group, layout, letter - 'a', tap)
         changed(group)
         return true
+    }
+
+    /** Mini mode: [tap], meant for letter [c], landed this high in [c]'s row. */
+    private fun height(group: Group, layout: KeyLayout, c: Int, tap: Tap) {
+        if (tap.y.isFinite()) group.rows[layout.rowOf[c]].add(tap.y)
     }
 
     /**
@@ -165,6 +203,10 @@ class TouchModel(private val file: File, private val io: Executor? = null) {
             for ((name, g) in groups) {
                 line("a", name, null, g.all)
                 g.letters.forEachIndexed { c, m -> if (m.n > 0f) line("l", name, 'a' + c, m) }
+                g.rows.forEachIndexed { r, h ->
+                    if (h.n > 0f) append("r\t").append(name).append('\t').append(r).append('\t')
+                        .append(h.n).append('\t').append(h.mean).append('\t').append(h.variance).append('\n')
+                }
             }
         }
         DiskIo.write(file, text, io)
@@ -175,6 +217,12 @@ class TouchModel(private val file: File, private val io: Executor? = null) {
         runCatching {
             file.forEachLine { line ->
                 val p = line.split('\t')
+                if (p.size == 6 && p[0] == "r") {
+                    val r = p[2].toIntOrNull()?.takeIf { it in 0..2 } ?: return@forEachLine
+                    val v = p.subList(3, 6).map { it.toFloatOrNull()?.takeIf { f -> f.isFinite() } ?: return@forEachLine }
+                    groups.getOrPut(p[1]) { Group() }.rows[r].apply { n = v[0].coerceIn(0f, MAX_ROW_N); mean = v[1]; variance = maxOf(0f, v[2]) }
+                    return@forEachLine
+                }
                 val (m, max, at) = when {
                     p.size == 5 && p[0] == "a" -> Triple(groups.getOrPut(p[1]) { Group() }.all, MAX_ALL_N, 2)
                     p.size == 6 && p[0] == "l" && p[2].length == 1 && p[2][0] in 'a'..'z' ->
@@ -211,7 +259,15 @@ class TouchModel(private val file: File, private val io: Executor? = null) {
             dx[c] = (gx + (l.dx - gx) * w).coerceIn(-MAX_OFFSET, MAX_OFFSET) * sx
             dy[c] = if (mode == Mode.FULL) (gy + (l.dy - gy) * w).coerceIn(-MAX_OFFSET, MAX_OFFSET) * sy else 0f
         }
-        return Shape(dx, dy)
+        if (mode != Mode.MINI) return Shape(dx, dy)
+        // Each row's height, from the overall average height toward the row's own as its taps add up.
+        val rows = g.rows
+        val total = rows.sumOf { it.n.toDouble() }.toFloat()
+        if (total < MIN_ROW_TAPS) return Shape(dx, dy)
+        val all = rows.sumOf { (it.n * it.mean).toDouble() }.toFloat() / total
+        val rowY = FloatArray(3) { r -> all + (rows[r].mean - all) * rows[r].n / (rows[r].n + PRIOR_ROW) }
+        val pooled = sqrt(rows.sumOf { (it.n * it.variance).toDouble() }.toFloat() / total)
+        return Shape(dx, dy, rowY, maxOf(MIN_ROW_SPREAD, pooled * ROW_SPREAD_FACTOR))
     }
 
     private fun centreX(layout: KeyLayout, mode: Mode, c: Int) =
@@ -237,6 +293,17 @@ class TouchModel(private val file: File, private val io: Executor? = null) {
         const val MAX_LETTER_N = 60f
         /** How far a letter may move, in default spreads (about one slot in mini mode, 0.4 keys in full). */
         const val MAX_OFFSET = 0.75f
+        /**
+         * Mini mode heights: taps of a row before its own average height counts half, about how many
+         * latest taps count, and how many taps in all before heights are used. The scatter of the
+         * taps that were learned from (words read right) is widened by [ROW_SPREAD_FACTOR], as those
+         * are the taps that fit best, and is never taken below [MIN_ROW_SPREAD] rows.
+         */
+        const val PRIOR_ROW = 40f
+        const val MAX_ROW_N = 400f
+        const val MIN_ROW_TAPS = 10f
+        const val ROW_SPREAD_FACTOR = 1.3f
+        const val MIN_ROW_SPREAD = 0.5f
         /** Learned words between saves (and the keyboard saves when it closes). */
         private const val SAVE_EVERY = 10
     }

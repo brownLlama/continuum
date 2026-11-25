@@ -448,7 +448,7 @@ internal fun KeyboardView.flushCursorMoves() {
 internal fun KeyboardView.tap(p: Pointer) {
     when (p.area) {
         // A quick tap on the strip is a letter tap too: symbols are only typed via the hold popup.
-        Area.LETTERS, Area.STRIP -> listener.onLetterTap(Tap(slotAt(p.downX).coerceIn(-0.5f, 25.5f), 0f))
+        Area.LETTERS, Area.STRIP -> listener.onLetterTap(Tap(slotAt(p.downX).coerceIn(-0.5f, 25.5f), rowAt(p.downY)))
         Area.GRID -> if (!p.moved) {
             when {
                 showsGifs -> gifAt(p.downX, p.downY)?.let(listener::onGifPicked)

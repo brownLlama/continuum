@@ -4,14 +4,12 @@ import com.brownllama.continuum.keyboard.KeyLayout
 import kotlin.math.ln
 
 /**
- * One touch on the letter area.
- * Mini mode: [x] is the continuous slot position (0..25) along the one-row layout, [y] unused.
- * Full mode: [x], [y] are in key units (see [KeyLayout.fullX]).
- * [exact] is a letter code 0..25 when the user picked it precisely (zoom / long-press), else -1.
- */
-/**
  * A touch on the letters: [x] and [y] say where, [exact] the letter if it was picked by name (else -1); [picked]: it
  * was picked in the mini zoom (held, then slid onto one letter), the one way to say "this letter, whatever else fits".
+ * Mini mode: [x] is the continuous slot position (0..25) along the one-row layout, [y] the height in
+ * rows of the stagger (0 top row, 1 home row, 2 bottom row; see [KeyLayout.MINI_ROW_TOP]), which
+ * counts once [TouchModel] has learned that this user's taps follow the rows.
+ * Full mode: [x], [y] are in key units (see [KeyLayout.fullX]).
  */
 data class Tap(val x: Float, val y: Float, val exact: Int = -1, val upper: Boolean = false, val picked: Boolean = false)
 
@@ -87,6 +85,8 @@ class Decoder(private val dict: Dictionary, private val user: UserModel) {
         val ctx = context(prev, start)
         // What the user typed after this word, or at the start of a sentence (how they begin: "ok").
         val userPrev = prev ?: if (start) UserModel.START else null
+        typedTotal = user.total
+        prevPairs = user.followers(userPrev)
         val shape = if (adapt) touch?.shape(layout, mode) else null
         val table = Array(n) { i -> spatialRow(taps[i], mode, layout, shape) }
 
@@ -134,9 +134,9 @@ class Decoder(private val dict: Dictionary, private val user: UserModel) {
             if (count == 0 || !isUsersForm(c, spelled)) continue
             val extra = c.key.length - n
             val di = dict.indexOf(c.key)
-            // A word the user typed is at least as likely as a new word, however rare in the corpus.
-            val lift = if (di >= 0) maxOf(0f, NEW_WORD_LOG_FREQ - dict.logFreq[di]) else 0f
-            var b = c.plus(userBoost(count, user.bigramCount(userPrev, c.key)) + lift + userPenalty(extra) - dictPenalty(extra))
+            // A word the user typed lately is at least as likely as a new word, however rare in the corpus.
+            val lift = if (di >= 0) baseFreq(c.key, di) - dict.logFreq[di] else 0f
+            var b = c.plus(userBoost(count, user.bigramCount(userPrev, c.key), baseFreq(c.key, di)) + lift + userPenalty(extra) - dictPenalty(extra))
             // Show the word the way the user writes it ("tero"), not the dictionary's "Tero".
             val form = shownForm(c.key)
             if (form != null && Dictionary.sameWord(b.display, form)) b = b.shownAs(form)
@@ -160,9 +160,10 @@ class Decoder(private val dict: Dictionary, private val user: UserModel) {
             val w = userWord(key)
             val di = w.index
             // A word the dictionary lacks has no next-word data: neither lift nor backoff.
-            val base = if (di >= 0) maxOf(dict.logFreq[di], NEW_WORD_LOG_FREQ) + bonus(ctx, di) else NEW_WORD_LOG_FREQ
+            val freq = baseFreq(key, di)
+            val base = freq + if (di >= 0) bonus(ctx, di) else 0f
             // Words the user has typed are completed much more eagerly than dictionary words.
-            val rest = base + userBoost(count, user.bigramCount(userPrev, key)) + userPenalty(extra)
+            val rest = base + userBoost(count, user.bigramCount(userPrev, key), freq) + userPenalty(extra)
             if (rest < floor.value) continue
             val s = spatial(w.codes, 0, table, 0, n, floor.value - rest)
             if (s == MISS) continue
@@ -187,8 +188,9 @@ class Decoder(private val dict: Dictionary, private val user: UserModel) {
         val literalIdx = dict.indexOf(literal)
         val literalCount = user.count(literal)
         val literalIsWord = (literalIdx >= 0 && !dict.isMisspelling(literalIdx)) || literalCount > 0
-        val literalLm = (if (literalIdx >= 0) dict.logFreq[literalIdx] + ctx.of(literalIdx) else Dictionary.UNKNOWN_LOG_FREQ) +
-            userBoost(literalCount, user.bigramCount(userPrev, literal))
+        val literalFreq = if (literalIdx >= 0) dict.logFreq[literalIdx] else Dictionary.UNKNOWN_LOG_FREQ
+        val literalLm = literalFreq + (if (literalIdx >= 0) ctx.of(literalIdx) else 0f) +
+            userBoost(literalCount, user.bigramCount(userPrev, literal), literalFreq)
 
         // Typos: only corrections that come close to the best reading without one (an exact match, or
         // a word still being typed) are worth finding. Letters picked exactly (zoom / long-press) are
@@ -266,8 +268,9 @@ class Decoder(private val dict: Dictionary, private val user: UserModel) {
         for (c in candidates) {
             val count = user.count(c.key)
             if (count == 0 || !isUsersForm(c, spelled)) { out += c.edit(); continue }
-            val lift = maxOf(0f, NEW_WORD_LOG_FREQ - dict.logFreq[dict.indexOf(c.key)])
-            var b = c.plus(userBoost(count, user.bigramCount(userPrev, c.key)) + lift)
+            val di = dict.indexOf(c.key)
+            val freq = baseFreq(c.key, di)
+            var b = c.plus(userBoost(count, user.bigramCount(userPrev, c.key), freq) + freq - dict.logFreq[di])
             val form = shownForm(c.key)
             if (form != null && Dictionary.sameWord(b.display, form)) b = b.shownAs(form)
             out += b.edit()
@@ -281,8 +284,8 @@ class Decoder(private val dict: Dictionary, private val user: UserModel) {
             if (key.length < n - maxEdits || key.length > n + maxEdits || key in skip || key in inOut) continue
             val w = userWord(key)
             val di = w.index
-            val rest = (if (di >= 0) maxOf(dict.logFreq[di], NEW_WORD_LOG_FREQ) + bonus(ctx, di) else NEW_WORD_LOG_FREQ) +
-                userBoost(count, user.bigramCount(userPrev, key))
+            val freq = baseFreq(key, di)
+            val rest = freq + (if (di >= 0) bonus(ctx, di) else 0f) + userBoost(count, user.bigramCount(userPrev, key), freq)
             val min = maxOf(floor.value, gate) - rest
             if (table[0][w.codes[0].toInt()] - minCost(key.length, n) < min) continue
             val s = edited(w.codes, 0, key.length, table, n, min, scratch)
@@ -523,23 +526,49 @@ class Decoder(private val dict: Dictionary, private val user: UserModel) {
     private var ctxStart = false
     private var ctxLast = NextContext.NONE
 
-    /** Next-word suggestions when nothing is being typed. */
+    /**
+     * Next-word suggestions when nothing is being typed, likeliest first: the next-word model's
+     * P(w | previous word) (the word's frequency times its lift) mixed with the share of the words
+     * the user typed after it, λ·P_user + (1 − λ)·P_model with λ = n / (n + [PREDICT_TAU]), n the
+     * pairs the user typed after that word. The more the user has typed after a word, the more their
+     * own habits decide, so a pair typed once doesn't push out the model's likeliest words. (Before,
+     * every word the user had typed after it came first: in simulation that made a light user's
+     * predictions worse than none, 25.3% of next words shown against 28.5%; mixed, 28.7%.)
+     * With no word before, the words that start a sentence (and the user's: "ok", "hi").
+     */
     fun predict(prev: String?, sentenceStart: Boolean, limit: Int = 3): List<String> {
+        val start = sentenceStart || prev == null
+        val userPrev = prev ?: UserModel.START
+        val n = user.followers(userPrev)
+        val lambda = n / (n + PREDICT_TAU)
+        // Key → (probability, how it's shown).
+        val p = HashMap<String, Pair<Double, String>>()
+        val ctx = dict.context(if (start) null else prev, start, 1f)
+        if (ctx != null) for (idx in ctx.followers) {
+            val v = (1 - lambda) * kotlin.math.exp((dict.logFreq[idx] + ctx.of(idx)).toDouble())
+            val k = dict.key(idx)
+            if (v > (p[k]?.first ?: 0.0)) p[k] = v to dict.display(idx)
+        }
+        if (n > 0) for (k in user.following(userPrev, USER_FOLLOWERS)) {
+            val di = dict.indexOf(k)
+            val model = p[k]?.first ?: if (di >= 0) (1 - lambda) * kotlin.math.exp((dict.logFreq[di] + (ctx?.backoff ?: 0f)).toDouble()) else 0.0
+            p[k] = model + lambda * user.bigramCount(userPrev, k) / n to (shownForm(k) ?: p[k]?.second ?: dict.displayFor(k))
+        }
         val out = ArrayList<String>()
-        // With no word before, the words the user starts with ("ok", "hi").
-        for (k in user.following(prev ?: UserModel.START, limit)) out += shownForm(k) ?: dict.displayFor(k)
-        val model = if (sentenceStart || prev == null) dict.startWords else dict.nextFor(prev)
-        val defaults = if (sentenceStart || prev == null) dict.language.startWords else dict.language.followWords
+        for ((_, e) in p.entries.sortedByDescending { it.value.first }) {
+            if (out.size >= limit) break
+            if (!user.isBlocked(e.second) && out.none { Dictionary.sameWord(it, e.second) }) out += e.second
+        }
+        val defaults = if (start) dict.startWords + dict.language.startWords else dict.language.followWords
         val frequent = user.mostUsed(limit).map { shownForm(it) ?: dict.displayFor(it) }
-        for (d in model + defaults + frequent) if (out.size < limit && out.none { Dictionary.sameWord(it, d) }) out += d
-        out.removeAll { user.isBlocked(it) }
+        for (d in defaults + frequent) if (out.size < limit && !user.isBlocked(d) && out.none { Dictionary.sameWord(it, d) }) out += d
         return out
     }
 
     /**
      * Log-likelihood of each letter a..z given one tap: a Gaussian around where that letter's taps
      * land. Without [shape] that is the key's centre; with it, the centre moved by the letter's
-     * learned offset ([TouchModel]).
+     * learned offset ([TouchModel]), and in mini mode also the height its row's taps land at.
      */
     private fun spatialRow(tap: Tap, mode: Mode, layout: KeyLayout, shape: TouchModel.Shape?): FloatArray {
         val row = FloatArray(26)
@@ -548,9 +577,18 @@ class Decoder(private val dict: Dictionary, private val user: UserModel) {
             return row
         }
         when (mode) {
-            Mode.MINI -> for (c in 0 until 26) {
-                val d = tap.x - layout.miniSlot[c] - (shape?.dx?.get(c) ?: 0f)
-                row[c] = -(d * d) / (2 * MINI_SIGMA * MINI_SIGMA)
+            Mode.MINI -> {
+                // How high the tap landed counts once the user's rows have been learned (see TouchModel).
+                val rowY = shape?.rowY
+                val spread = shape?.rowSpread ?: 1f
+                for (c in 0 until 26) {
+                    val d = tap.x - layout.miniSlot[c] - (shape?.dx?.get(c) ?: 0f)
+                    row[c] = -(d * d) / (2 * MINI_SIGMA * MINI_SIGMA)
+                    if (rowY != null) {
+                        val e = (tap.y - rowY[layout.rowOf[c]]) / spread
+                        row[c] -= e * e / 2
+                    }
+                }
             }
             Mode.FULL -> for (c in 0 until 26) {
                 val dx = (tap.x - layout.fullX[c] - (shape?.dx?.get(c) ?: 0f)) / FULL_SIGMA_X
@@ -580,8 +618,40 @@ class Decoder(private val dict: Dictionary, private val user: UserModel) {
         return best
     }
 
-    private fun userBoost(count: Int, bigram: Int): Float =
-        USER_WEIGHT * ln(1f + count) + BIGRAM_WEIGHT * ln(1f + bigram)
+    /**
+     * What the user's history adds to a word scored from log-frequency [freq]: the user's own
+     * likelihood of it mixed in, ln(1 + κ·P_user(w)/P(w) + κ₂·P_user(w | previous word)/P(w)),
+     * where P_user is the word's share of all words the user typed ([UserModel.total]) and of those
+     * typed after the previous word ([UserModel.followers]), each with [USER_PRIOR] / [PAIR_PRIOR]
+     * words more in the total, so that a short history doesn't make its few words certain (one word
+     * typed once isn't all the user will ever type). Shares, not counts: a word typed as
+     * often as the word list expects gains about the same however much the user has typed, and only
+     * words the user types more often than that gain much. (Raw counts grew with every word typed:
+     * in simulation a long-time user's words crowded out every other word, from 89% of words right
+     * with no history to 86%, and words not yet typed from 89% to 39%; with shares it stays at 89%.)
+     */
+    private fun userBoost(count: Int, bigram: Int, freq: Float): Float {
+        val p = kotlin.math.exp(freq.toDouble())
+        var r = 0.0
+        if (count > 0) r += USER_SHARE * count / (typedTotal + USER_PRIOR) / p
+        if (bigram > 0) r += PAIR_SHARE * bigram / (prevPairs + PAIR_PRIOR) / p
+        return kotlin.math.ln(1.0 + r).toFloat()
+    }
+
+    /**
+     * The log-frequency a word the user typed is scored from: its corpus frequency, but at least
+     * [NEW_WORD_LOG_FREQ] when typed lately ([UserModel.isRecent]; always for a word the dictionary
+     * lacks, which has nothing else).
+     */
+    private fun baseFreq(key: String, di: Int): Float = when {
+        di < 0 -> NEW_WORD_LOG_FREQ
+        user.isRecent(key) -> maxOf(dict.logFreq[di], NEW_WORD_LOG_FREQ)
+        else -> dict.logFreq[di]
+    }
+
+    /** The user's totals for the decode in progress (see [userBoost]). */
+    private var typedTotal = 0L
+    private var prevPairs = 0
 
     /** Log penalty for completing a dictionary word / a user's word [extra] letters past the taps. */
     private fun dictPenalty(extra: Int) = if (extra == 0) 0f else COMPLETION_PENALTY - COMPLETION_PER_LETTER * extra
@@ -658,8 +728,21 @@ class Decoder(private val dict: Dictionary, private val user: UserModel) {
         /** Log penalty for offering a longer word: a flat part plus a part per missing letter. */
         private const val COMPLETION_PENALTY = -2.0f
         private const val COMPLETION_PER_LETTER = 0.25f
-        /** Weights of ln(1 + times typed) and ln(1 + times typed after the previous word). */
-        private const val USER_WEIGHT = 1.0f
+        /**
+         * How much the user's own word shares count against the word list's ([userBoost]); tuned on
+         * simulated users with 2,000 to 300,000 words of history (1 kept the most words right; 3 a
+         * little fewer).
+         */
+        private const val USER_SHARE = 1.0
+        private const val PAIR_SHARE = 1.0
+        /**
+         * Words added to the totals in [userBoost]: with a short history a word counts about as it
+         * did with raw counts (a new word typed once came back as the default 79% of the time in
+         * simulation, 77.5% before); with a long one, by its share. 1,000 did best among 0 to 3,000.
+         */
+        private const val USER_PRIOR = 1000.0
+        private const val PAIR_PRIOR = 10.0
+        /** Weight of ln(1 + times the second word was typed after the first), for two words typed as one. */
         private const val BIGRAM_WEIGHT = 1.5f
         /**
          * How much the next-word model counts: 1 takes its probabilities as they are; less trusts
@@ -739,6 +822,12 @@ class Decoder(private val dict: Dictionary, private val user: UserModel) {
         private const val SHORT_WORD_MARGIN = 1.5f
         private const val SHORT_WORD_TAPS = 5
 
-        /** Fallback predictions when the model has none (sentence start / after a word). */
+        /**
+         * Next-word predictions ([predict]): pairs the user must have typed after a word before their
+         * own habits count half, and how many of the words they typed after it are looked at. Tuned
+         * on the typing benchmark's sentences, half of them typed first: 3 to 10 do about equally well.
+         */
+        private const val PREDICT_TAU = 10.0
+        private const val USER_FOLLOWERS = 50
     }
 }
