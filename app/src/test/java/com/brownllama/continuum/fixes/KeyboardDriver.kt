@@ -38,7 +38,8 @@ class Keyboard(prefs: Map<String, Any> = emptyMap()) {
             is String -> p.putString(k, v)
             is Int -> p.putInt(k, v)
         }
-        p.putBoolean(Prefs.ANIMALS, false).putBoolean(Prefs.VIBRATE, false).commit()
+        if (Prefs.ANIMALS !in prefs) p.putBoolean(Prefs.ANIMALS, false)
+        p.putBoolean(Prefs.VIBRATE, false).commit()
         ime = Robolectric.buildService(TestIme::class.java).create().get()
         view = ime.onCreateInputView() as KeyboardView
         layoutView()

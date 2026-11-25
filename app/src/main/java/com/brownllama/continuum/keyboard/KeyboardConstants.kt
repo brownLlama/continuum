@@ -77,5 +77,9 @@ internal const val REPEAT_MS = 55L
 
 /** Sliding on the grass: the finger travels this far (dp) for each character the cursor moves. */
 internal const val CURSOR_STRIDE_DP = 4f
-/** Kept clear above Android's gesture bar when sliding on the grass (dp), where its swipes begin. */
+/** Carrying the animal: one line up or down for this much finger travel (dp). */
+internal const val CURSOR_LINE_DP = 26f
+/** Kept clear above Android's gesture bar (dp), where its swipes begin: the animal stands above it. */
 internal const val GESTURE_BAR_MARGIN_DP = 6f
+/** A finger this near (dp) the animal's sides still picks it up. */
+internal const val PET_SLACK_DP = 8f

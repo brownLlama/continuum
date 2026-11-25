@@ -91,8 +91,10 @@ class KeyboardView(context: Context, internal val listener: Listener) : View(con
         fun onBackspace()
         /** Swipe left. */
         fun onDeleteWord()
-        /** A finger slid along the grass: move the cursor [steps] characters (negative: left). */
+        /** The animal is carried sideways: move the cursor [steps] characters (negative: left). */
         fun onCursorMove(steps: Int)
+        /** The animal is carried up or down: move the cursor [lines] lines (negative: up). */
+        fun onCursorLines(lines: Int)
         /** Space key or swipe right. */
         fun onSpace()
         /** Enter key or swipe up and right. */
@@ -227,7 +229,7 @@ class KeyboardView(context: Context, internal val listener: Listener) : View(con
     /** The field takes an email address: full mode's "," key becomes "@". */
     var emailField = false
         set(value) { if (field != value) { field = value; relayout() } }
-    /** Settings "Animal visits" and "Animals": which may walk across the keys now and then (none: off). */
+    /** Settings "Animal" and "Animals": which one lives on the grass (picked at random from these; none: off). */
     internal var animals: List<Species> = Species.ALL
         set(value) {
             field = value
@@ -238,18 +240,17 @@ class KeyboardView(context: Context, internal val listener: Listener) : View(con
         set(value) {
             if (field == value) return
             field = value
-            nextAnimalAt = 0L
+            nextWanderAt = 0L
             scheduleAnimal()
         }
 
     /**
-     * The keyboard opened ([ContinuumIME.onWindowShown], and the window turning visible): a due
-     * visit comes in a moment, and with "Every time" one is always due.
+     * The keyboard opened ([ContinuumIME.onWindowShown], and the window turning visible): the animal
+     * is on the grass in a moment.
      */
     fun keyboardShown() {
         meadow.regrow()
-        if (animalFrequency.gapMs == null) nextAnimalAt = 0L
-        scheduleAnimal(randomBetween(animalFrequency.openMs))
+        scheduleAnimal(300L)
     }
 
     fun keyboardHidden() = endAnimal(cancel = true)

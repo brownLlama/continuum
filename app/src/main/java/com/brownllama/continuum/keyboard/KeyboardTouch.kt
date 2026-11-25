@@ -55,6 +55,7 @@ internal fun KeyboardView.handleTouch(e: MotionEvent) {
             for (p in pointers.values) {
                 timer.removeCallbacks(p.longPress)
                 p.repeat?.let(timer::removeCallbacks)
+                if (p.area == Area.PET) animal.drop(SystemClock.uptimeMillis(), width.toFloat())
             }
             pointers.clear()
             zoom = null
@@ -82,7 +83,7 @@ internal fun KeyboardView.down(id: Int, x: Float, y: Float) {
             return
         }
     }
-    val p = when {
+    val p = pickUpAnimal(id, x, y) ?: when {
         // The GIF search header: its keys, then the strip of GIFs.
         y < -gifStripH -> hitKey(headerKeys, x, y)?.let { Pointer(this, id, x, y, Area.KEY, it) }
         y < 0f -> Pointer(this, id, x, y, Area.GRID, null)
@@ -96,18 +97,10 @@ internal fun KeyboardView.down(id: Int, x: Float, y: Float) {
         else -> hitKey(keys, x, y)?.let { Pointer(this, id, x, y, Area.KEY, it) }
     } ?: return
     pointers[id] = p
-    // Below the keys is the grass: a sideways slide that starts there moves the cursor. Nothing that
-    // starts on the keys is ever turned into one, so typing and swipes on the keys are as they were.
-    // Not on the part of it over Android's gesture bar (or navigation buttons): swipes there belong to
-    // Android (home, switch apps), which would take the slide over half way.
-    p.grass = grassHeight > 0 && y >= keyboardHeight && y < grassBottom - systemBottom - dpu(GESTURE_BAR_MARGIN_DP) &&
-        !gifSearching && !panel.big
     // A tick for a key or the letter row; not for the emoji / GIF / sticker grids, which scroll.
     if (p.area != Area.GRID) keyVibration.tap()
-    if ((p.area == Area.LETTERS || p.area == Area.STRIP) && !p.grass) glows += Glow(p)
-    if (p.grass) {
-        // No hold on the grass (no zoom, no long-press popup, no key repeat): it is for sliding.
-    } else if (p.key?.kind == Kind.BACKSPACE) {
+    if (p.area == Area.LETTERS || p.area == Area.STRIP) glows += Glow(p)
+    if (p.key?.kind == Kind.BACKSPACE) {
         backspace()
         val r = object : Runnable {
             override fun run() {
@@ -130,7 +123,7 @@ internal fun KeyboardView.move(p: Pointer, x: Float, y: Float) {
     p.x = x
     p.y = y
     val k = p.key
-    if (p.grass && cursorSlide(p, x, y)) return
+    if (p.area == Area.PET) return petMove(p, x, y)
     if (p.area == Area.GRID) {
         // The emoji / GIF grid scrolls vertically (the search header's strip sideways); any real
         // movement means it's not a tap.
@@ -211,6 +204,7 @@ internal fun KeyboardView.onLongerPress(p: Pointer) {
 internal fun KeyboardView.onLongPress(p: Pointer) {
     if (pointers[p.id] !== p || p.moved) return
     when (p.area) {
+        Area.PET -> {}
         Area.STRIP, Area.LETTERS -> startZoom(p)
         Area.GRID -> if (panel == Panel.CLIPBOARD) {
             clipAt(p.downX, p.downY)?.let {
@@ -261,7 +255,12 @@ internal fun KeyboardView.release(p: Pointer) {
     pointers.remove(p.id)
     timer.removeCallbacks(p.longPress)
     p.repeat?.let(timer::removeCallbacks)
-    if (p.cursoring) grass.push = 0
+    if (p.area == Area.PET) {
+        // Let go: the animal drops where it is and stops.
+        animal.drop(SystemClock.uptimeMillis(), width.toFloat())
+        invalidate()
+        return
+    }
     when {
         p.consumed || p.key?.kind == Kind.BACKSPACE -> {}
         p.scrolling && p.area == Area.GRID -> {
@@ -315,30 +314,46 @@ internal fun KeyboardView.gesture(dx: Float, dy: Float, fromBar: Boolean) {
 }
 
 /**
- * A finger on the grass sliding sideways moves the cursor, one character for each [CURSOR_STRIDE_DP]
- * it travels, and the grass leans the way it goes. Returns whether this finger is sliding the cursor;
- * a tap on the grass, or a finger that goes mostly up or down there, is handled as it always was.
+ * The finger carrying the animal moved: it follows the finger, and the cursor moves with it, one
+ * character for each [CURSOR_STRIDE_DP] sideways and one line for each [CURSOR_LINE_DP] up or down.
  */
-internal fun KeyboardView.cursorSlide(p: Pointer, x: Float, y: Float): Boolean {
-    if (!p.cursoring) {
-        val dx = x - p.downX
-        if (p.zooming || p.scrolling || abs(dx) <= slop || abs(dx) <= abs(y - p.downY)) return false
-        p.cursoring = true
-        p.consumed = true
-        p.moved = true
-        timer.removeCallbacks(p.longPress)
-        p.cursorX = p.downX
-    }
+internal fun KeyboardView.petMove(p: Pointer, x: Float, y: Float) {
+    if (!animal.carried) return
+    p.moved = true
+    animal.carry(x, y)
     val stride = dpu(CURSOR_STRIDE_DP)
     val steps = ((x - p.cursorX) / stride).toInt()
     if (steps != 0) {
         p.cursorX += steps * stride
-        grass.push = if (steps > 0) 1 else -1
         listener.onCursorMove(steps)
         keyVibration.tap()
     }
+    val lineH = dpu(CURSOR_LINE_DP)
+    val lines = ((y - p.cursorY) / lineH).toInt()
+    if (lines != 0) {
+        p.cursorY += lines * lineH
+        listener.onCursorLines(lines)
+        keyVibration.tap()
+    }
     invalidate()
-    return true
+}
+
+/**
+ * A finger landed on the resting animal (its legs and belly in the grass, above Android's gesture
+ * bar, where the keys are not): it is picked up, and from then on it is carried by that finger. Returns
+ * the pointer, or null when the touch is not on it.
+ */
+internal fun KeyboardView.pickUpAnimal(id: Int, x: Float, y: Float): Pointer? {
+    if (gifSearching || panel.big) return null
+    // The grass between the keys and Android's gesture bar: swipes in the bar are Android's.
+    val to = grassBottom - systemBottom - dpu(GESTURE_BAR_MARGIN_DP)
+    if (!animal.hit(x, y, dpu(PET_SLACK_DP), keyboardHeight, to)) return null
+    val p = Pointer(this, id, x, y, Area.PET, null)
+    p.cursorX = x
+    p.cursorY = y
+    animal.pickUp(x, y)
+    keyVibration.tap()
+    return p
 }
 
 /** A finger lifted without swiping. */
@@ -355,5 +370,6 @@ internal fun KeyboardView.tap(p: Pointer) {
             }
         }
         Area.KEY -> keyTap(p.key!!, p)
+        Area.PET -> {}
     }
 }

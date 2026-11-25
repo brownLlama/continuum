@@ -21,6 +21,7 @@ internal fun KeyboardView.markPanelChange(ms: Long = FADE_MS, slide: Float = 0f)
     fadeMs = ms
     fadeSlide = slide
     endAnimal()
+    scheduleAnimal(FADE_MS)
 }
 
 /** 0..1 progress of an animation that started at [since]; keeps redrawing until it's done. */
@@ -97,7 +98,7 @@ internal fun KeyboardView.drawContent(canvas: Canvas) {
     drawZoom(canvas)
 }
 
-internal fun KeyboardView.isPressed(k: Key) = pointers.values.any { it.key === k && !it.consumed && !it.grass }
+internal fun KeyboardView.isPressed(k: Key) = pointers.values.any { it.key === k && !it.consumed }
 
 /** Draws one key: its pressed background, then its label or icon. */
 internal fun KeyboardView.drawKey(c: Canvas, k: Key, inBar: Boolean) {

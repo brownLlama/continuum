@@ -447,3 +447,26 @@ internal fun ContinuumIME.handleCursorMove(steps: Int) {
         ic.sendKeyEvent(KeyEvent(now, now, KeyEvent.ACTION_UP, key, 0, meta))
     }
 }
+
+/**
+ * The animal was carried up or down: the cursor moves [lines] lines, as arrow keys would, but not
+ * out of the text (an arrow key at its first or last line can leave the field for another one).
+ */
+internal fun ContinuumIME.handleCursorLines(lines: Int) {
+    if (queryEditor != null || lines == 0) return
+    val ic = editor() ?: return
+    finishComposing()
+    lastCommit = null
+    lastExpansion = null
+    autoSpace = false
+    deletedSlots = null
+    val up = lines < 0
+    val key = if (up) KeyEvent.KEYCODE_DPAD_UP else KeyEvent.KEYCODE_DPAD_DOWN
+    repeat(kotlin.math.abs(lines)) {
+        val room = if (up) ic.getTextBeforeCursor(1, 0) else ic.getTextAfterCursor(1, 0)
+        if (room.isNullOrEmpty()) return
+        val now = SystemClock.uptimeMillis()
+        ic.sendKeyEvent(KeyEvent(now, now, KeyEvent.ACTION_DOWN, key, 0))
+        ic.sendKeyEvent(KeyEvent(now, now, KeyEvent.ACTION_UP, key, 0))
+    }
+}

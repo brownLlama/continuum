@@ -29,8 +29,6 @@ import kotlin.math.roundToInt
 internal class Grass(private val unit: Float) : Sway {
     /** When the wind is sampled (uptime ms), or -1 for none: the grass stands still. */
     internal var windAt = -1L
-    /** While a finger slides the cursor along the grass: 1 (right) or -1 (left) leans it that way, 0 not at all. */
-    internal var push = 0
     private val src = Rect()
     private val dst = RectF()
     private var image: Bitmap? = null
@@ -64,17 +62,15 @@ internal class Grass(private val unit: Float) : Sway {
     fun draw(c: Canvas, width: Int, top: Float, height: Int, light: Boolean, background: Int) {
         if (width <= 0 || height <= 0) return
         val bmp = imageFor(width, height, light, background)
-        if (push == 0 && (windAt < 0 || !Wind.blowing(windAt))) c.drawBitmap(bmp, 0f, top, null) else drawSwaying(c, bmp, top)
+        if (!blowing) c.drawBitmap(bmp, 0f, top, null) else drawSwaying(c, bmp, top)
     }
 
     /** How far the wind moves the pixel in [col], [row] (0: the ground), in grass pixels; 0 when still. */
-    override fun at(col: Int, row: Int): Int {
-        if (push != 0) {
-            val h = row / (field.rows - 1f).coerceAtLeast(1f)
-            return push * (h * h * Wind.maxLean(field.rows)).roundToInt()
-        }
-        return if (windAt < 0) 0 else Wind.lean(col, row, field.columns, field.rows, windAt)
-    }
+    override fun at(col: Int, row: Int): Int =
+        if (windAt < 0) 0 else Wind.lean(col, row, field.columns, field.rows, windAt)
+
+    /** Whether the wind is moving the grass now. */
+    private val blowing get() = windAt >= 0 && Wind.blowing(windAt)
 
     /**
      * The grass with its rows (and each stretch of [Wind.SEGMENT] columns) moved by the wind: the
@@ -123,7 +119,19 @@ internal class Grass(private val unit: Float) : Sway {
         if (image == null) return
         val bottom = top + builtHeight
         for (col in maxOf(0, fromCol)..minOf(field.columns - 1, toCol)) {
-            if (!meadow.covers(col)) column(c, col, bottom) { field.frontAt(col, it) }
+            if (meadow.covers(col)) continue
+            if (!blowing) {
+                column(c, col, bottom) { field.frontAt(col, it) }
+                continue
+            }
+            // In the wind these tufts lean with the rest of the grass, a pixel at a time.
+            for (r in 0 until field.rows) {
+                val slot = field.frontAt(col, r)
+                if (slot == 0) continue
+                paint.color = colors[slot]
+                val left = (col + at(col, r)) * unit
+                c.drawRect(left, bottom - (r + 1) * unit, min(builtWidth.toFloat(), left + unit), bottom - r * unit, paint)
+            }
         }
     }
 
@@ -203,14 +211,13 @@ internal val KeyboardView.grassHeight: Int
 internal fun KeyboardView.drawGrass(c: Canvas) {
     val h = grassHeight
     if (h <= 0) return
-    // The wind blows only while the keyboard is showing, animations are on and no animal is visiting
-    // (the tufts drawn over it would not move with the grass); the system's battery saver stops it too.
+    // The wind blows only while the keyboard is showing and animations are on; the system's battery saver stops it too.
     val now = SystemClock.uptimeMillis()
-    val wind = animating && isShown && !animal.visiting && !(context.getSystemService(PowerManager::class.java)?.isPowerSaveMode ?: false)
+    val wind = animating && isShown && !(context.getSystemService(PowerManager::class.java)?.isPowerSaveMode ?: false)
     grass.windAt = if (wind) now else -1L
     grass.draw(c, width, grassBottom - h, h, theme.isLight, theme.background)
     meadow.fit(ceil(width / spritePx).toInt(), ceil(h / spritePx).toInt(), animalFeetRows())
-    meadow.draw(c, fill, spritePx, grassBottom, grass.petals, grass.centres, grass.stemColor, grass.leafColor, if (wind || grass.push != 0) grass else null)
+    meadow.draw(c, fill, spritePx, grassBottom, grass.petals, grass.centres, grass.stemColor, grass.leafColor, if (wind) grass else null)
     if (wind) scheduleWind(Wind.nextIn(now), h)
 }
 
@@ -227,7 +234,7 @@ private fun KeyboardView.scheduleWind(delay: Long, grassH: Int) {
 /** The tufts that stand in front of a visiting animal, drawn again over it (after it), so it walks through them. */
 internal fun KeyboardView.drawGrassFront(c: Canvas) {
     val h = grassHeight
-    if (h <= 0 || !animal.visiting) return
+    if (h <= 0 || !animal.visiting || animal.carried) return
     val from = animal.gridLeft
     grass.drawFront(c, grassBottom - h, from, from + Species.W - 1, meadow)
 }
@@ -235,10 +242,18 @@ internal fun KeyboardView.drawGrassFront(c: Canvas) {
 /** How many sprite pixels above the bottom of the grass the animals walk, so there is grass under their feet. */
 internal const val ANIMAL_FEET_ROWS = 3
 
-/** How many sprite pixels above the ground of the grass the animals' feet are: [ANIMAL_FEET_ROWS], or half in grass shorter than twice that. */
+/**
+ * How many sprite pixels above the ground of the grass the animal's feet are: it stands above
+ * Android's gesture bar (touches there are Android's), so its legs and belly are in the grass between
+ * that bar and the keys, where a finger can pick it up. At least [ANIMAL_FEET_ROWS], and never so high
+ * that the grass has no room above it for flowers.
+ */
 internal fun KeyboardView.animalFeetRows(): Int {
     val h = grassHeight
-    return if (h >= 2 * ANIMAL_FEET_ROWS * spritePx) ANIMAL_FEET_ROWS else (h / spritePx / 2).toInt()
+    if (h <= 0) return 0
+    val rows = (h / spritePx).toInt()
+    val above = ((systemBottom + dpu(GESTURE_BAR_MARGIN_DP)) / spritePx).roundToInt()
+    return maxOf(ANIMAL_FEET_ROWS, above).coerceAtMost(maxOf(ANIMAL_FEET_ROWS, rows - 8))
 }
 
 /**
