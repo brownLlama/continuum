@@ -7,7 +7,6 @@ import android.os.SystemClock
 import android.view.MotionEvent
 import com.brownllama.continuum.Prefs
 import com.brownllama.continuum.keyboard.TREE_EDGE_GAP_DP
-import com.brownllama.continuum.keyboard.TREE_HOLD_MS
 import com.brownllama.continuum.keyboard.Tree
 import com.brownllama.continuum.keyboard.grassBottom
 import com.brownllama.continuum.keyboard.grassTop
@@ -220,21 +219,34 @@ class TreeCursorTest {
         k.touch(MotionEvent.ACTION_DOWN, x, y, t)
         assertFalse("not picked up yet", k.view.tree.carried)
         k.touch(MotionEvent.ACTION_UP, x, y, t + 80)
-        k.wait(TREE_HOLD_MS + 100)
+        k.wait(400)
         assertFalse(k.view.tree.carried)
         assertEquals("a letter was typed", 6, k.text.length)
     }
 
-    @Test fun `over the keys a hold picks the tree up, and then it moves the cursor`() {
+    @Test fun `over the keys a hold is the key's hold, so its popup or zoom still opens, and the tree stays put`() {
         val k = keyboard().withTree("hello world")
         val (x, y) = k.onCrown()
         k.touch(MotionEvent.ACTION_DOWN, x, y)
-        k.wait(TREE_HOLD_MS + 60)
-        assertTrue("held", k.view.tree.carried)
-        k.moveBy(x, y, -28f, 0f)
-        assertEquals(4, k.edit.selectionStart)
-        k.touch(MotionEvent.ACTION_UP, x - 28f, y)
-        assertEquals("no letter was typed by the hold", "hello world", k.text)
+        k.wait(700)
+        assertFalse("the tree was not picked up", k.view.tree.carried)
+        assertTrue("the zoom of mini mode's letters opened, as anywhere else on the keys", k.view.zoom != null)
+        k.touch(MotionEvent.ACTION_UP, x, y)
+    }
+
+    @Test fun `the whole width of the tree's bottom picks it up, but nothing beside it`() {
+        val k = keyboard().withTree("hello world")
+        val t = k.view.tree
+        val y = k.offY + t.homeTop + t.height - 3f
+        // Near either side of the bottom, still in the grass.
+        k.touch(MotionEvent.ACTION_DOWN, t.homeLeft + 4f, y)
+        assertTrue(k.view.tree.carried)
+        k.touch(MotionEvent.ACTION_UP, t.homeLeft + 4f, y)
+        k.wait(500)
+        k.frame()
+        val t2 = k.view.tree
+        k.touch(MotionEvent.ACTION_DOWN, t2.homeLeft + t2.width + 60f, y)
+        assertFalse("well beside it is not the tree", k.view.tree.carried)
     }
 
     @Test fun `a swipe that starts on the tree over the keys is still the swipe`() {
@@ -244,7 +256,7 @@ class TreeCursorTest {
         k.touch(MotionEvent.ACTION_DOWN, x, y, t)
         for (i in 1..6) k.touch(MotionEvent.ACTION_MOVE, x - 20f * i, y, t + i * 10L)
         k.touch(MotionEvent.ACTION_UP, x - 120f, y, t + 80L)
-        k.wait(TREE_HOLD_MS + 100)
+        k.wait(400)
         assertFalse(k.view.tree.carried)
         assertEquals("hello ", k.text)
     }
@@ -256,7 +268,7 @@ class TreeCursorTest {
         assertFalse(k.view.tree.carried)
         k.touch(MotionEvent.ACTION_UP, 100f, y)
         k.touch(MotionEvent.ACTION_DOWN, 100f, k.offY + k.view.keyboardHeight * 0.5f)
-        k.wait(TREE_HOLD_MS + 100)
+        k.wait(400)
         assertFalse(k.view.tree.carried)
     }
 

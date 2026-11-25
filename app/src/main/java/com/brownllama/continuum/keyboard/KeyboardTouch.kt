@@ -55,7 +55,6 @@ internal fun KeyboardView.handleTouch(e: MotionEvent) {
             for (p in pointers.values) {
                 timer.removeCallbacks(p.longPress)
                 p.repeat?.let(timer::removeCallbacks)
-                timer.removeCallbacks(p.treeHold)
                 if (p.area == Area.TREE) dropTree()
             }
             pointers.clear()
@@ -97,8 +96,6 @@ internal fun KeyboardView.down(id: Int, x: Float, y: Float) {
             ?: Pointer(this, id, x, y, Area.GRID, null)
         else -> hitKey(keys, x, y)?.let { Pointer(this, id, x, y, Area.KEY, it) }
     } ?: return
-    // On the tree but over the keys (not backspace, which acts as the finger lands): the key's until held.
-    p.treeCandidate = p.area != Area.TREE && p.key?.kind != Kind.BACKSPACE && onTree(x, y)
     pointers[id] = p
     // A tick for a key or the letter row; not for the emoji / GIF / sticker grids, which scroll.
     if (p.area != Area.GRID) keyVibration.tap()
@@ -113,9 +110,6 @@ internal fun KeyboardView.down(id: Int, x: Float, y: Float) {
         }
         p.repeat = r
         timer.postDelayed(r, REPEAT_DELAY_MS)
-    } else if (p.treeCandidate) {
-        // On the tree over the keys: no zoom or long-press popup, only the hold that picks the tree up.
-        timer.postDelayed(p.treeHold, TREE_HOLD_MS)
     } else if (p.area != Area.GRID || panel == Panel.CLIPBOARD || panel == Panel.STICKERS) {
         // Clip cards and the user's stickers can be held (to delete them); emoji and GIFs can't.
         timer.postDelayed(p.longPress, holdMs)
@@ -260,7 +254,6 @@ internal fun KeyboardView.onLongPress(p: Pointer) {
 internal fun KeyboardView.release(p: Pointer) {
     pointers.remove(p.id)
     timer.removeCallbacks(p.longPress)
-    timer.removeCallbacks(p.treeHold)
     p.repeat?.let(timer::removeCallbacks)
     if (p.area == Area.TREE) {
         // Let go: the cursor stops where it is, and the tree falls from where it hangs.
@@ -320,9 +313,6 @@ internal fun KeyboardView.gesture(dx: Float, dy: Float, fromBar: Boolean) {
     }
 }
 
-/** Whether (x, y) is on the standing tree (and the tree can be picked up now). */
-internal fun KeyboardView.onTree(x: Float, y: Float) = !gifSearching && !panel.big && tree.hit(x, y, dpu(TREE_SLACK_DP), treeBase())
-
 /**
  * The finger carrying the tree moved: the tree follows it, and the cursor moves with it, one
  * character for each [CURSOR_STRIDE_DP] sideways and one line for each [CURSOR_LINE_DP] up or down.
@@ -373,12 +363,14 @@ internal fun KeyboardView.dropTree() {
 }
 
 /**
- * A finger landed on the tree where it stands over the grass, which has no keys: it is picked up at
- * once, and from then on carried by that finger. Over the keys the tree is picked up by a hold
- * ([onTreeHold]) instead. Returns the pointer, or null when the touch is not on the tree there.
+ * A finger landed on the bottom of the tree, the trunk and the part of it standing in the grass, where
+ * there are no keys: it is picked up at once, and from then on carried by that finger. The leafy part
+ * over the keys is only to look at: touches there go to the keys under it (taps, holds, swipes).
+ * Returns the pointer, or null when the touch is not on the tree's bottom.
  */
 internal fun KeyboardView.pickUpTree(id: Int, x: Float, y: Float): Pointer? {
-    if (y < keyboardHeight || !onTree(x, y)) return null
+    if (gifSearching || panel.big) return null
+    if (!tree.hit(x, y, dpu(TREE_SLACK_DP), keyboardHeight, treeBase())) return null
     return grabTree(id, x, y)
 }
 
@@ -390,14 +382,6 @@ private fun KeyboardView.grabTree(id: Int, x: Float, y: Float): Pointer {
     keyVibration.tap()
     postInvalidateOnAnimation()
     return p
-}
-
-/** A finger has held the tree over the keys for [TREE_HOLD_MS]: if it has not moved, the tree is picked up instead of the key. */
-internal fun KeyboardView.onTreeHold(p: Pointer) {
-    if (pointers[p.id] !== p || p.moved || p.longPressed || p.zooming || p.consumed || !onTree(p.x, p.y)) return
-    timer.removeCallbacks(p.longPress)
-    glows.removeAll { it.pointer === p }
-    pointers[p.id] = grabTree(p.id, p.x, p.y)
 }
 
 /** A finger lifted without swiping. */

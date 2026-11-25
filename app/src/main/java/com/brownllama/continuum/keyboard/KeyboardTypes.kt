@@ -80,9 +80,6 @@ internal class Pointer(private val view: KeyboardView, val id: Int, val downX: F
     /** Carrying the tree ([Area.TREE]): where the cursor was last moved a character ([cursorX]) or a line ([cursorY]). */
     var cursorX = downX
     var cursorY = downY
-    /** Landed on the tree over the keys: a quick tap is the key's, a hold of [TREE_HOLD_MS] picks the tree up ([onTreeHold]). */
-    var treeCandidate = false
-    val treeHold = Runnable { view.onTreeHold(this) }
     /** Backspace auto-repeat while held. */
     var repeat: Runnable? = null
 

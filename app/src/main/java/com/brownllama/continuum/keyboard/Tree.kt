@@ -20,8 +20,8 @@ import kotlin.math.sqrt
  * apples, branches, and a trunk that flares at the roots, all with the dark outline everything here
  * has. It is drawn a little see-through, so the keys behind it can still be read.
  *
- * It stands on the grass level above Android's gesture bar, first in the middle ([fit]). A finger
- * picks it up ([pickUp]) and it hangs below the finger ([carry]) until the finger lets go ([drop]);
+ * It stands on the grass level above Android's gesture bar, first in the middle ([fit]). A finger on
+ * its bottom, in the grass, picks it up ([pickUp]) and it hangs below the finger ([carry]) until the finger lets go ([drop]);
  * then it falls straight down from there and stands where it landed. Its picture is drawn once
  * into a bitmap for its size and colours, so a frame only copies that.
  */
@@ -53,7 +53,7 @@ internal class Tree(private val unit: Float) {
     /** Where the user put it down, as a share of the keyboard's width (null: not yet, so in the middle). */
     private var placed: Float? = null
 
-    /** The tree's pixels (colour slots), for [fit]'s size: what a finger can pick it up by. */
+    /** The tree's pixels (colour slots), for [fit]'s size. */
     private var grid = IntArray(0)
     private var image: Bitmap? = null
     private var builtKey = 0L
@@ -86,20 +86,13 @@ internal class Tree(private val unit: Float) {
     }
 
     /**
-     * Whether (x, y) is on the standing tree: on one of its pixels or within [slack] px of one, and
-     * above [to] (so not in Android's gesture bar). Where the tree stands over the keys it is what is
-     * touched, as it is what is seen.
+     * Whether (x, y) is on the bottom of the standing tree: within its width (widened by [slack] px) and
+     * between [from] (the top of the grass, where the keys end) and [to] (above Android's gesture bar). The
+     * crown over the keys is not for touching: it only shows. Not while it is held or falling.
      */
-    fun hit(x: Float, y: Float, slack: Float, to: Float): Boolean {
-        if (!present || carried || falling || y > to) return false
-        val near = (slack / unit).toInt() + 1
-        val col = ((x - homeLeft) / unit).toInt()
-        val row = ((y - homeTop) / unit).toInt()
-        for (r in row - near..row + near) for (c in col - near..col + near) {
-            if (r in 0 until rows && c in 0 until cols && grid[r * cols + c] != NONE) return true
-        }
-        return false
-    }
+    fun hit(x: Float, y: Float, slack: Float, from: Float, to: Float): Boolean =
+        present && !carried && !falling && y >= max(from, homeTop) && y <= to &&
+            x >= homeLeft - slack && x <= homeLeft + width + slack
 
     /** Picked up by a finger at ([x], [y]): it eases from where it stood to hang below the finger. */
     fun pickUp(x: Float, y: Float, now: Long) {
