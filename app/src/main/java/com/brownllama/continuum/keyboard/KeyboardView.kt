@@ -682,10 +682,8 @@ class KeyboardView(context: Context, internal val listener: Listener) : View(con
     internal var cursorFingerX = -1f
     internal var cursorFingerY = -1f
     internal val fireflies = Fireflies(spritePx)
-    /** Brightens whatever is drawn into the layer it is given to: the grass and the animals glow at night, as the tree does. */
-    internal val nightGlow = android.graphics.Paint().apply {
-        colorFilter = android.graphics.LightingColorFilter(0xFFFFFFFF.toInt(), NIGHT_GLOW_ADD)
-    }
+    /** The tree's light at night: a lamp beside the road, lighting the grass and the animal near it ([drawCursorMode]). */
+    internal val nightLight = NightLight()
     internal val cursorTimeout = Runnable { cursorModeIdle() }
 
     /** Turns the cursor mode on or off (the tree shows which); off by itself after a while without a touch. */

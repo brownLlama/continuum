@@ -260,8 +260,8 @@ internal fun KeyboardView.drawTree(c: Canvas) {
 /**
  * The cursor mode is night. One deep blue veil over the whole keyboard, from the top of the suggestion
  * bar to the bottom of the screen (the grass and the animals in it too, with no seam), hides all but a
- * little of it, a few stars come out, the tree glows, and so do the grass and the animal (drawn again
- * above the veil, brightened), and
+ * little of it, a few stars come out, the tree glows, and is a lamp: the grass and the animal are lit
+ * only by its light, in a pool round it that fades with distance (drawn again above the veil), and
  * fireflies drift about; sliding a finger, in any direction, brings them round it in a swirl and the
  * finger leaves sparks behind. It is drawn over everything. (How to use it is in the app's Guide.)
  */
@@ -280,15 +280,21 @@ internal fun KeyboardView.drawCursorMode(c: Canvas) {
         fill.color = ColorUtils.setAlphaComponent(0xFFFFFF, if (bright) 220 else 90)
         c.drawRect(sx, sy, sx + u, sy + u, fill)
     }
-    // The grass, its flowers, the animal and the tufts in front of it are drawn again above the night, lit up:
-    // the meadow glows, as the tree does, instead of going dark with the keys.
+    // The tree is the lamp: a warm haze round its apples, and the grass, the flowers and the animal are lit
+    // only where its light reaches (drawn again above the night, warmed, then faded out with distance).
+    val lampX = if (tree.present) tree.homeLeft + tree.width / 2f else width * 0.8f
+    val lampTop = if (tree.present) tree.homeTop + tree.height * 0.35f else keyboardHeight
+    nightLight.fit(lampX, treeBase(), lampTop, dpu(NIGHT_LIGHT_REACH_DP))
+    c.drawRect(0f, 0f, width.toFloat(), grassBottom, nightLight.halo)
     val glowTop = keyboardHeight - dpu(NIGHT_GLOW_RISE_DP)
-    val save = c.saveLayer(0f, glowTop, width.toFloat(), grassBottom, nightGlow)
+    val save = c.saveLayer(0f, glowTop, width.toFloat(), grassBottom, nightLight.layer)
     drawGrass(c)
     drawAnimal(c)
     drawGrassFront(c)
+    c.drawRect(0f, glowTop, width.toFloat(), grassBottom, nightLight.tint)
+    c.drawRect(0f, glowTop, width.toFloat(), grassBottom, nightLight.mask)
     c.restoreToCount(save)
-    // The tree, glowing, above that; then the fireflies above all.
+    // The tree itself, glowing with its apples, above all that; then the fireflies.
     drawTree(c)
     val down = pointers.values.any { it.area == Area.CURSOR }
     fireflies.step(now, down, cursorFingerX, cursorFingerY)

@@ -262,19 +262,28 @@ class TreeCursorTest {
         }
     }
 
-    @Test fun `at night the grass and the animal are drawn again above the veil, brightened, so they glow like the tree`() {
+    @Test fun `at night the tree is a lamp, and the grass and the animal are lit only in a pool of its light`() {
         val k = keyboard().withTree("hello")
         k.view.animal.start(com.brownllama.continuum.keyboard.Species.ALEX, k.view.width.toFloat(), k.view.treeBase(), SystemClock.uptimeMillis(), groundRows = 3)
         k.doubleTapTree()
         var glowLayers = 0
+        var masks = 0
+        var halos = 0
         val canvas = object : Canvas(Bitmap.createBitmap(1080, 700, Bitmap.Config.ARGB_8888)) {
             override fun saveLayer(left: Float, top: Float, right: Float, bottom: Float, paint: android.graphics.Paint?): Int {
                 if (paint?.colorFilter != null) glowLayers++
                 return super.saveLayer(left, top, right, bottom, paint)
             }
+            override fun drawRect(left: Float, top: Float, right: Float, bottom: Float, paint: android.graphics.Paint) {
+                if (paint.xfermode != null) masks++
+                if (paint.shader != null && paint.xfermode == null) halos++
+                super.drawRect(left, top, right, bottom, paint)
+            }
         }
         k.view.draw(canvas)
-        assertEquals("one brightened layer over the night", 1, glowLayers)
+        assertEquals("one lit layer over the night", 1, glowLayers)
+        assertEquals("cut away with the lamp's reach, so it fades with distance from the tree", 1, masks)
+        assertTrue("with a warm haze round the crown and a warm tint on the grass", halos >= 2)
         // Not at day.
         k.wait(CURSOR_MODE_TIMEOUT_MS + 500)
         assertFalse(k.view.cursorMode)

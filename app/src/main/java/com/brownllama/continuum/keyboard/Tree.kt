@@ -102,7 +102,26 @@ internal class Tree(private val unit: Float) {
         paint.colorFilter = if (active) glow else null
         // Whole screen pixels, so its own pixels stay crisp.
         c.drawBitmap(imageFor(theme), homeLeft + shake, homeTop, paint)
+        if (active) lanterns(c, homeLeft + shake)
         return next
+    }
+
+    /** At night the apples are lanterns: each a warm bright pixel with a soft cross of light round it. */
+    private fun lanterns(c: Canvas, left: Float) {
+        for (i in grid.indices) {
+            if (grid[i] != APPLE) continue
+            val x = left + (i % cols) * unit
+            val y = homeTop + (i / cols) * unit
+            paint.colorFilter = null
+            paint.color = 0x60FFC24A
+            c.drawRect(x - unit, y, x, y + unit, paint)
+            c.drawRect(x + unit, y, x + 2 * unit, y + unit, paint)
+            c.drawRect(x, y - unit, x + unit, y, paint)
+            c.drawRect(x, y + unit, x + unit, y + 2 * unit, paint)
+            paint.color = 0xE6FFE08A.toInt()
+            c.drawRect(x, y, x + unit, y + unit, paint)
+        }
+        paint.color = 0xFF000000.toInt()
     }
 
     /** The colours the tree is drawn in (the grass's greens, browns, apples and the outline). */
