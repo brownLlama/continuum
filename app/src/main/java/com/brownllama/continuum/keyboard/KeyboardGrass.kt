@@ -227,27 +227,28 @@ internal fun KeyboardView.drawGrass(c: Canvas) {
     meadow.fit(ceil(width / spritePx).toInt(), ceil(h / spritePx).toInt(), animalFeetRows())
     meadow.draw(c, fill, spritePx, grassBottom, grass.petals, grass.centres, grass.stemColor, grass.leafColor, if (wind) grass else null)
     if (wind) scheduleWind(Wind.nextIn(now), h)
-    drawTree(c, held = false)
 }
 
 /**
  * Where the tree stands: on the right of the grass, its base just above Android's gesture bar (swipes
- * there are Android's) and its top no higher than the keys; none where the grass is too short for it.
+ * there are Android's), rising [TREE_HEIGHT_DP] over the keys at the right (hiding them) but never into
+ * the suggestion bar. None without grass, or where the grass leaves no ground for it above the bar.
  */
 internal fun KeyboardView.fitTree(grassH: Int = grassHeight) {
-    if (grassH <= 0) return tree.fit(0f, 0f, 0f, 0f)
-    tree.fit(width.toFloat(), treeBase(), grassTop, dpu(TREE_RIGHT_GAP_DP))
+    val base = treeBase()
+    if (grassH <= 0 || base < grassTop + 2 * spritePx) return tree.fit(0f, 0f, 0f, 0f, 0)
+    tree.fit(width.toFloat(), base, barH + dpu(4f), dpu(TREE_RIGHT_GAP_DP), (dpu(TREE_HEIGHT_DP) / spritePx).roundToInt())
 }
 
 /** The bottom of the tree, and of the part of the grass a finger can pick it up from (keyboard coordinates). */
 internal fun KeyboardView.treeBase() = grassBottom - systemBottom - dpu(GESTURE_BAR_MARGIN_DP)
 
 /**
- * The tree: standing in the grass ([held] false, drawn before the animals) or, while a finger carries it
+ * The tree: standing in the grass ([held] false, drawn over the keys, before the animals) or, while a finger carries it
  * or it slides home ([held] true, drawn last, over the keys). It redraws only while it slides.
  */
 internal fun KeyboardView.drawTree(c: Canvas, held: Boolean) {
-    if (!tree.present || held != (tree.carried || tree.returning)) return
+    if (!tree.present || panel.big || gifSearching || held != (tree.carried || tree.returning)) return
     val next = tree.draw(c, SystemClock.uptimeMillis(), grass.treePalette())
     if (next >= 0) postInvalidateOnAnimation()
 }

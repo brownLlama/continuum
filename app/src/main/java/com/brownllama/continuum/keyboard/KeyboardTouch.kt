@@ -339,13 +339,13 @@ internal fun KeyboardView.treeMove(p: Pointer, x: Float, y: Float) {
 }
 
 /**
- * A finger landed on the tree (in the grass between the keys and Android's gesture bar, where nothing
- * else is touched): it is picked up, and from then on carried by that finger. Returns the pointer, or
+ * A finger landed on the tree (anywhere on it, over the keys too, but not in Android's gesture bar):
+ * it is picked up, and from then on carried by that finger. Returns the pointer, or
  * null when the touch is not on the tree.
  */
 internal fun KeyboardView.pickUpTree(id: Int, x: Float, y: Float): Pointer? {
     if (gifSearching || panel.big) return null
-    if (!tree.hit(x, y, dpu(TREE_SLACK_DP), keyboardHeight, treeBase())) return null
+    if (!tree.hit(x, y, dpu(TREE_SLACK_DP), treeBase())) return null
     val p = Pointer(this, id, x, y, Area.TREE, null)
     p.cursorX = x
     p.cursorY = y

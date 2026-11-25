@@ -83,5 +83,7 @@ internal const val CURSOR_LINE_DP = 26f
 internal const val GESTURE_BAR_MARGIN_DP = 6f
 /** A finger this near (dp) the tree still picks it up. */
 internal const val TREE_SLACK_DP = 8f
+/** How tall the tree is, in dp (it rises over the keys). */
+internal const val TREE_HEIGHT_DP = 80f
 /** The tree stands this far (dp) from the right edge, clear of Android's back swipe. */
 internal const val TREE_RIGHT_GAP_DP = 30f

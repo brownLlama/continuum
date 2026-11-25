@@ -90,6 +90,7 @@ internal fun KeyboardView.drawContent(canvas: Canvas) {
     if (mode == Mode.MINI) {
         drawText(canvas, languageCode, slotCenter(25), letterRect.bottom - miniRowH * 0.12f, miniRowH * 0.3f, languageLabelColor(), regular)
     }
+    drawTree(canvas, held = false)
     drawAnimal(canvas)
     drawGrassFront(canvas)
     drawTree(canvas, held = true)

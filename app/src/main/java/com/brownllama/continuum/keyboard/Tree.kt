@@ -13,8 +13,9 @@ import kotlin.math.sqrt
 /**
  * A pixel tree in the grass, in the same chunky pixels ([unit] screen pixels each) as the grass and
  * the animals: a round leafy crown, a few red apples, and a trunk, with the dark outline everything
- * here has. It stands at the right of the grass, above Android's gesture bar, its top no higher than
- * the keys; the grass is only as tall as the setting says, so the tree is drawn to fit ([fit]).
+ * here has. It stands at the right of the grass, above Android's gesture bar, and is tall: it rises
+ * over the keys at the right, hiding them, as high as [fit] is asked for (but never over the
+ * suggestion bar).
  *
  * A finger picks it up ([pickUp]); it hangs from the finger ([carry]) until it is let go ([drop]),
  * and then it slides back to where it stands. Its picture is drawn once into a bitmap for its size and
@@ -42,6 +43,9 @@ internal class Tree(private val unit: Float) {
     private var carryX = 0f
     private var carryY = 0f
 
+    /** The tree's pixels (colour slots), for [fit]'s size: what a finger can pick it up by. */
+    private var grid = IntArray(0)
+
     private var image: Bitmap? = null
     private var builtKey = 0L
     private val paint = Paint()
@@ -52,13 +56,17 @@ internal class Tree(private val unit: Float) {
 
     /**
      * Places the tree for a keyboard [viewWidth] wide: its base at [baseY] (just above Android's
-     * gesture bar), no higher than [topLimit] (the bottom of the keys), [rightGap] px from the right edge.
+     * gesture bar), [wantRows] sprite pixels tall if it can be, but no higher than [topLimit], and
+     * [rightGap] px from the right edge.
      */
-    fun fit(viewWidth: Float, baseY: Float, topLimit: Float, rightGap: Float) {
-        val fits = ((baseY - topLimit) / unit).toInt().coerceAtMost(MAX_ROWS)
+    fun fit(viewWidth: Float, baseY: Float, topLimit: Float, rightGap: Float, wantRows: Int) {
+        val fits = ((baseY - topLimit) / unit).toInt().coerceAtMost(wantRows)
         val r = if (fits >= MIN_ROWS) fits else 0
         val c = if (r == 0) 0 else crownWidth(r)
-        if (r != rows || c != cols) image = null
+        if (r != rows || c != cols) {
+            image = null
+            grid = if (r == 0) IntArray(0) else build(r, c)
+        }
         rows = r
         cols = c
         if (r == 0) return
@@ -66,10 +74,21 @@ internal class Tree(private val unit: Float) {
         homeTop = kotlin.math.ceil((baseY - r * unit) / unit) * unit
     }
 
-    /** Whether (x, y) is on the standing tree, widened by [slack] px, and within [from]..[to] (so not over the keys or the gesture bar). */
-    fun hit(x: Float, y: Float, slack: Float, from: Float, to: Float): Boolean =
-        present && !carried && !returning && x >= homeLeft - slack && x <= homeLeft + width + slack &&
-            y >= max(homeTop, from) && y <= min(homeTop + height + slack, to)
+    /**
+     * Whether (x, y) is on the standing tree: on one of its pixels or within [slack] px of one, and
+     * above [to] (so not in Android's gesture bar). Where the tree stands over the keys it is what is
+     * touched, as it is what is seen.
+     */
+    fun hit(x: Float, y: Float, slack: Float, to: Float): Boolean {
+        if (!present || carried || returning || y > to) return false
+        val near = (slack / unit).toInt() + 1
+        val col = ((x - homeLeft) / unit).toInt()
+        val row = ((y - homeTop) / unit).toInt()
+        for (r in row - near..row + near) for (c in col - near..col + near) {
+            if (r in 0 until rows && c in 0 until cols && grid[r * cols + c] != NONE) return true
+        }
+        return false
+    }
 
     fun pickUp(x: Float, y: Float) {
         carried = true
@@ -157,7 +176,6 @@ internal class Tree(private val unit: Float) {
         /** What [draw] returns when nothing needs redrawing until something happens. */
         const val REST = -2L
         const val MIN_ROWS = 8
-        const val MAX_ROWS = 18
         private const val BACK_MS = 220L
         /** Where on the tree the finger holds it (0 top .. 1 base). */
         private const val HELD_AT = 0.55f

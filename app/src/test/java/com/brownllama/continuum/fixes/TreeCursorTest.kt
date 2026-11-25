@@ -64,23 +64,25 @@ class TreeCursorTest {
         idle()
     }
 
-    @Test fun `a tree stands at the right of the grass, inside it and above Android's gesture bar`() {
+    @Test fun `a tall tree stands at the right of the grass, above Android's gesture bar, rising over the keys`() {
         for (bar in listOf(0, 66)) {
             val k = keyboard(bar = bar).withTree("hello")
             val v = k.view
             val t = v.tree
             assertTrue("bar $bar: a tree fits", t.present)
-            assertTrue("its top is no higher than the keys", t.homeTop >= v.grassTop - 0.5f)
+            assertTrue("it rises over the keys, not just the grass", t.homeTop < v.grassTop - 10f)
+            assertTrue("but not into the suggestion bar", t.homeTop >= v.barH)
             assertTrue("its base is above the gesture bar", t.homeTop + t.height <= v.grassBottom - bar + 0.5f)
-            assertEquals("its base is where the grass can be touched", v.treeBase(), t.homeTop + t.height, v.spritePx)
+            assertEquals("its base is where it can be touched", v.treeBase(), t.homeTop + t.height, v.spritePx)
             assertTrue("on the right", t.homeLeft > v.width * 0.7f)
             assertTrue("clear of the screen edge", t.homeLeft + t.width < v.width)
+            assertTrue("about 80 dp tall, as far as there is room", t.height >= 40f * k.context.resources.displayMetrics.density)
         }
     }
 
     @Test fun `with no grass, or too little, there is no tree`() {
         assertFalse(keyboard(space = 0).withTree("hello").view.tree.present)
-        assertFalse(keyboard(space = 6).withTree("hello").view.tree.present)
+        assertFalse("no ground above the gesture bar", keyboard(space = 2, bar = 66).withTree("hello").view.tree.present)
     }
 
     @Test fun `picking the tree up and dragging it sideways moves the cursor, and letting go stops it`() {
@@ -130,16 +132,26 @@ class TreeCursorTest {
         assertEquals("one\ntwo\nthree", k.text)
     }
 
-    @Test fun `a touch anywhere else on the grass or on the keys is not the tree`() {
+    @Test fun `the tree is picked up by its crown over the keys too`() {
         val k = keyboard().withTree("hello world")
-        val (x, y) = k.onTree()
-        // Far to the left in the grass, and over the keys above the tree.
+        val t = k.view.tree
+        val x = t.homeLeft + t.width / 2f
+        val y = k.view.overlayH + k.view.gifHeaderH + t.homeTop + t.height * 0.3f
+        assertTrue("that spot is over the keys", t.homeTop + t.height * 0.3f < k.view.grassTop)
+        k.touch(MotionEvent.ACTION_DOWN, x, y)
+        assertTrue(k.view.tree.carried)
+    }
+
+    @Test fun `a touch away from the tree is not the tree`() {
+        val k = keyboard().withTree("hello world")
+        val (_, y) = k.onTree()
+        // Far to the left in the grass, and over the keys at the left.
         k.touch(MotionEvent.ACTION_DOWN, 100f, y)
         assertFalse(k.view.tree.carried)
         k.touch(MotionEvent.ACTION_UP, 100f, y)
-        k.touch(MotionEvent.ACTION_DOWN, x, k.view.overlayH + k.view.keyboardHeight * 0.5f)
+        k.touch(MotionEvent.ACTION_DOWN, 100f, k.view.overlayH + k.view.keyboardHeight * 0.5f)
         assertFalse(k.view.tree.carried)
-        k.touch(MotionEvent.ACTION_UP, x, k.view.overlayH + k.view.keyboardHeight * 0.5f)
+        k.touch(MotionEvent.ACTION_UP, 100f, k.view.overlayH + k.view.keyboardHeight * 0.5f)
     }
 
     @Test fun `a swipe on the keys is the swipe it always was`() {
@@ -170,7 +182,7 @@ class TreeCursorTest {
     }
 
     @Test fun `the tree's picture is round, outlined and has a trunk, at every size`() {
-        for (rows in Tree.MIN_ROWS..Tree.MAX_ROWS) {
+        for (rows in Tree.MIN_ROWS..40) {
             val cols = Tree.crownWidth(rows)
             val g = Tree.build(rows, cols)
             assertTrue("rows $rows: leaves", g.any { it == Tree.MID })
