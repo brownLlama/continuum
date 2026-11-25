@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import com.brownllama.continuum.keyboard.Animal
 import com.brownllama.continuum.keyboard.Flower
+import com.brownllama.continuum.keyboard.GrassField
 import com.brownllama.continuum.keyboard.Meadow
 import com.brownllama.continuum.keyboard.Species
 import com.brownllama.continuum.keyboard.animalFeet
@@ -140,5 +141,34 @@ class MeadowTest {
         v.drawGrassFront(c)
         // And the flowers grew in the grass that was drawn.
         assertTrue(v.meadow.flowers.isNotEmpty())
+    }
+
+    @Test fun `the grass covers the ground, and what stands in front of an animal is the grass as drawn`() {
+        for ((columns, rows) in listOf(180 to 15, 540 to 8, 200 to 20, 180 to 1, 3 to 3)) {
+            val f = GrassField(columns, rows)
+            for (c in 0 until columns) {
+                assertTrue("$columns×$rows: nothing on the ground in column $c", f.at(c, 0) != 0)
+                for (r in 0 until rows) {
+                    val front = f.frontAt(c, r)
+                    // Drawn again over an animal, it must look exactly as the grass behind did.
+                    if (front != 0) assertEquals("$columns×$rows at $c,$r", f.at(c, r), front)
+                    // The outline only goes round blades, as round the animals.
+                    if (f.at(c, r) == GrassField.OUTLINE) {
+                        val beside = listOf(c - 1 to r, c + 1 to r, c to r - 1)
+                            .any { (x, y) -> f.at(x, y) != 0 && f.at(x, y) != GrassField.OUTLINE }
+                        assertTrue("$columns×$rows: outline at $c,$r beside no blade", beside)
+                    }
+                }
+            }
+        }
+    }
+
+    @Test fun `the tufts in front of an animal stand higher than its legs, over its body`() {
+        // A phone's default grass: 15 pixels, the animals' feet 3 up, their legs about 4 more.
+        val f = GrassField(180, 15)
+        val top = (0 until 180).maxOf { c -> (0 until 15).lastOrNull { f.frontAt(c, it) != 0 } ?: -1 }
+        assertTrue("front tufts reach row $top", top >= 3 + 4 + 3)
+        val share = (0 until 180).count { f.hasFront(it) }
+        assertTrue("$share of 180 columns have grass in front: some, not all", share in 180 / 5..180 * 4 / 5)
     }
 }
