@@ -666,6 +666,9 @@ class KeyboardView(context: Context, internal val listener: Listener) : View(con
     internal val meadow = Meadow()
     internal val animal = Animal(spritePx).also { it.meadow = meadow }
     internal val animalCheck = Runnable { maybeStartAnimal() }
+    /** The wind's next frame: redraws only the grass's strip ([windDirty]). */
+    internal val windDirty = android.graphics.Rect()
+    internal val windTick = Runnable { if (isShown) invalidate(windDirty) }
     /** The grass under the keys, where the animals walk ([drawGrass], [drawGrassFront], [animalFeet]). */
     internal val grass = Grass(spritePx)
     internal var lastTouchAt = 0L
@@ -709,6 +712,7 @@ class KeyboardView(context: Context, internal val listener: Listener) : View(con
     override fun onDetachedFromWindow() {
         super.onDetachedFromWindow()
         endAnimal(cancel = true)
+        timer.removeCallbacks(windTick)
         for (p in pointers.values) {
             timer.removeCallbacks(p.longPress)
             p.repeat?.let(timer::removeCallbacks)

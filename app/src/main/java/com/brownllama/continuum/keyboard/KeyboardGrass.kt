@@ -3,7 +3,11 @@ package com.brownllama.continuum.keyboard
 
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.os.PowerManager
+import android.os.SystemClock
 import android.graphics.Paint
+import android.graphics.Rect
+import android.graphics.RectF
 import androidx.core.graphics.ColorUtils
 import androidx.core.graphics.createBitmap
 import com.brownllama.continuum.prediction.Mode
@@ -22,7 +26,11 @@ import kotlin.math.roundToInt
  * nothing moves. The tufts that stand in front of a passing animal are drawn again over it
  * ([drawFront]), so it walks through the grass there, its body hidden behind them.
  */
-internal class Grass(private val unit: Float) {
+internal class Grass(private val unit: Float) : Sway {
+    /** When the wind is sampled (uptime ms), or -1 for none: the grass stands still. */
+    internal var windAt = -1L
+    private val src = Rect()
+    private val dst = RectF()
     private var image: Bitmap? = null
     private var builtLight = false
     private var builtBackground = 0
@@ -53,7 +61,50 @@ internal class Grass(private val unit: Float) {
     /** Draws the grass [width] × [height] px with its top at [top], in the greens for a [light] or dark [background]. */
     fun draw(c: Canvas, width: Int, top: Float, height: Int, light: Boolean, background: Int) {
         if (width <= 0 || height <= 0) return
-        c.drawBitmap(imageFor(width, height, light, background), 0f, top, null)
+        val bmp = imageFor(width, height, light, background)
+        if (windAt < 0 || !Wind.blowing(windAt)) c.drawBitmap(bmp, 0f, top, null) else drawSwaying(c, bmp, top)
+    }
+
+    /** How far the wind moves the pixel in [col], [row] (0: the ground), in grass pixels; 0 when still. */
+    override fun at(col: Int, row: Int): Int =
+        if (windAt < 0) 0 else Wind.lean(col, row, field.columns, field.rows, windAt)
+
+    /**
+     * The grass with its rows (and each stretch of [Wind.SEGMENT] columns) moved by the wind: the
+     * same bitmap drawn in strips, each read from a little to the side, so nothing is allocated or
+     * rebuilt. The strips tile the width, so no gap opens, whichever way a neighbour leans.
+     */
+    private fun drawSwaying(c: Canvas, bmp: Bitmap, top: Float) {
+        val w = bmp.width
+        val segW = Wind.SEGMENT * unit
+        var seg = 0
+        while (seg * segW < w) {
+            val x0 = seg * segW
+            val x1 = min(w.toFloat(), x0 + segW)
+            val col = seg * Wind.SEGMENT
+            var r = field.rows - 1
+            while (r >= 0) {
+                val shift = at(col, r)
+                var low = r
+                while (low > 0 && at(col, low - 1) == shift) low--
+                // Rows low..r, measured up from the bottom of the bitmap.
+                val yTop = maxOf(0f, bmp.height - (r + 1) * unit)
+                val yBottom = bmp.height - low * unit
+                var sx0 = x0 - shift * unit
+                var sx1 = x1 - shift * unit
+                var dx0 = x0
+                var dx1 = x1
+                if (sx0 < 0f) { dx0 -= sx0; sx0 = 0f }
+                if (sx1 > w) { dx1 -= sx1 - w; sx1 = w.toFloat() }
+                if (dx1 > dx0 && yBottom > yTop) {
+                    src.set(sx0.roundToInt(), yTop.roundToInt(), sx1.roundToInt(), yBottom.roundToInt())
+                    dst.set(dx0, top + yTop, dx1, top + yBottom)
+                    c.drawBitmap(bmp, src, dst, null)
+                }
+                r = low - 1
+            }
+            seg++
+        }
     }
 
     /**
@@ -145,9 +196,25 @@ internal val KeyboardView.grassHeight: Int
 internal fun KeyboardView.drawGrass(c: Canvas) {
     val h = grassHeight
     if (h <= 0) return
+    // The wind blows only while the keyboard is showing, animations are on and no animal is visiting
+    // (the tufts drawn over it would not move with the grass); the system's battery saver stops it too.
+    val now = SystemClock.uptimeMillis()
+    val wind = animating && isShown && !animal.visiting && !(context.getSystemService(PowerManager::class.java)?.isPowerSaveMode ?: false)
+    grass.windAt = if (wind) now else -1L
     grass.draw(c, width, grassBottom - h, h, theme.isLight, theme.background)
     meadow.fit(ceil(width / spritePx).toInt(), ceil(h / spritePx).toInt(), animalFeetRows())
-    meadow.draw(c, fill, spritePx, grassBottom, grass.petals, grass.centres, grass.stemColor, grass.leafColor)
+    meadow.draw(c, fill, spritePx, grassBottom, grass.petals, grass.centres, grass.stemColor, grass.leafColor, if (wind) grass else null)
+    if (wind) scheduleWind(Wind.nextIn(now), h)
+}
+
+/**
+ * Redraws just the grass's strip after [delay] ms: one pending redraw at most (a new one replaces
+ * the old), so typing, which draws often, cannot pile up redraws. Nothing is scheduled while still.
+ */
+private fun KeyboardView.scheduleWind(delay: Long, grassH: Int) {
+    timer.removeCallbacks(windTick)
+    windDirty.set(0, (overlayH + gifHeaderH + grassBottom - grassH).toInt(), width, height)
+    timer.postDelayed(windTick, delay)
 }
 
 /** The tufts that stand in front of a visiting animal, drawn again over it (after it), so it walks through them. */

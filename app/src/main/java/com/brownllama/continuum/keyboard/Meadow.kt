@@ -92,11 +92,12 @@ internal class Meadow(private val random: Random = Random.Default) {
      * Draws the flowers on grass whose ground is at [bottom], [unit] px per pixel: petals and centres
      * in [petals] and [centres] by kind, stems in [stem] and leaves in [leaf].
      */
-    fun draw(c: Canvas, paint: Paint, unit: Float, bottom: Float, petals: IntArray, centres: IntArray, stem: Int, leaf: Int) {
+    fun draw(c: Canvas, paint: Paint, unit: Float, bottom: Float, petals: IntArray, centres: IntArray, stem: Int, leaf: Int, sway: Sway? = null) {
         fun pixel(col: Int, row: Int, color: Int, rows: Int = 1) {
             if (rows <= 0) return
             paint.color = color
-            c.drawRect(col * unit, bottom - (row + rows) * unit, (col + 1) * unit, bottom - row * unit, paint)
+            val x = (col + (sway?.at(col, row) ?: 0)) * unit
+            c.drawRect(x, bottom - (row + rows) * unit, x + unit, bottom - row * unit, paint)
         }
         for (f in flowers) {
             if (f.gone) continue
