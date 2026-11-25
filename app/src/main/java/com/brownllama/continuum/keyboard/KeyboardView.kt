@@ -180,11 +180,12 @@ class KeyboardView(context: Context, internal val listener: Listener) : View(con
     var barScale = 1f
         set(value) { if (field != value) { field = value; requestLayout(); relayout() } }
     /**
-     * Space between the keys and whatever system bar is under them (settings slider). From Android 15
-     * the IME window is edge-to-edge, so the bars' own height is added separately ([systemBottom]).
+     * Space between the keys and whatever system bar is under them (settings slider), filled with
+     * grass as tall as the space ([Grass]; 0: no space, no grass). From Android 15 the IME window is
+     * edge-to-edge, so the bars' own height is added separately ([systemBottom]).
      */
     var bottomSpaceDp = Prefs.BOTTOM_SPACE_DEFAULT.toFloat()
-        set(value) { if (field != value) { field = value; requestLayout() } }
+        set(value) { if (field != value) { field = value; requestLayout(); invalidate() } }
     /**
      * Height in px of the system bars still showing under the keyboard: the gesture handle or
      * navigation buttons, and Android 16's keyboard buttons unless "Hide system buttons" hid them.
@@ -661,6 +662,8 @@ class KeyboardView(context: Context, internal val listener: Listener) : View(con
     /** 2 dp per sprite pixel, in whole screen pixels so it stays crisp. */
     internal val animal = Animal(max(1f, (2f * density).roundToInt().toFloat()))
     internal val animalCheck = Runnable { maybeStartAnimal() }
+    /** The grass in the space under the keys ([drawGrass]). */
+    internal val grass = Grass(density)
     internal var lastTouchAt = 0L
 
     // ---- the language hint ------------------------------------------------------------------
@@ -778,6 +781,8 @@ class KeyboardView(context: Context, internal val listener: Listener) : View(con
         canvas.translate(0f, overlayH + header)
         fill.color = theme.background
         canvas.drawRect(0f, -header, width.toFloat(), height - overlayH - header, fill)
+        // The grass under the keys stays put while the content above it fades in.
+        drawGrass(canvas)
         // After a switch (letters / numbers / emoji / GIF) the new content fades in; after a switch
         // between mini and full mode it also rises a little into place, easing out.
         val fade = progress(panelChangedAt, fadeMs)
