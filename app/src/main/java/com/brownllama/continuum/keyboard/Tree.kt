@@ -20,7 +20,7 @@ import kotlin.math.sqrt
  * apples, branches, and a trunk that flares at the roots, all with the dark outline everything here
  * has. It is drawn a little see-through, so the keys behind it can still be read.
  *
- * It stands in the middle of the grass level above Android's gesture bar ([fit]). Its bottom, in the
+ * It stands at the right of the grass level above Android's gesture bar ([fit]). Its bottom, in the
  * grass, is the switch for the cursor mode: tapped twice it turns the mode on ([active]: it is drawn
  * solid and brighter) and tapped twice again it turns it off; a single tap only makes it shake
  * ([nudge]). Its leafy part over the keys only shows; touches there go to the keys. Its picture is
@@ -53,10 +53,11 @@ internal class Tree(private val unit: Float) {
     val height get() = rows * unit
 
     /**
-     * Places the tree for a keyboard [viewWidth] wide: in the middle, its base at [baseY] (just above
-     * Android's gesture bar), [wantRows] sprite pixels tall if it can be, but no higher than [topLimit].
+     * Places the tree for a keyboard [viewWidth] wide: at the right, [rightGap] px from the edge (clear
+     * of Android's back swipe), its base at [baseY] (just above Android's gesture bar), [wantRows] sprite
+     * pixels tall if it can be, but no higher than [topLimit].
      */
-    fun fit(viewWidth: Float, baseY: Float, topLimit: Float, wantRows: Int) {
+    fun fit(viewWidth: Float, baseY: Float, topLimit: Float, rightGap: Float, wantRows: Int) {
         val fits = ((baseY - topLimit) / unit).toInt().coerceAtMost(wantRows)
         val r = if (fits >= MIN_ROWS) fits else 0
         val c = if (r == 0) 0 else crownWidth(r)
@@ -67,7 +68,7 @@ internal class Tree(private val unit: Float) {
         rows = r
         cols = c
         if (r == 0) return
-        homeLeft = floor(((viewWidth - c * unit) / 2f) / unit) * unit
+        homeLeft = floor((viewWidth - rightGap - c * unit) / unit) * unit
         homeTop = ceil((baseY - r * unit) / unit) * unit
     }
 

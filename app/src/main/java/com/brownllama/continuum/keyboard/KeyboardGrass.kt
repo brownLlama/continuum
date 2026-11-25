@@ -234,14 +234,14 @@ internal fun KeyboardView.drawGrass(c: Canvas) {
 }
 
 /**
- * Where the tree stands: in the middle of the grass at first, its base just above Android's gesture bar (swipes
+ * Where the tree stands: at the right of the grass, its base just above Android's gesture bar (swipes
  * there are Android's), rising [TREE_HEIGHT_DP] over the keys (hiding them a little) but never into
  * the suggestion bar. None without grass, or where the grass leaves no ground for it above the bar.
  */
 internal fun KeyboardView.fitTree(grassH: Int = grassHeight) {
     val base = treeBase()
-    if (grassH <= 0 || base < grassTop + 2 * spritePx) return tree.fit(0f, 0f, 0f, 0)
-    tree.fit(width.toFloat(), base, barH + dpu(4f), (dpu(TREE_HEIGHT_DP) / spritePx).roundToInt())
+    if (grassH <= 0 || base < grassTop + 2 * spritePx) return tree.fit(0f, 0f, 0f, 0f, 0)
+    tree.fit(width.toFloat(), base, barH + dpu(4f), dpu(TREE_RIGHT_GAP_DP), (dpu(TREE_HEIGHT_DP) / spritePx).roundToInt())
 }
 
 /** The bottom of the tree, and of the part of the grass a finger can pick it up from (keyboard coordinates). */

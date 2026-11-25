@@ -672,7 +672,7 @@ class KeyboardView(context: Context, internal val listener: Listener) : View(con
     /** The flowers in the grass, which the animals eat. Random places; eaten ones regrow when the keyboard opens. */
     internal val meadow = Meadow()
     internal val animal = Animal(spritePx).also { it.meadow = meadow }
-    /** The tree in the middle of the grass: tapped twice it turns the cursor mode on and off ([treeTapped]). */
+    /** The tree at the right of the grass: tapped twice it turns the cursor mode on and off ([treeTapped]). */
     internal val tree = Tree(spritePx)
     /** The cursor mode: the keys are a trackpad, a finger sliding anywhere moves the cursor ([cursorMove]). */
     internal var cursorMode = false

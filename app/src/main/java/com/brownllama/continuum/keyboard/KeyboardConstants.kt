@@ -92,3 +92,5 @@ internal const val DOUBLE_TAP_MS = 400L
 internal const val TAP_MAX_MS = 300L
 /** The cursor mode turns itself off after this long (ms) with no finger on the keyboard. */
 internal const val CURSOR_MODE_TIMEOUT_MS = 6_000L
+/** The tree stands this far (dp) from the right edge, clear of Android's back swipe. */
+internal const val TREE_RIGHT_GAP_DP = 24f
