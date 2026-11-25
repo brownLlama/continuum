@@ -36,8 +36,20 @@ internal object Wind {
         val endMs get() = startMs + durationMs + sweepMs
     }
 
-    /** The gust of slot [k], or null if the slot is calm. */
+    /** The slot last asked about and its gust: a frame asks about the same slot over a thousand times, so it is worked out once. */
+    private var cachedSlot = Long.MIN_VALUE
+    private var cachedGust: Gust? = null
+
+    /** The gust of slot [k], or null if the slot is calm (drawing runs on the main thread only, so the memo needs no lock). */
     internal fun gust(k: Long): Gust? {
+        if (k != cachedSlot) {
+            cachedGust = makeGust(k)
+            cachedSlot = k
+        }
+        return cachedGust
+    }
+
+    private fun makeGust(k: Long): Gust? {
         fun n(salt: Int) = GrassField.noise((k xor (k ushr 32)).toInt(), 700 + salt)
         if (n(0) < CALM_SHARE) return null
         val duration = 1_600L + (n(1) * (MAX_GUST_MS - 1_600L)).toLong()

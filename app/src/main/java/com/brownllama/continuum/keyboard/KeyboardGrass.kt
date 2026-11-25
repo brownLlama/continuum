@@ -49,11 +49,13 @@ internal class Grass(private val unit: Float) : Sway {
     internal fun inFront(col: Int) = field.hasFront(col)
 
     /** The tree's colours: the grass's greens, a brown trunk, red apples and the grass's outline. */
-    internal fun treePalette() = Tree.Palette(
+    internal fun treePalette(): Tree.Palette = treePal ?: Tree.Palette(
         outline = colors[GrassField.OUTLINE], dark = colors[GrassField.BACK_GREEN], mid = colors[GrassField.MID_GREEN],
         light = colors[GrassField.LIGHT], highlight = colors[GrassField.HIGHLIGHT],
         trunk = 0xFF8A5A33.toInt(), trunkDark = 0xFF5E3B20.toInt(), trunkLight = 0xFFB07A4A.toInt(), apple = 0xFFD6303F.toInt(),
-    )
+    ).also { treePal = it }
+    /** Kept (and dropped when the colours change), so a frame allocates nothing for it. */
+    private var treePal: Tree.Palette? = null
 
     /** The flowers' stems and leaves, in the grass's own greens. */
     internal val stemColor get() = colors[GrassField.MID_GREEN]
@@ -150,6 +152,7 @@ internal class Grass(private val unit: Float) : Sway {
         val columns = ceil(width / unit).toInt()
         if (field.columns != columns || field.rows != rows) field = GrassField(columns, rows)
         colors = grassColors(light, background)
+        treePal = null
         petals = petalColors(light, background)
         centres = centreColors(light, background)
         val bmp = createBitmap(width, height)
