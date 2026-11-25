@@ -669,7 +669,7 @@ class KeyboardView(context: Context, internal val listener: Listener) : View(con
     /** The flowers in the grass, which the animals eat. Random places; eaten ones regrow when the keyboard opens. */
     internal val meadow = Meadow()
     internal val animal = Animal(spritePx).also { it.meadow = meadow }
-    /** The tree on the right of the grass: picked up and dragged to move the cursor ([pickUpTree], [treeMove]). */
+    /** The tree in the middle of the grass: picked up and dragged to move the cursor ([pickUpTree], [treeMove]). */
     internal val tree = Tree(spritePx)
     /** Cursor steps and lines the tree's finger has made since the last frame, sent to the editor together ([flushTreeCursor]). */
     internal var pendingSteps = 0

@@ -85,8 +85,6 @@ internal const val GESTURE_BAR_MARGIN_DP = 6f
 internal const val TREE_SLACK_DP = 8f
 /** How tall the tree is, in dp (it rises over the keys). */
 internal const val TREE_HEIGHT_DP = 60f
-/** The tree stands this far (dp) from the right edge, clear of Android's back swipe. */
-internal const val TREE_RIGHT_GAP_DP = 30f
 /** The tree stays this far (dp) from either edge of the keyboard wherever it is put down. */
 internal const val TREE_EDGE_GAP_DP = 12f
 /** Holding a finger on the tree over the keys this long picks it up; a quicker tap goes through to the key under it. */

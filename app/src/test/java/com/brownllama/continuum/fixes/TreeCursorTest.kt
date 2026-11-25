@@ -84,7 +84,7 @@ class TreeCursorTest {
         idle()
     }
 
-    @Test fun `a tall tree stands at the right of the grass, above Android's gesture bar, rising over the keys`() {
+    @Test fun `a tree stands in the middle of the grass, above Android's gesture bar, rising over the keys`() {
         for (bar in listOf(0, 66)) {
             val k = keyboard(bar = bar).withTree("hello")
             val v = k.view
@@ -94,7 +94,7 @@ class TreeCursorTest {
             assertTrue("but not into the suggestion bar", t.homeTop >= v.barH)
             assertTrue("its base is above the gesture bar", t.homeTop + t.height <= v.grassBottom - bar + 0.5f)
             assertEquals("its base is where it can be touched", v.treeBase(), t.homeTop + t.height, v.spritePx)
-            assertTrue("on the right", t.homeLeft > v.width * 0.7f)
+            assertEquals("in the middle", v.width / 2f, t.homeLeft + t.width / 2f, v.spritePx * 2)
             assertTrue("clear of the screen edge", t.homeLeft + t.width < v.width)
             assertTrue("about 60 dp tall, as far as there is room", t.height >= 40f * k.context.resources.displayMetrics.density)
         }
@@ -159,7 +159,7 @@ class TreeCursorTest {
         assertFalse("landed", t.falling)
         assertEquals("on the ground line", k.view.treeBase(), t.homeTop + t.height, k.view.spritePx)
         assertEquals("where it was let go", x - 400f, t.homeLeft + t.width / 2f, k.view.spritePx * 2)
-        assertTrue("not back at the right", t.homeLeft < k.view.width * 0.7f)
+        assertTrue("not back in the middle", t.homeLeft + t.width / 2f < k.view.width * 0.4f)
         // The cursor stopped: moving the finger now does nothing.
         k.touch(MotionEvent.ACTION_MOVE, x - 600f, y)
         k.wait(50)

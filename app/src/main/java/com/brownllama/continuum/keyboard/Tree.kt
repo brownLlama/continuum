@@ -20,7 +20,7 @@ import kotlin.math.sqrt
  * apples, branches, and a trunk that flares at the roots, all with the dark outline everything here
  * has. It is drawn a little see-through, so the keys behind it can still be read.
  *
- * It stands on the grass level above Android's gesture bar, first at the right ([fit]). A finger
+ * It stands on the grass level above Android's gesture bar, first in the middle ([fit]). A finger
  * picks it up ([pickUp]) and it hangs below the finger ([carry]) until the finger lets go ([drop]);
  * then it falls straight down from there and stands where it landed. Its picture is drawn once
  * into a bitmap for its size and colours, so a frame only copies that.
@@ -50,7 +50,7 @@ internal class Tree(private val unit: Float) {
     private var fallAt = 0L
     private var fromLeft = 0f
     private var fromTop = 0f
-    /** Where the user put it down, as a share of the keyboard's width (null: not yet, so at the right). */
+    /** Where the user put it down, as a share of the keyboard's width (null: not yet, so in the middle). */
     private var placed: Float? = null
 
     /** The tree's pixels (colour slots), for [fit]'s size: what a finger can pick it up by. */
@@ -65,11 +65,10 @@ internal class Tree(private val unit: Float) {
 
     /**
      * Places the tree for a keyboard [viewWidth] wide: its base at [baseY] (just above Android's
-     * gesture bar), [wantRows] sprite pixels tall if it can be, but no higher than [topLimit]. At the
-     * right, [rightGap] px from the edge, until it has been put down somewhere; always [edgeGap] px
-     * or more from either edge.
+     * gesture bar), [wantRows] sprite pixels tall if it can be, but no higher than [topLimit]. In the
+     * middle until it has been put down somewhere; always [edgeGap] px or more from either edge.
      */
-    fun fit(viewWidth: Float, baseY: Float, topLimit: Float, rightGap: Float, edgeGap: Float, wantRows: Int) {
+    fun fit(viewWidth: Float, baseY: Float, topLimit: Float, edgeGap: Float, wantRows: Int) {
         val fits = ((baseY - topLimit) / unit).toInt().coerceAtMost(wantRows)
         val r = if (fits >= MIN_ROWS) fits else 0
         val c = if (r == 0) 0 else crownWidth(r)
@@ -80,7 +79,7 @@ internal class Tree(private val unit: Float) {
         rows = r
         cols = c
         if (r == 0) return
-        val want = placed?.let { it * viewWidth } ?: (viewWidth - rightGap - c * unit)
+        val want = placed?.let { it * viewWidth } ?: ((viewWidth - c * unit) / 2f)
         homeLeft = floor(want.coerceIn(edgeGap, max(edgeGap, viewWidth - edgeGap - c * unit)) / unit) * unit
         if (!falling) homeTop = ceil((baseY - r * unit) / unit) * unit
         else homeTop = ceil((baseY - r * unit) / unit) * unit
