@@ -284,6 +284,9 @@ class TreeCursorTest {
         assertEquals("one lit layer over the night", 1, glowLayers)
         assertEquals("cut away with the lamp's reach, so it fades with distance from the tree", 1, masks)
         assertTrue("with a warm haze round the crown and a warm tint on the grass", halos >= 2)
+        val tree = k.view.tree
+        val lamp = tree.homeLeft + tree.width / 2f
+        assertEquals("the light reaches the far end of the keyboard, and fades out just there", maxOf(lamp, k.view.width - lamp), k.view.nightLight.reach, 1f)
         // Not at day.
         k.wait(CURSOR_MODE_TIMEOUT_MS + 500)
         assertFalse(k.view.cursorMode)

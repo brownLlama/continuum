@@ -284,7 +284,7 @@ internal fun KeyboardView.drawCursorMode(c: Canvas) {
     // only where its light reaches (drawn again above the night, warmed, then faded out with distance).
     val lampX = if (tree.present) tree.homeLeft + tree.width / 2f else width * 0.8f
     val lampTop = if (tree.present) tree.homeTop + tree.height * 0.35f else keyboardHeight
-    nightLight.fit(lampX, treeBase(), lampTop, dpu(NIGHT_LIGHT_REACH_DP))
+    nightLight.fit(lampX, treeBase(), lampTop, width.toFloat(), dpu(NIGHT_HAZE_REACH_DP))
     c.drawRect(0f, 0f, width.toFloat(), grassBottom, nightLight.halo)
     val glowTop = keyboardHeight - dpu(NIGHT_GLOW_RISE_DP)
     val save = c.saveLayer(0f, glowTop, width.toFloat(), grassBottom, nightLight.layer)
