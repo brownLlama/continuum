@@ -94,10 +94,9 @@ internal const val TAP_MAX_MS = 300L
 internal const val CURSOR_MODE_TIMEOUT_MS = 6_000L
 /** The tree stands this far (dp) from the right edge, clear of Android's back swipe. */
 internal const val TREE_RIGHT_GAP_DP = 24f
-/** The cursor mode is night: the veil's colour, how much of the bar and keys it hides (of 255), how much of the grass below, and the number of stars. */
+/** The cursor mode is night: the veil's colour, how much of everything under it it hides (of 255), and the number of stars. */
 internal const val NIGHT = 0xFF070B1E.toInt()
 internal const val CURSOR_VEIL_ALPHA = 232
-internal const val DUSK_ALPHA = 130
 internal const val STARS = 20
 /** The night redraws about this often (ms): 30 frames a second. */
 internal const val FIREFLY_FRAME_MS = 33L

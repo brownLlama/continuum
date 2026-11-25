@@ -241,7 +241,7 @@ class TreeCursorTest {
         assertFalse(k.view.cursorMode)
     }
 
-    @Test fun `in the cursor mode it is night, with a deep blue veil over the bar and the keys that hides all but a little`() {
+    @Test fun `in the cursor mode it is night all over, one deep blue veil from the suggestion bar to the bottom of the screen`() {
         for (mode in listOf("mini", "full")) {
             val k = keyboard(mode).withTree("hello")
             k.doubleTapTree()
@@ -257,8 +257,8 @@ class TreeCursorTest {
             assertTrue("$mode: a veil", night != null)
             assertEquals("$mode: it is night blue", NIGHT and 0xFFFFFF, night!!.third and 0xFFFFFF)
             assertEquals("$mode: it starts at the top of the suggestion bar", 0f, night.first, 0.5f)
-            assertEquals("$mode: and covers the keys", k.view.keyboardHeight, night.second, 0.5f)
-            assertTrue("$mode: the grass below is only dusk", veils.any { (it.third ushr 24) in 80..180 && it.first >= k.view.keyboardHeight - 0.5f })
+            assertEquals("$mode: and goes down to the bottom of the screen, grass and all, in one piece", k.view.grassBottom, night.second, 0.5f)
+            assertEquals("$mode: no second, lighter veil for the grass", 1, veils.count { (it.third and 0xFFFFFF) == (NIGHT and 0xFFFFFF) })
         }
     }
 
