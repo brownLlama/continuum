@@ -290,11 +290,11 @@
     </string-array>
     <!-- Visiting animals: names in the order of Species.ALL, values are Species.key. -->
     <string-array name="animal_names">
-        <item>Schibu (llama)</item>
-        <item>Alex (dog)</item>
-        <item>Schimba (leopard)</item>
-        <item>Nibu (sheep with the bell)</item>
-        <item>Scheepu (sheep in the green shirt)</item>
+        <item>Schibu</item>
+        <item>Alex</item>
+        <item>Schimba</item>
+        <item>Nibu</item>
+        <item>Scheepu</item>
     </string-array>
     <string-array name="animal_values" translatable="false">
         <item>schibu</item>
