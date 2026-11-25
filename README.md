@@ -175,7 +175,7 @@ The app deliberately does not download or install anything itself: that needs An
 <img src="docs/screenshots/settings.png" width="32%" align="right" alt="Settings home page">
 
 - **Appearance:** theme and layout (QWERTZ or QWERTY).
-- **Size & position:** separate heights for the mini keyboard, the full keyboard and the suggestion bar, plus the space under the keys. The keys always sit above Android's navigation bar or gesture handle. On Android 16+ you can hide Android's own keyboard buttons to get that space back. The pale gesture line is Android's own and can't be hidden by a keyboard; the keyboard keeps its keys above Android's gesture area instead.
+- **Size & position:** separate heights for the mini keyboard, the full keyboard and the suggestion bar, plus the space under the keys, which grows grass as tall as you set it (0 for none). The keys always sit above Android's navigation bar or gesture handle. On Android 16+ you can hide Android's own keyboard buttons to get that space back. The pale gesture line is Android's own and can't be hidden by a keyboard; the keyboard keeps its keys above Android's gesture area instead.
 - **Typing:** autocorrect, auto-capitalisation, press-and-hold time, key vibration (on or off, and its strength), and *Forget learned words*.
 - **Gestures:** swipe sensitivity, each slider explained.
 - **GIFs:** show or hide the emoji panel's GIF tab, and your KLIPY key.
