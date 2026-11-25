@@ -45,6 +45,10 @@ internal fun KeyboardView.startChoosing() {
     spotCopyX = left
     spotCutX = right
     spotY = fy
+    // The selection becomes a constellation: one star for about every three characters, in a pattern of its own.
+    val length = listener.selectionLength()
+    choiceStars = (length / 3 + 4).coerceIn(4, 9)
+    choiceSeed = length * 7 + 3
     fireflies.choose(left, fy, right, fy)
     selection = Selection.CHOOSING
     keyVibration.tap()
@@ -88,72 +92,106 @@ internal fun KeyboardView.performSelectionButton(cut: Boolean) {
     invalidate()
 }
 
-/** The two choices: a pixel icon and a label over each swarm of fireflies (copy: two sheets; cut: scissors that snip). */
+/**
+ * The two choices are constellations made from the selection (as many stars as it is long, up to nine, in a
+ * pattern of their own), with the fireflies circling each. Copy is a pair of twins: the same constellation
+ * twice, in pale blue, with an "=" between them. Cut is the same constellation split along a diagonal into
+ * two halves drifting apart, in red-orange, with a dotted slash through the gap; every couple of seconds a
+ * shooting star streaks along the slash.
+ */
 internal fun KeyboardView.drawSelectionChoices(c: Canvas) {
     if (selection != Selection.CHOOSING) return
     val now = SystemClock.uptimeMillis()
     val u = spritePx
-    val iconTop = spotY - 5 * u
-    // Copy: two sheets of paper, the front one over the back.
-    run {
-        val x0 = spotCopyX - 4.5f * u
-        fill.color = COPY_ICON
-        outline(c, x0 + 3 * u, iconTop, 6, 6, u)
-        fill.color = ColorUtils.setAlphaComponent(NIGHT, 255)
-        c.drawRect(x0, iconTop + 3 * u, x0 + 6 * u, iconTop + 9 * u, fill)
-        fill.color = COPY_ICON
-        outline(c, x0, iconTop + 3 * u, 6, 6, u)
-    }
-    // Cut: scissors, open for a moment and closed for a moment.
-    val open = (now / SNIP_MS) % 3L != 0L
-    fill.color = CUT_ICON
-    pixels(c, if (open) SCISSORS_OPEN else SCISSORS_CLOSED, spotCutX - 4.5f * u, iconTop, u)
+    val top = spotY - CONSTELLATION_H * u / 2f - u
+    // Copy: the twins.
+    val twinsLeft = spotCopyX - (2 * CONSTELLATION_W + TWIN_GAP) * u / 2f
+    constellation(c, twinsLeft, top, COPY_ICON, now, cut = false, shift = 0)
+    constellation(c, twinsLeft + (CONSTELLATION_W + TWIN_GAP) * u, top, COPY_ICON, now, cut = false, shift = 0)
+    fill.color = ColorUtils.setAlphaComponent(COPY_ICON, 230)
+    val eqX = twinsLeft + (CONSTELLATION_W + TWIN_GAP / 2f - 1) * u
+    c.drawRect(eqX, spotY - 2 * u, eqX + 2 * u, spotY - u, fill)
+    c.drawRect(eqX, spotY, eqX + 2 * u, spotY + u, fill)
+    // Cut: the one constellation, cut in two.
+    constellation(c, spotCutX - CONSTELLATION_W * u / 2f, top, CUT_ICON, now, cut = true, shift = 2)
     val size = dpu(12f)
-    drawText(c, resources.getString(android.R.string.copy), spotCopyX, spotY + 7 * u, size, COPY_ICON, regular)
-    drawText(c, resources.getString(android.R.string.cut), spotCutX, spotY + 7 * u, size, CUT_ICON, regular)
+    drawText(c, resources.getString(android.R.string.copy), spotCopyX, spotY + (CONSTELLATION_H / 2f + 3) * u, size, COPY_ICON, regular)
+    drawText(c, resources.getString(android.R.string.cut), spotCutX, spotY + (CONSTELLATION_H / 2f + 3) * u, size, CUT_ICON, regular)
 }
 
-/** A rectangle outline [w] × [h] sprite pixels, one pixel thick, with its top left at ([x], [y]). */
-private fun KeyboardView.outline(c: Canvas, x: Float, y: Float, w: Int, h: Int, u: Float) {
-    c.drawRect(x, y, x + w * u, y + u, fill)
-    c.drawRect(x, y + (h - 1) * u, x + w * u, y + h * u, fill)
-    c.drawRect(x, y, x + u, y + h * u, fill)
-    c.drawRect(x + (w - 1) * u, y, x + w * u, y + h * u, fill)
-}
-
-/** Pixel art: a rectangle for each '#', with the top left at ([x], [y]), [u] px a pixel. */
-private fun KeyboardView.pixels(c: Canvas, rows: Array<String>, x: Float, y: Float, u: Float) {
-    for ((r, row) in rows.withIndex()) {
-        var col = 0
-        while (col < row.length) {
-            if (row[col] != '#') { col++; continue }
-            var end = col
-            while (end < row.length && row[end] == '#') end++
-            c.drawRect(x + col * u, y + r * u, x + end * u, y + (r + 1) * u, fill)
-            col = end
+/**
+ * One constellation, [CONSTELLATION_W] × [CONSTELLATION_H] sprite pixels with its top left at ([left], [top]): the
+ * stars of [choiceStars] and [choiceSeed], each a bright pixel with a cross of light that twinkles, joined in
+ * order by one-pixel lines. If [cut], a diagonal slash from the bottom left to the top right splits it: the
+ * stars and lines on each side stay on their side (no line crosses it) and the two halves are [shift] pixels
+ * apart, a dotted slash between them, and a shooting star runs along it now and then.
+ */
+private fun KeyboardView.constellation(c: Canvas, left: Float, top: Float, color: Int, now: Long, cut: Boolean, shift: Int) {
+    val u = spritePx
+    val w = CONSTELLATION_W
+    val h = CONSTELLATION_H
+    val n = choiceStars
+    fun starX(i: Int) = (((i + 0.1f + 0.75f * GrassField.noise(choiceSeed + i, 401)) * (w - 1)) / n).toInt().coerceIn(0, w - 1)
+    fun starY(i: Int) = (GrassField.noise(choiceSeed + i, 402) * (h - 1)).toInt()
+    // Which side of the slash a cell is on: -1 above and left of it, 1 below and right of it.
+    fun side(x: Int, y: Int) = if (x * h + y * w < w * h) -1 else 1
+    fun dx(s: Int) = if (cut) s * shift * u else 0f
+    fun dy(s: Int) = if (cut) s * shift * u * 0.5f else 0f
+    // The lines between one star and the next, a pixel at a time (not across the slash).
+    fill.color = ColorUtils.setAlphaComponent(color, 110)
+    for (i in 0 until n - 1) {
+        var x0 = starX(i); var y0 = starY(i)
+        val x1 = starX(i + 1); val y1 = starY(i + 1)
+        val sx = if (x0 < x1) 1 else -1
+        val sy = if (y0 < y1) 1 else -1
+        val ddx = kotlin.math.abs(x1 - x0)
+        val ddy = -kotlin.math.abs(y1 - y0)
+        var err = ddx + ddy
+        val s0 = side(x0, y0)
+        while (true) {
+            if (!cut || side(x0, y0) == s0 && side(x1, y1) == s0) {
+                val s = if (cut) side(x0, y0) else 0
+                val px = left + x0 * u + dx(s)
+                val py = top + y0 * u + dy(s)
+                c.drawRect(px, py, px + u, py + u, fill)
+            }
+            if (x0 == x1 && y0 == y1) break
+            val e2 = 2 * err
+            if (e2 >= ddy) { err += ddy; x0 += sx }
+            if (e2 <= ddx) { err += ddx; y0 += sy }
+        }
+    }
+    // The stars, each twinkling at its own pace.
+    for (i in 0 until n) {
+        val s = if (cut) side(starX(i), starY(i)) else 0
+        val px = left + starX(i) * u + dx(s)
+        val py = top + starY(i) * u + dy(s)
+        val tw = kotlin.math.sin(now / 1000.0 * (2.0 + (i % 3)) + i * 1.7).let { 0.5 + 0.5 * it * it }
+        fill.color = ColorUtils.setAlphaComponent(color, (80 + 90 * tw).toInt())
+        c.drawRect(px - u, py, px, py + u, fill)
+        c.drawRect(px + u, py, px + 2 * u, py + u, fill)
+        c.drawRect(px, py - u, px + u, py, fill)
+        c.drawRect(px, py + u, px + u, py + 2 * u, fill)
+        fill.color = ColorUtils.setAlphaComponent(0xFFFFFF, (160 + 95 * tw).toInt())
+        c.drawRect(px, py, px + u, py + u, fill)
+    }
+    if (!cut) return
+    // The slash: dots along the diagonal from the bottom left to the top right, and now and then a shooting star.
+    val steps = maxOf(w, h)
+    fill.color = ColorUtils.setAlphaComponent(color, 190)
+    for (k in 0..steps step 2) {
+        val x = k * (w - 1) / steps
+        val y = (h - 1) - k * (h - 1) / steps
+        c.drawRect(left + x * u, top + y * u, left + (x + 1) * u, top + (y + 1) * u, fill)
+    }
+    val t = (now % SHOOT_PERIOD_MS).toFloat() / SHOOT_MS
+    if (t < 1f) {
+        for (tail in 0..5) {
+            val p = (t - tail * 0.05f).coerceIn(0f, 1f)
+            val x = (p * (w - 1)).toInt()
+            val y = ((h - 1) - p * (h - 1)).toInt()
+            fill.color = ColorUtils.setAlphaComponent(0xFFFFFF, 255 - tail * 42)
+            c.drawRect(left + x * u, top + y * u, left + (x + 1) * u, top + (y + 1) * u, fill)
         }
     }
 }
-
-private val SCISSORS_OPEN = arrayOf(
-    "#.......#",
-    ".#.....#.",
-    "..#...#..",
-    "...#.#...",
-    "....#....",
-    "...#.#...",
-    "..##.##..",
-    "..#...#..",
-    "..##.##..",
-)
-private val SCISSORS_CLOSED = arrayOf(
-    "....#....",
-    "....#....",
-    "....#....",
-    "....#....",
-    "....#....",
-    "...#.#...",
-    "..##.##..",
-    "..#...#..",
-    "..##.##..",
-)

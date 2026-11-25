@@ -97,7 +97,7 @@ class SelectionModeTest {
         assertFalse(k.view.fireflies.amber)
     }
 
-    @Test fun `a double tap that slides stretches the selection, both ways`() {
+    @Test fun `a double tap that slides stretches from the word, so right reaches past its end and left before its start and the word always stays`() {
         val k = keyboard().night("hello brave new world", 8)
         val (x, y) = k.spot()
         k.tapAt(x, y); k.wait(100)
@@ -105,12 +105,64 @@ class SelectionModeTest {
         for (i in 1..20) k.touch(MotionEvent.ACTION_MOVE, x + 1f * i, y) // 20 px: five characters
         k.wait(50)
         assertEquals("brave new ", k.text.substring(k.selected().first, k.selected().second))
-        for (i in 1..20) k.touch(MotionEvent.ACTION_MOVE, x + 20f - 4f * i, y) // 80 px back: past where it began
+        for (i in 1..10) k.touch(MotionEvent.ACTION_MOVE, x + 20f - 2f * i, y) // back 20 px: the word again
         k.wait(50)
-        // The fixed end is the start of "brave" (6): going left of it the selection grows to the left.
-        assertTrue("it grew the other way: ${k.selected()}", k.selected().first < 6 && k.selected().second == 6)
-        k.touch(MotionEvent.ACTION_UP, x - 60f, y)
+        assertEquals("brave", k.text.substring(k.selected().first, k.selected().second))
+        for (i in 1..20) k.touch(MotionEvent.ACTION_MOVE, x - 1f * i, y) // 20 px to the left of where it began: before the word
+        k.wait(50)
+        val sel = k.selected()
+        assertTrue("it reaches back before the word: $sel", sel.first < 6)
+        assertEquals("and the end of the word stays", 11, sel.second)
+        assertTrue("the word is inside it: " + k.text.substring(sel.first, sel.second), k.text.substring(sel.first, sel.second).endsWith("brave"))
+        k.touch(MotionEvent.ACTION_UP, x - 20f, y)
         assertEquals("hello brave new world", k.text)
+    }
+
+    @Test fun `sliding further left than the text goes stops at its start, and further right at its end`() {
+        val k = keyboard().night("hello brave new world", 8)
+        val (x, y) = k.spot()
+        k.tapAt(x, y); k.wait(100)
+        k.touch(MotionEvent.ACTION_DOWN, x, y)
+        for (i in 1..40) k.touch(MotionEvent.ACTION_MOVE, x - 10f * i, y)
+        k.wait(50)
+        assertEquals(0 to 11, k.selected())
+        for (i in 1..80) k.touch(MotionEvent.ACTION_MOVE, x - 400f + 12f * i, y)
+        k.wait(50)
+        assertEquals(6 to k.text.length, k.selected())
+        k.touch(MotionEvent.ACTION_UP, x + 400f, y)
+    }
+
+    @Test fun `sliding up or down while selecting stretches by lines with shift held, down the end and up the start, and sliding back shortens`() {
+        val k = keyboard().night("one\ntwo\nthree\nfour", 5)
+        val keys = ArrayList<Int>()
+        val real = k.ime.ic!!
+        k.ime.ic = object : android.view.inputmethod.InputConnectionWrapper(real, true) {
+            override fun sendKeyEvent(event: android.view.KeyEvent): Boolean {
+                if (event.action == android.view.KeyEvent.ACTION_DOWN) keys += event.keyCode
+                return super.sendKeyEvent(event)
+            }
+        }
+        val (x, y) = k.spot()
+        k.tapAt(x, y); k.wait(100)
+        k.touch(MotionEvent.ACTION_DOWN, x, y)
+        assertEquals("two", k.text.substring(k.selected().first, k.selected().second))
+        var at = y
+        fun slideTo(to: Float) {
+            for (i in 1..13) k.touch(MotionEvent.ACTION_MOVE, x, at + (to - at) * i / 13)
+            at = to
+            k.wait(50)
+        }
+        val shift = android.view.KeyEvent.KEYCODE_SHIFT_LEFT
+        slideTo(y + 26f) // a line down: the end goes down
+        assertEquals(listOf(shift, android.view.KeyEvent.KEYCODE_DPAD_DOWN), keys)
+        keys.clear()
+        slideTo(y) // back: the same end shortens
+        assertEquals(listOf(shift, android.view.KeyEvent.KEYCODE_DPAD_UP), keys)
+        keys.clear()
+        slideTo(y - 26f) // a line up from there: now the start goes up
+        assertEquals(listOf(shift, android.view.KeyEvent.KEYCODE_DPAD_UP), keys)
+        k.touch(MotionEvent.ACTION_UP, x, y - 26f)
+        assertEquals("one\ntwo\nthree\nfour", k.text)
     }
 
     @Test fun `a triple tap selects everything`() {
@@ -134,6 +186,25 @@ class SelectionModeTest {
         assertTrue("well apart", v.spotCutX - v.spotCopyX >= 100f)
         assertTrue("inside the screen", v.spotCopyX > 0f && v.spotCutX < v.width)
         k.frame() // and it draws
+    }
+
+    @Test fun `the choices are constellations made from the selection, more stars for more text`() {
+        val short = keyboard().night("hello brave new world", 8)
+        short.doubleTap()
+        short.wait(CHOOSE_DELAY_MS + 100)
+        assertEquals("five characters: five stars", 5, short.view.choiceStars)
+        val all = keyboard().night("hello brave new world, and a good deal more text to select in all", 8)
+        val (x, y) = all.spot()
+        all.tapAt(x, y); all.wait(80); all.tapAt(x, y); all.wait(80); all.tapAt(x, y)
+        all.wait(CHOOSE_DELAY_MS + 100)
+        assertEquals("a long selection: nine, the most", 9, all.view.choiceStars)
+        // They draw: lines and stars for each (the twins, and the cut one with its slash).
+        val rects = intArrayOf(0)
+        val canvas = object : Canvas(Bitmap.createBitmap(1080, 600, Bitmap.Config.ARGB_8888)) {
+            override fun drawRect(left: Float, top: Float, right: Float, bottom: Float, paint: android.graphics.Paint) { rects[0]++ }
+        }
+        all.view.draw(canvas)
+        assertTrue("many small rectangles: ${rects[0]}", rects[0] > 150)
     }
 
     @Test fun `the choices stay on the screen even when the finger lifted at its edge`() {

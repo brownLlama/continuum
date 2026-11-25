@@ -136,10 +136,17 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
     internal val saveLearned = Runnable { user.save() }
     /** Where the app says the cursor (or the ends of the selection) is, as the position in its text; -1 when unknown. */
     internal var selStart = -1
-    /** In the cursor mode, after a double tap: the selection has a fixed end ([selAnchor]) and an end the finger moves ([selFocus]); -1 when not selecting or not known. */
+    /**
+     * In the cursor mode, after a double tap: the selection started as a word ([selBaseStart]..[selBaseEnd]) and a
+     * slide stretches it from there: [selOff] characters (positive: past the word's end, negative: before its start),
+     * and [selUp] / [selDown] lines up from its start / down from its end. -1 when there is no base.
+     */
     internal var selecting = false
-    internal var selAnchor = -1
-    internal var selFocus = -1
+    internal var selBaseStart = -1
+    internal var selBaseEnd = -1
+    internal var selOff = 0
+    internal var selUp = 0
+    internal var selDown = 0
     internal var selEnd = -1
     @Volatile internal var decoder: Decoder? = null
     internal var dict: Dictionary? = null
@@ -526,6 +533,9 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
 
     /** Copy or cut the selection to the clipboard. */
     override fun onSelectionAction(cut: Boolean) = handleSelectionAction(cut)
+
+    /** How many characters are selected, for the picture of the selection ([KeyboardView.Listener.selectionLength]). */
+    override fun selectionLength() = if (selStart >= 0 && selEnd >= 0) kotlin.math.abs(selEnd - selStart) else 0
 
     /** The selecting is over. */
     override fun onSelectionEnd(collapse: Boolean) = handleSelectionEnd(collapse)

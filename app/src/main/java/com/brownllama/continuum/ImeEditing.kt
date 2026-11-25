@@ -423,7 +423,7 @@ internal fun ContinuumIME.handleCursorMove(steps: Int) {
     lastExpansion = null
     autoSpace = false
     deletedSlots = null
-    if (selecting) return stretchSelection(ic, steps)
+    if (selecting) return stretchSelection(steps)
     val left = steps < 0
     val n = kotlin.math.abs(steps)
     val span = selectionOf(ic)
@@ -470,18 +470,16 @@ internal fun ContinuumIME.handleCursorLines(lines: Int) {
     lastExpansion = null
     autoSpace = false
     deletedSlots = null
+    if (selecting) return stretchLines(ic, lines)
     val up = lines < 0
     val key = if (up) KeyEvent.KEYCODE_DPAD_UP else KeyEvent.KEYCODE_DPAD_DOWN
-    // While selecting, the arrow keys carry shift, so they stretch the selection a line at a time.
-    val meta = if (selecting) KeyEvent.META_SHIFT_ON or KeyEvent.META_SHIFT_LEFT_ON else 0
     repeat(kotlin.math.abs(lines)) {
         val room = if (up) ic.getTextBeforeCursor(1, 0) else ic.getTextAfterCursor(1, 0)
         if (room.isNullOrEmpty()) return@repeat
         val now = SystemClock.uptimeMillis()
-        ic.sendKeyEvent(KeyEvent(now, now, KeyEvent.ACTION_DOWN, key, 0, meta))
-        ic.sendKeyEvent(KeyEvent(now, now, KeyEvent.ACTION_UP, key, 0, meta))
+        ic.sendKeyEvent(KeyEvent(now, now, KeyEvent.ACTION_DOWN, key, 0))
+        ic.sendKeyEvent(KeyEvent(now, now, KeyEvent.ACTION_UP, key, 0))
     }
-    if (selecting) resyncSelection(ic)
 }
 
 /** Selecting a word: how many characters each side of the cursor are looked at. */
@@ -492,8 +490,9 @@ private fun inWord(c: Char) = c.isLetterOrDigit() || c == '\'' || c == '\u2019' 
 
 /**
  * A double tap in the cursor mode: selects the word the cursor is in or at the end of, else the one just
- * before it (skipping spaces and punctuation). Returns false when there is no word. The selection then has
- * a fixed end and an end the finger moves ([stretchSelection]).
+ * before it (skipping spaces and punctuation). Returns false when there is no word. The word is the base of
+ * the selection: a slide then stretches it from there ([stretchSelection], [stretchLines]), and the word
+ * always stays selected.
  */
 internal fun ContinuumIME.handleSelectWord(): Boolean {
     if (queryEditor != null) return false
@@ -507,7 +506,6 @@ internal fun ContinuumIME.handleSelectWord(): Boolean {
     val at = span.second
     // Where the cursor was, the word's letters before and after it.
     var before = ic.getTextBeforeCursor(WORD_SCAN, 0)?.toString().orEmpty()
-    if (span.first != span.second) before = "" // a selection already: look from its end
     var back = before.takeLastWhile(::inWord).length
     val ahead = ic.getTextAfterCursor(WORD_SCAN, 0)?.takeWhile(::inWord)?.length ?: 0
     var start = at - back
@@ -520,13 +518,19 @@ internal fun ContinuumIME.handleSelectWord(): Boolean {
         end = at - (before.length - skipped.length)
         start = end - back
     }
-    ic.setSelection(start, end)
+    setBase(ic, start, end)
     selecting = true
-    selAnchor = start
-    selFocus = end
+    return true
+}
+
+/** The selection is [start]..[end] and is the base that stretching starts from. */
+private fun ContinuumIME.setBase(ic: InputConnection, start: Int, end: Int) {
+    ic.setSelection(start, end)
+    selBaseStart = start
+    selBaseEnd = end
+    selOff = 0
     selStart = start
     selEnd = end
-    return true
 }
 
 /** A triple tap in the cursor mode: selects everything. */
@@ -538,39 +542,102 @@ internal fun ContinuumIME.handleSelectAll() {
     autoSpace = false
     ic.performContextMenuAction(android.R.id.selectAll)
     selecting = true
+    selUp = 0
+    selDown = 0
     resyncSelection(ic)
 }
 
-/** Reads the selection from the field into [selAnchor] and [selFocus] (which end the finger moves is not known: the end), or forgets them if the field does not say. */
+/**
+ * Takes the selection the field says it has as the new base (nothing is stretched yet from it), if it says; else
+ * what was last known stays.
+ */
 private fun ContinuumIME.resyncSelection(ic: InputConnection) {
     val ex = ic.getExtractedText(ExtractedTextRequest().apply { hintMaxChars = 2000 }, 0)
     if (ex != null && ex.selectionStart >= 0 && ex.selectionEnd >= 0) {
-        selAnchor = ex.startOffset + ex.selectionStart
-        selFocus = ex.startOffset + ex.selectionEnd
-        selStart = selAnchor
-        selEnd = selFocus
-    } else if (selStart >= 0 && selEnd >= 0 && !(selAnchor >= 0 && selFocus >= 0)) {
-        selAnchor = selStart
-        selFocus = selEnd
+        val a = ex.startOffset + ex.selectionStart
+        val b = ex.startOffset + ex.selectionEnd
+        selBaseStart = minOf(a, b)
+        selBaseEnd = maxOf(a, b)
+        selStart = selBaseStart
+        selEnd = selBaseEnd
+        selOff = 0
     }
 }
 
 /**
- * Sliding while selecting: the end the finger moves goes [steps] characters (negative: left), never out
- * of the text, and may cross the fixed end (the selection then grows the other way).
+ * Sliding sideways while selecting: from the word, to the right the selection reaches [steps] characters further
+ * past its end; to the left it reaches further before its start (sliding back shortens it again, never below
+ * the word). It stays inside the text.
  */
 private fun ContinuumIME.stretchSelection(ic: InputConnection, steps: Int) {
-    if (selAnchor < 0 || selFocus < 0) return
-    val lo = minOf(selAnchor, selFocus)
-    val hi = maxOf(selAnchor, selFocus)
-    var to = selFocus + steps
-    if (to > hi) to = hi + (ic.getTextAfterCursor(to - hi, 0)?.length ?: (to - hi))
-    if (to < lo) to = lo - (ic.getTextBeforeCursor(lo - to, 0)?.length ?: (lo - to))
-    if (to == selFocus) return
-    ic.setSelection(selAnchor, to)
-    selFocus = to
-    selStart = selAnchor
-    selEnd = to
+    if (selBaseStart < 0 || selBaseEnd < 0) return
+    fun lo(off: Int) = if (off >= 0) selBaseStart else selBaseStart + off
+    fun hi(off: Int) = if (off >= 0) selBaseEnd + off else selBaseEnd
+    val off = selOff + steps
+    var newLo = lo(off)
+    var newHi = hi(off)
+    val curLo = lo(selOff)
+    val curHi = hi(selOff)
+    // Not out of the text: only as many characters as there are past either end of what is selected now.
+    if (newHi > curHi) newHi = curHi + (ic.getTextAfterCursor(newHi - curHi, 0)?.length ?: (newHi - curHi))
+    if (newLo < curLo) newLo = curLo - (ic.getTextBeforeCursor(curLo - newLo, 0)?.length ?: (curLo - newLo))
+    selOff = if (off >= 0) newHi - selBaseEnd else newLo - selBaseStart
+    if (newLo == curLo && newHi == curHi) return
+    ic.setSelection(newLo, newHi)
+    selStart = newLo
+    selEnd = newHi
+}
+
+/** Sliding sideways in the cursor mode: from the selected word if selecting ([stretchSelection]). */
+internal fun ContinuumIME.stretchSelection(steps: Int) {
+    val ic = editor() ?: return
+    stretchSelection(ic, steps)
+}
+
+/**
+ * Sliding up or down while selecting: down stretches the end of the selection down by whole lines (as shift and
+ * the down arrow do), up stretches its start up; sliding back the other way shortens what was stretched first.
+ * The word stays selected.
+ */
+private fun ContinuumIME.stretchLines(ic: InputConnection, lines: Int) {
+    if (selStart < 0 || selEnd < 0) return
+    val up = lines < 0
+    var n = kotlin.math.abs(lines)
+    if (!up) {
+        val shrink = minOf(n, selUp)
+        if (shrink > 0) { shiftArrows(ic, focusAtStart = true, key = KeyEvent.KEYCODE_DPAD_DOWN, times = shrink); selUp -= shrink; n -= shrink }
+        if (n > 0) { shiftArrows(ic, focusAtStart = false, key = KeyEvent.KEYCODE_DPAD_DOWN, times = n); selDown += n }
+    } else {
+        val shrink = minOf(n, selDown)
+        if (shrink > 0) { shiftArrows(ic, focusAtStart = false, key = KeyEvent.KEYCODE_DPAD_UP, times = shrink); selDown -= shrink; n -= shrink }
+        if (n > 0) { shiftArrows(ic, focusAtStart = true, key = KeyEvent.KEYCODE_DPAD_UP, times = n); selUp += n }
+    }
+    resyncSelection(ic)
+}
+
+/**
+ * Presses an arrow key [times] times with shift held (shift's own key goes down first and up last, as a keyboard
+ * would, so every editor extends the selection), moving the selection's start if [focusAtStart] else its end:
+ * the selection is first set so that the end that moves is the one the arrow keys move.
+ */
+private fun ContinuumIME.shiftArrows(ic: InputConnection, focusAtStart: Boolean, key: Int, times: Int) {
+    val lo = minOf(selStart, selEnd)
+    val hi = maxOf(selStart, selEnd)
+    if (focusAtStart) ic.setSelection(hi, lo) else ic.setSelection(lo, hi)
+    val up = key == KeyEvent.KEYCODE_DPAD_UP
+    val meta = KeyEvent.META_SHIFT_ON or KeyEvent.META_SHIFT_LEFT_ON
+    var now = SystemClock.uptimeMillis()
+    ic.sendKeyEvent(KeyEvent(now, now, KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_SHIFT_LEFT, 0, meta))
+    repeat(times) {
+        // Not out of the text: an arrow key at its first or last line can leave the field for another one.
+        val room = if (up) ic.getTextBeforeCursor(1, 0) else ic.getTextAfterCursor(1, 0)
+        if (room.isNullOrEmpty()) return@repeat
+        now = SystemClock.uptimeMillis()
+        ic.sendKeyEvent(KeyEvent(now, now, KeyEvent.ACTION_DOWN, key, 0, meta))
+        ic.sendKeyEvent(KeyEvent(now, now, KeyEvent.ACTION_UP, key, 0, meta))
+    }
+    now = SystemClock.uptimeMillis()
+    ic.sendKeyEvent(KeyEvent(now, now, KeyEvent.ACTION_UP, KeyEvent.KEYCODE_SHIFT_LEFT, 0, meta))
 }
 
 /** Copy or cut: the selected text goes to the clipboard (not from a password or private field), and the selecting ends. */
@@ -593,13 +660,16 @@ internal fun ContinuumIME.handleSelectionEnd(collapse: Boolean) {
     selecting = false
     if (collapse && wasSelecting) {
         val ic = editor() ?: return
-        val end = maxOf(selAnchor, selFocus)
+        val end = maxOf(selStart, selEnd)
         if (end >= 0) {
             ic.setSelection(end, end)
             selStart = end
             selEnd = end
         }
     }
-    selAnchor = -1
-    selFocus = -1
+    selBaseStart = -1
+    selBaseEnd = -1
+    selOff = 0
+    selUp = 0
+    selDown = 0
 }

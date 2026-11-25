@@ -109,7 +109,11 @@ internal const val CHOOSE_DELAY_MS = 450L
 internal const val SPOT_GAP_DP = 80f
 internal const val SPOT_EDGE_DP = 56f
 internal const val SPOT_TOUCH_DP = 44f
-/** The scissors snip this often (ms); the icons' colours: pale blue for copy, warm red-orange for cut. */
-internal const val SNIP_MS = 220L
+/** The choices' constellations are this many sprite pixels across and high, the twins this far apart (sprite pixels), the cut one has a shooting star every [SHOOT_PERIOD_MS] that takes [SHOOT_MS]; the colours: pale blue for copy, warm red-orange for cut. */
+internal const val CONSTELLATION_W = 14
+internal const val CONSTELLATION_H = 9
+internal const val TWIN_GAP = 5
+internal const val SHOOT_PERIOD_MS = 1800L
+internal const val SHOOT_MS = 450L
 internal const val COPY_ICON = 0xFFBFE0FF.toInt()
 internal const val CUT_ICON = 0xFFFF9A78.toInt()

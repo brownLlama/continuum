@@ -120,7 +120,7 @@ internal class Fireflies(private val unit: Float, private val random: Random = R
         for (i in 0 until COUNT) {
             if (choosing) {
                 val a = phase[i] + now * spin[i] / 1000f
-                val r = unit * (3.5f + (i % 5) * 1.3f)
+                val r = unit * (10f + (i % 5) * 1.8f)
                 val sx = if (i % 2 == 0) copyX else cutX
                 val sy = if (i % 2 == 0) copyY else cutY
                 targetX[i] = sx + cos(a) * r

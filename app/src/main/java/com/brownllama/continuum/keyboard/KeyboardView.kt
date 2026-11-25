@@ -99,6 +99,8 @@ class KeyboardView(context: Context, internal val listener: Listener) : View(con
         fun onSelectWord(): Boolean
         /** In the cursor mode, a triple tap: select everything. */
         fun onSelectAll()
+        /** How many characters are selected now (0 if not known). */
+        fun selectionLength(): Int
         /** The selection is copied ([cut] false) or cut to the clipboard, and the selection ends. */
         fun onSelectionAction(cut: Boolean)
         /** Selecting is over: moves are plain cursor moves again, and the selection is dropped (the cursor stays at its end) if [collapse]. */
@@ -695,6 +697,9 @@ class KeyboardView(context: Context, internal val listener: Listener) : View(con
     internal var spotCopyX = 0f
     internal var spotCutX = 0f
     internal var spotY = 0f
+    /** The constellations of the two choices are made from the selection: how many stars, and the pattern ([startChoosing]). */
+    internal var choiceStars = 5
+    internal var choiceSeed = 0
     internal val chooseTick = Runnable { startChoosing() }
     /** In the cursor mode: where the sliding finger is (keyboard coordinates), and the night's fireflies that gather round it. */
     internal var cursorFingerX = -1f
