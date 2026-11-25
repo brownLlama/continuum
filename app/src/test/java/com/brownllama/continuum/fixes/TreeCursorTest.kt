@@ -262,6 +262,27 @@ class TreeCursorTest {
         }
     }
 
+    @Test fun `at night the grass and the animal are drawn again above the veil, brightened, so they glow like the tree`() {
+        val k = keyboard().withTree("hello")
+        k.view.animal.start(com.brownllama.continuum.keyboard.Species.ALEX, k.view.width.toFloat(), k.view.treeBase(), SystemClock.uptimeMillis(), groundRows = 3)
+        k.doubleTapTree()
+        var glowLayers = 0
+        val canvas = object : Canvas(Bitmap.createBitmap(1080, 700, Bitmap.Config.ARGB_8888)) {
+            override fun saveLayer(left: Float, top: Float, right: Float, bottom: Float, paint: android.graphics.Paint?): Int {
+                if (paint?.colorFilter != null) glowLayers++
+                return super.saveLayer(left, top, right, bottom, paint)
+            }
+        }
+        k.view.draw(canvas)
+        assertEquals("one brightened layer over the night", 1, glowLayers)
+        // Not at day.
+        k.wait(CURSOR_MODE_TIMEOUT_MS + 500)
+        assertFalse(k.view.cursorMode)
+        glowLayers = 0
+        k.view.draw(canvas)
+        assertEquals(0, glowLayers)
+    }
+
     @Test fun `the fireflies follow the finger in two dimensions`() {
         val k = keyboard().withTree("hello world")
         k.doubleTapTree()

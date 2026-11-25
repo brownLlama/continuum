@@ -100,3 +100,6 @@ internal const val CURSOR_VEIL_ALPHA = 232
 internal const val STARS = 20
 /** The night redraws about this often (ms): 30 frames a second. */
 internal const val FIREFLY_FRAME_MS = 33L
+/** At night the grass and the animal glow: this is added to their colours (0xRRGGBB, a soft green-yellow), and the glow reaches this far (dp) up over the keys for the animal's head. */
+internal const val NIGHT_GLOW_ADD = 0x002C4A1C
+internal const val NIGHT_GLOW_RISE_DP = 60f

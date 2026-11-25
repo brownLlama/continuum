@@ -260,7 +260,8 @@ internal fun KeyboardView.drawTree(c: Canvas) {
 /**
  * The cursor mode is night. One deep blue veil over the whole keyboard, from the top of the suggestion
  * bar to the bottom of the screen (the grass and the animals in it too, with no seam), hides all but a
- * little of it, a few stars come out, the tree glows, and
+ * little of it, a few stars come out, the tree glows, and so do the grass and the animal (drawn again
+ * above the veil, brightened), and
  * fireflies drift about; sliding a finger, in any direction, brings them round it in a swirl and the
  * finger leaves sparks behind. It is drawn over everything. (How to use it is in the app's Guide.)
  */
@@ -279,7 +280,15 @@ internal fun KeyboardView.drawCursorMode(c: Canvas) {
         fill.color = ColorUtils.setAlphaComponent(0xFFFFFF, if (bright) 220 else 90)
         c.drawRect(sx, sy, sx + u, sy + u, fill)
     }
-    // The tree, glowing, above the night; then the fireflies above that.
+    // The grass, its flowers, the animal and the tufts in front of it are drawn again above the night, lit up:
+    // the meadow glows, as the tree does, instead of going dark with the keys.
+    val glowTop = keyboardHeight - dpu(NIGHT_GLOW_RISE_DP)
+    val save = c.saveLayer(0f, glowTop, width.toFloat(), grassBottom, nightGlow)
+    drawGrass(c)
+    drawAnimal(c)
+    drawGrassFront(c)
+    c.restoreToCount(save)
+    // The tree, glowing, above that; then the fireflies above all.
     drawTree(c)
     val down = pointers.values.any { it.area == Area.CURSOR }
     fireflies.step(now, down, cursorFingerX, cursorFingerY)
