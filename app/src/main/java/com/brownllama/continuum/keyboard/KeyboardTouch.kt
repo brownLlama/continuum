@@ -128,11 +128,14 @@ internal fun KeyboardView.down(id: Int, x: Float, y: Float) {
     if (p.area != Area.GRID) keyVibration.tap()
     if (p.area == Area.LETTERS || p.area == Area.STRIP) glows += Glow(p)
     if (p.key?.kind == Kind.BACKSPACE) {
+        // A tap deletes a letter; held, whole words go, faster and faster, until the finger lifts.
         backspace()
         val r = object : Runnable {
+            var gap = DELETE_WORD_FIRST_MS
             override fun run() {
-                backspace()
-                timer.postDelayed(this, REPEAT_MS)
+                listener.onDeleteWord()
+                timer.postDelayed(this, gap.toLong())
+                gap = max(DELETE_WORD_MIN_MS, gap * DELETE_WORD_SPEEDUP)
             }
         }
         p.repeat = r
