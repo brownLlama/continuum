@@ -3,6 +3,7 @@ package com.brownllama.continuum.keyboard
 
 import android.os.SystemClock
 import android.view.MotionEvent
+import android.view.ViewConfiguration
 import com.brownllama.continuum.keyboard.KeyboardView.Panel
 import com.brownllama.continuum.prediction.Mode
 import com.brownllama.continuum.prediction.Tap
@@ -27,6 +28,9 @@ internal fun KeyboardView.isSwipe(p: Pointer): Boolean {
 
 internal fun KeyboardView.handleTouch(e: MotionEvent) {
     touchTime = e.eventTime
+    // Every point, with its own time (batched ones too), for how fast a scroll is flung.
+    if (e.actionMasked == MotionEvent.ACTION_DOWN) velocity.clear()
+    velocity.addMovement(e)
     when (e.actionMasked) {
         MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN -> {
             // An animal walks on (touches go to the keys); a visit only starts in a pause in typing.
@@ -62,6 +66,17 @@ internal fun KeyboardView.handleTouch(e: MotionEvent) {
             invalidate()
         }
     }
+}
+
+/**
+ * How fast [p] was moving when it lifted (px/s, across when [sideways], else down), from every
+ * point of the last moments; 0 below the system's fling threshold, so a scroll that has stopped stays put.
+ */
+internal fun KeyboardView.flingSpeed(p: Pointer, sideways: Boolean): Int {
+    val config = ViewConfiguration.get(context)
+    velocity.computeCurrentVelocity(1000, config.scaledMaximumFlingVelocity.toFloat())
+    val v = if (sideways) velocity.getXVelocity(p.id) else velocity.getYVelocity(p.id)
+    return if (abs(v) < config.scaledMinimumFlingVelocity) 0 else v.roundToInt()
 }
 
 /** The key under (x, y), or the nearest one so a touch just between keys still counts. */
@@ -141,17 +156,7 @@ internal fun KeyboardView.move(p: Pointer, x: Float, y: Float) {
             p.scrollStart = gridScroll + d
             gridScroller.forceFinished(true)
         }
-        if (p.scrolling) {
-            gridScroll = (p.scrollStart - d).coerceIn(0f, maxGridScroll)
-            val now = SystemClock.uptimeMillis()
-            if (now > p.lastT) {
-                if (sideways) p.vx = (x - p.lastX) * 1000f / (now - p.lastT)
-                else p.vy = (y - p.lastY) * 1000f / (now - p.lastT)
-            }
-            p.lastX = x
-            p.lastY = y
-            p.lastT = now
-        }
+        if (p.scrolling) gridScroll = (p.scrollStart - d).coerceIn(0f, maxGridScroll)
         invalidate()
         return
     }
@@ -166,10 +171,6 @@ internal fun KeyboardView.move(p: Pointer, x: Float, y: Float) {
         }
         if (p.scrolling) {
             barScroll = (p.scrollStart - dx).coerceIn(0f, maxBarScroll)
-            val now = SystemClock.uptimeMillis()
-            if (now > p.lastT) p.vx = (x - p.lastX) * 1000f / (now - p.lastT)
-            p.lastX = x
-            p.lastT = now
             invalidate()
             return
         }
@@ -284,12 +285,13 @@ internal fun KeyboardView.release(p: Pointer) {
         p.consumed || p.key?.kind == Kind.BACKSPACE -> {}
         p.scrolling && p.area == Area.GRID -> {
             val max = maxGridScroll.roundToInt()
-            if (gifSearching) gridScroller.fling(gridScroll.roundToInt(), 0, (-p.vx).roundToInt(), 0, 0, max, 0, 0)
-            else gridScroller.fling(0, gridScroll.roundToInt(), 0, (-p.vy).roundToInt(), 0, 0, 0, max)
+            val v = flingSpeed(p, sideways = gifSearching)
+            if (gifSearching) gridScroller.fling(gridScroll.roundToInt(), 0, -v, 0, 0, max, 0, 0)
+            else gridScroller.fling(0, gridScroll.roundToInt(), 0, -v, 0, 0, 0, max)
             postInvalidateOnAnimation()
         }
         p.scrolling -> {
-            scroller.fling(barScroll.roundToInt(), 0, (-p.vx).roundToInt(), 0, 0, maxBarScroll.roundToInt(), 0, 0)
+            scroller.fling(barScroll.roundToInt(), 0, -flingSpeed(p, sideways = true), 0, 0, maxBarScroll.roundToInt(), 0, 0)
             postInvalidateOnAnimation()
         }
         p.zooming -> commitZoom()

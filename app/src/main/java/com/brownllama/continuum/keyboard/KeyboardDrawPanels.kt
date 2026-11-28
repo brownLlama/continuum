@@ -2,13 +2,13 @@
 package com.brownllama.continuum.keyboard
 
 import android.graphics.Bitmap
+import android.graphics.BitmapShader
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
+import android.graphics.Shader
 import android.graphics.drawable.Animatable
-import android.text.StaticLayout
-import android.text.TextUtils
 import androidx.core.graphics.withClip
 import androidx.core.graphics.withSave
 import com.brownllama.continuum.R
@@ -74,12 +74,14 @@ private fun KeyboardView.drawClipImage(c: Canvas, image: Bitmap, radius: Float) 
     val w = image.width * scale
     val h = image.height * scale
     clipDst.set(tmp.centerX() - w / 2, tmp.centerY() - h / 2, tmp.centerX() + w / 2, tmp.centerY() + h / 2)
-    clipPath.reset()
-    clipPath.addRoundRect(clipDst, radius - edge, radius - edge, Path.Direction.CW)
-    c.withSave {
-        c.clipPath(clipPath)
-        c.drawBitmap(image, null, clipDst, clipImagePaint)
-    }
+    // The picture as the fill of a rounded rectangle: cheaper while scrolling than clipping to a path.
+    val shader = clipShaders.getOrPut(image) { BitmapShader(image, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP) }
+    clipMatrix.setScale(scale, scale)
+    clipMatrix.postTranslate(clipDst.left, clipDst.top)
+    shader.setLocalMatrix(clipMatrix)
+    clipImagePaint.shader = shader
+    c.drawRoundRect(clipDst, radius - edge, radius - edge, clipImagePaint)
+    clipImagePaint.shader = null
 }
 
 /** The visible rows of the emoji grid, with a highlight under a finger that's about to tap. */

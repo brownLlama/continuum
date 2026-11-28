@@ -61,14 +61,9 @@ internal class Pointer(private val view: KeyboardView, val id: Int, val downX: F
     var consumed = false
     /** Selected index in a multi-character long-press popup. */
     var alt = 0
-    /** Dragging the suggestion strip sideways or the emoji grid up and down; vx / vy feed the fling. */
+    /** Dragging the suggestion strip sideways or the emoji grid up and down (its fling: [flingSpeed]). */
     var scrolling = false
     var scrollStart = 0f
-    var lastX = downX
-    var lastY = downY
-    var lastT = SystemClock.uptimeMillis()
-    var vx = 0f
-    var vy = 0f
     val longPress = Runnable { view.onLongPress(this) }
     /** Holding on after the long press: a letter's German form joins the popup (see [GERMAN]). */
     val longerPress = Runnable { view.onLongerPress(this) }

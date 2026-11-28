@@ -91,4 +91,48 @@ class ClipboardLayoutTest {
         k.view.draw(Canvas(Bitmap.createBitmap(k.view.width, k.view.height, Bitmap.Config.ARGB_8888)))
         assertFalse(k.view.clipCards.isEmpty())
     }
+
+    /** A finger dragged up the cards from [y0] by [dy], [steps] moves [stepMs] apart, then held still for [restMs] before it lifts. */
+    private fun drag(k: Keyboard, y0: Float, dy: Float, steps: Int, stepMs: Long, restMs: Long = 0) {
+        val x = k.view.width * 0.25f
+        val t = android.os.SystemClock.uptimeMillis()
+        fun send(action: Int, y: Float, at: Long) {
+            val e = android.view.MotionEvent.obtain(t, at, action, x, y, 0)
+            k.view.onTouchEvent(e)
+            e.recycle()
+        }
+        val top = k.view.overlayH
+        send(android.view.MotionEvent.ACTION_DOWN, top + y0, t)
+        for (i in 1..steps) send(android.view.MotionEvent.ACTION_MOVE, top + y0 + dy * i / steps, t + i * stepMs)
+        val end = t + steps * stepMs + restMs
+        if (restMs > 0) send(android.view.MotionEvent.ACTION_MOVE, top + y0 + dy, end)
+        send(android.view.MotionEvent.ACTION_UP, top + y0 + dy, end + 1)
+    }
+
+    private fun longList(k: Keyboard) {
+        k.view.setClips((1..30).map { "clip $it " + "word ".repeat(it * 3) })
+        assertTrue(k.view.maxClipScroll > 2000f)
+    }
+
+    @Test fun `a quick flick keeps the cards gliding past where the finger stopped`() {
+        val k = clipboard()
+        longList(k)
+        val y0 = k.view.clipRect.bottom - 40f
+        drag(k, y0, -300f, steps = 6, stepMs = 8)
+        val atLift = k.view.clipScroll
+        assertTrue(atLift > 200f)
+        k.view.gridScroller.computeScrollOffset()
+        assertTrue("a fling is under way", !k.view.gridScroller.isFinished)
+        assertTrue("it heads on down the list", k.view.gridScroller.finalY > atLift + 300)
+    }
+
+    @Test fun `a scroll that stopped before the finger lifted stays put`() {
+        val k = clipboard()
+        longList(k)
+        val y0 = k.view.clipRect.bottom - 40f
+        drag(k, y0, -300f, steps = 6, stepMs = 8, restMs = 300)
+        val atLift = k.view.clipScroll
+        k.view.gridScroller.computeScrollOffset()
+        assertTrue(k.view.gridScroller.isFinished || k.view.gridScroller.finalY == atLift.toInt())
+    }
 }
