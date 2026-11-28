@@ -112,6 +112,18 @@ internal fun KeyboardView.down(id: Int, x: Float, y: Float) {
         else -> hitKey(keys, x, y)?.let { Pointer(this, id, x, y, Area.KEY, it) }
     } ?: return
     pointers[id] = p
+    // A finger landing on a list that is still gliding stops it right there, as in any Android
+    // list; that touch is no tap and no hold (it may go on to drag the list).
+    val gliding = when {
+        p.area == Area.GRID && !gridScroller.isFinished -> gridScroller
+        p.key?.kind == Kind.SUGGESTION && !scroller.isFinished -> scroller
+        else -> null
+    }
+    if (gliding != null) {
+        gliding.forceFinished(true)
+        p.caught = true
+        p.moved = true
+    }
     // A tick for a key or the letter row; not for the emoji / GIF grids, which scroll.
     if (p.area != Area.GRID) keyVibration.tap()
     if (p.area == Area.LETTERS || p.area == Area.STRIP) glows += Glow(p)
@@ -125,8 +137,8 @@ internal fun KeyboardView.down(id: Int, x: Float, y: Float) {
         }
         p.repeat = r
         timer.postDelayed(r, REPEAT_DELAY_MS)
-    } else if (p.area == Area.TREE || p.area == Area.CURSOR) {
-        // The tree and the trackpad have no hold.
+    } else if (p.area == Area.TREE || p.area == Area.CURSOR || p.caught) {
+        // The tree and the trackpad have no hold, nor a touch that stopped a gliding list.
     } else if (p.area != Area.GRID || panel == Panel.CLIPBOARD) {
         // Clip cards can be held (to delete them); emoji and GIFs can't.
         timer.postDelayed(p.longPress, holdMs)
@@ -294,6 +306,8 @@ internal fun KeyboardView.release(p: Pointer) {
             scroller.fling(barScroll.roundToInt(), 0, -flingSpeed(p, sideways = true), 0, 0, maxBarScroll.roundToInt(), 0, 0)
             postInvalidateOnAnimation()
         }
+        // It only stopped the list: nothing is picked.
+        p.caught -> {}
         p.zooming -> commitZoom()
         else -> {
             val dx = p.x - p.downX

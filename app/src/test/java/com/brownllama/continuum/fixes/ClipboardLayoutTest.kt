@@ -135,4 +135,30 @@ class ClipboardLayoutTest {
         k.view.gridScroller.computeScrollOffset()
         assertTrue(k.view.gridScroller.isFinished || k.view.gridScroller.finalY == atLift.toInt())
     }
+
+    @Test fun `touching the cards while they glide stops them there, and pastes nothing`() {
+        val k = clipboard()
+        for (i in 1..30) k.copy("clip $i " + "word ".repeat(i * 3), 100L + i)
+        k.ime.onClipboardOpen()
+        k.idle()
+        assertTrue(k.view.maxClipScroll > 2000f)
+        val y0 = k.view.clipRect.bottom - 40f
+        drag(k, y0, -300f, steps = 6, stepMs = 8)
+        assertFalse("gliding", k.view.gridScroller.isFinished)
+        org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(80))
+        k.view.computeScroll()
+        val gliding = k.view.clipScroll
+        // A finger lands on a card mid-glide and lifts.
+        k.tap(k.view.width * 0.25f, k.view.overlayH + k.view.clipRect.centerY())
+        assertTrue("stopped", k.view.gridScroller.isFinished)
+        val stopped = k.view.clipScroll
+        assertEquals(gliding, stopped, 1f)
+        org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(500))
+        k.view.computeScroll()
+        assertEquals("it stays where it stopped", stopped, k.view.clipScroll, 0.01f)
+        assertEquals("the touch that stopped it pasted nothing", "", k.text)
+        // Once it has stopped, a tap pastes as usual.
+        k.tap(k.view.width * 0.25f, k.view.overlayH + k.view.clipRect.centerY())
+        assertTrue(k.text.startsWith("clip "))
+    }
 }
