@@ -20,6 +20,9 @@ import com.brownllama.continuum.keyboard.KeyboardView
 import java.io.File
 import java.io.InputStream
 import java.io.OutputStream
+import kotlin.math.max
+import kotlin.math.min
+import kotlin.math.roundToInt
 
 /**
  * Saves what is on the system clipboard to the history: its text, or the picture it holds.
@@ -75,26 +78,29 @@ private fun ContinuumIME.copyImage(uri: Uri, source: Int) {
     val dir = clipboard.imageDir
     val resolver = contentResolver
     DiskIo.executor.execute {
-        val file = runCatching { saveImage(resolver, uri, dir) }.getOrNull()
+        val saved = runCatching { saveImage(resolver, uri, dir) }.getOrNull()
         main.post {
             copyingImages -= source
-            if (file == null) return@post
+            if (saved == null) return@post
             // Switched off while it was copied: the picture isn't kept.
             if (!clipboardOn) {
-                file.delete()
+                saved.file.delete()
                 return@post
             }
-            clipboard.addImage(file, source)
+            clipboard.addImage(saved.file, source, saved.width, saved.height)
             if (view?.panel == KeyboardView.Panel.CLIPBOARD) showClips()
         }
     }
 }
 
+/** A copied picture saved by [saveImage], and its size in pixels. */
+private class SavedImage(val file: File, val width: Int, val height: Int)
+
 /**
  * The picture at [uri] saved in [dir] under its own type's extension; null if it can't be read,
  * is larger than [ClipboardHistory.MAX_IMAGE_BYTES], or isn't a picture Android can show.
  */
-private fun saveImage(resolver: ContentResolver, uri: Uri, dir: File): File? {
+private fun saveImage(resolver: ContentResolver, uri: Uri, dir: File): SavedImage? {
     dir.mkdirs()
     val tmp = File.createTempFile("clip", ".tmp", dir)
     try {
@@ -107,7 +113,7 @@ private fun saveImage(resolver: ContentResolver, uri: Uri, dir: File): File? {
         if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
         val ext = ClipboardHistory.extensionFor(bounds.outMimeType) ?: return null
         val dest = File(dir, tmp.nameWithoutExtension + "." + ext)
-        return dest.takeIf { tmp.renameTo(it) }
+        return if (tmp.renameTo(dest)) SavedImage(dest, bounds.outWidth, bounds.outHeight) else null
     } finally {
         tmp.delete()
     }
@@ -145,14 +151,18 @@ internal fun ContinuumIME.showClips() {
     val clips = clipboard.clips()
     val files = clips.mapNotNull { it.image }
     clipThumbs.keys.retainAll(files.mapTo(HashSet()) { it.name })
-    v.setClips(clips.map { it.text }, images = clips.map { c -> c.image?.let { clipThumbs[it.name] } })
+    v.setClips(
+        clips.map { it.text },
+        images = clips.map { c -> c.image?.let { clipThumbs[it.name] } },
+        aspects = clips.map { c -> if (c.width > 0 && c.height > 0) c.height.toFloat() / c.width else 0f },
+    )
     val missing = files.filter { it.name !in clipThumbs }
     if (missing.isEmpty()) return
-    // A card is about half the keyboard wide; the panel isn't laid out yet the first time.
+    // A card is about half the keyboard wide, and at most as tall as the panel; it isn't laid out yet the first time.
     val w = v.clipCellW.toInt().takeIf { it > 1 } ?: (resources.displayMetrics.widthPixels / 2)
-    val h = v.clipCellH.toInt().coerceAtLeast(1)
+    val maxH = v.clipMaxCardH.toInt().takeIf { it > 1 } ?: (resources.displayMetrics.heightPixels / 3)
     DiskIo.executor.execute {
-        val decoded = missing.associate { it.name to runCatching { thumbnail(it, w, h) }.getOrNull() }
+        val decoded = missing.associate { it.name to runCatching { thumbnail(it, w, maxH) }.getOrNull() }
         main.post {
             for ((name, bitmap) in decoded) if (bitmap != null) clipThumbs[name] = bitmap
             val shown = view ?: return@post
@@ -162,14 +172,24 @@ internal fun ContinuumIME.showClips() {
     }
 }
 
-/** [file] decoded at a size that still covers [w] × [h] (the card it fills), not larger than needed. */
-private fun thumbnail(file: File, w: Int, h: Int): Bitmap? {
+/**
+ * [file] at the size its card shows it: [w] wide, or narrower for a picture taller than [maxH]
+ * (the tallest card). Smaller pictures aren't enlarged here; the card scales them up.
+ */
+private fun thumbnail(file: File, w: Int, maxH: Int): Bitmap? {
     val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
     BitmapFactory.decodeFile(file.path, bounds)
     if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+    val fit = min(w.toFloat() / bounds.outWidth, maxH.toFloat() / bounds.outHeight)
+    val tw = max(1, (bounds.outWidth * fit).roundToInt())
+    val th = max(1, (bounds.outHeight * fit).roundToInt())
     var sample = 1
-    while (bounds.outWidth / (sample * 2) >= w && bounds.outHeight / (sample * 2) >= h) sample *= 2
-    return BitmapFactory.decodeFile(file.path, BitmapFactory.Options().apply { inSampleSize = sample })
+    while (bounds.outWidth / (sample * 2) >= tw && bounds.outHeight / (sample * 2) >= th) sample *= 2
+    val decoded = BitmapFactory.decodeFile(file.path, BitmapFactory.Options().apply { inSampleSize = sample }) ?: return null
+    if (decoded.width <= tw) return decoded
+    val scaled = Bitmap.createScaledBitmap(decoded, tw, th, true)
+    if (scaled !== decoded) decoded.recycle()
+    return scaled
 }
 
 internal fun ContinuumIME.handleClipboardOpen() {

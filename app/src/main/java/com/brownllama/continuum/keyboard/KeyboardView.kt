@@ -33,6 +33,7 @@ import com.brownllama.continuum.prediction.Mode
 import com.brownllama.continuum.prediction.Tap
 import com.brownllama.continuum.theme.KeyboardTheme
 import kotlin.math.max
+import kotlin.math.min
 import kotlin.math.roundToInt
 
 /**
@@ -46,7 +47,8 @@ import kotlin.math.roundToInt
  * - Full numbers:  the same bar over a 10-column symbol grid with a filled phone keypad.
  * - Emoji:         full-keyboard sized in either mode: group tabs (+ GIF, ⌫) in place of the bar,
  *                  over one grid that scrolls through "frequently used" and every group; ✕ closes it.
- * - Clipboard:     same size: bar ["Clipboard" | bin] over cards of recently copied text and pictures; tap one
+ * - Clipboard:     taller: bar ["Clipboard" | bin] over two columns of cards of recently copied text and
+ *                  pictures, each as tall as all of it (Pinterest-style); tap one
  *                  to paste it, hold one to delete it.
  * - GIF:           same size: bar [☺ | search field] over a scrolling grid of GIFs from KLIPY.
  *                  Tapping the search field ([gifSearching]) brings back the normal keyboard (mini or
@@ -302,6 +304,7 @@ class KeyboardView(context: Context, internal val listener: Listener) : View(con
         if (p.big) closeGifSearch()
         // The emoji and GIF panels are full-keyboard sized even in mini mode.
         val resize = p.big != panel.big
+        val oldHeight = keyboardHeight
         markPanelChange()
         if (panel == Panel.GIF) stopGifs()
         panel = p
@@ -310,7 +313,8 @@ class KeyboardView(context: Context, internal val listener: Listener) : View(con
             frequentShown = frequentEmoji
             emojiScroll = 0f
         }
-        if (resize) requestLayout()
+        // The clipboard panel is taller than the emoji and GIF panels.
+        if (resize || keyboardHeight != oldHeight) requestLayout()
         relayout()
         if (p == Panel.GIF && gifTiles.isEmpty()) listener.onGifSearch(gifQuery)
         if (p == Panel.CLIPBOARD) {
@@ -354,6 +358,7 @@ class KeyboardView(context: Context, internal val listener: Listener) : View(con
 
     internal fun bodyHeight(): Float = when {
         mode == Mode.MINI && !panel.big -> stripH + miniRowH
+        panel == Panel.CLIPBOARD -> max(fullRowH * 4, min(fullRowH * 4 * CLIP_PANEL_SCALE, resources.displayMetrics.heightPixels * CLIP_PANEL_MAX_SCREEN))
         else -> fullRowH * 4
     }
 
@@ -425,18 +430,30 @@ class KeyboardView(context: Context, internal val listener: Listener) : View(con
     internal var clips: List<String?> = emptyList()
     /** Per card, the picture's thumbnail; null for text, or while it is still being decoded. */
     internal var clipImages: List<Bitmap?> = emptyList()
+    /** Per card, the picture's height ÷ width as kept with it; 0 if not known (then its thumbnail's, or square). */
+    internal var clipAspects: List<Float> = emptyList()
     internal val clipImagePaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
-    /** Scratch for drawing a picture card: the part of the picture shown, and the card's rounded outline. */
-    internal val clipSrc = android.graphics.Rect()
+    /** Scratch for drawing a picture card: where the picture goes, and the card's rounded outline. */
+    internal val clipDst = RectF()
     internal val clipPath = Path()
     internal var clipScroll = 0f
     internal val clipRect = RectF()
     internal var clipCellW = 1f
-    internal val clipCellH get() = dpu(78f)
-    private val clipRows get() = (clips.size + CLIP_COLUMNS - 1) / CLIP_COLUMNS
-    internal val maxClipScroll get() = max(0f, clipRows * (clipCellH + gifGap) + dpu(56f) - clipRect.height())
-    /** Laid-out card text, per clip; rebuilt when the clips or the card width change. */
+    /** Each card's place, unscrolled, from the top of the panel's body (see [layoutClipCards]). */
+    internal val clipCards = ArrayList<RectF>()
+    /** How tall the two columns of cards are together: the longer one. */
+    internal var clipContentH = 0f
+    /** A picture card is at most as tall as the panel shows at once, so a whole picture is always seen. */
+    internal val clipMaxCardH get() = max(dpu(CLIP_MIN_CARD_DP), clipRect.height() - 2 * gifGap)
+    /** A text card may be taller, up to [CLIP_TEXT_MAX_SCREENS] of that (a long text is scrolled through). */
+    internal val clipMaxTextH get() = clipMaxCardH * CLIP_TEXT_MAX_SCREENS
+    internal val clipInset get() = dpu(10f)
+    internal val maxClipScroll get() = max(0f, clipContentH + dpu(56f) - clipRect.height())
+    /** Laid-out card text, per clip; rebuilt when the clips, the card width or the panel's height change. */
     internal val clipLayouts = HashMap<String, StaticLayout>()
+    /** The card width and tallest card [clipLayouts] were laid out for. */
+    internal var clipLayoutsW = 0f
+    internal var clipLayoutsH = 0f
     internal val clipPaint = TextPaint(Paint.ANTI_ALIAS_FLAG)
 
     /** Shown in place of the cards when there are none; null: the usual "nothing copied yet" hint. */
@@ -444,14 +461,20 @@ class KeyboardView(context: Context, internal val listener: Listener) : View(con
 
     /**
      * The copies to show, newest first: each one's text, or null for a picture, whose thumbnail is
-     * at the same place in [images] (null until it's decoded, see [setClipImages]). With none,
-     * [emptyMessage] says why (the phone is locked, the history is switched off) in place of the usual hint.
+     * at the same place in [images] (null until it's decoded, see [setClipImages]) and its height ÷
+     * width in [aspects] (0: not known). With none, [emptyMessage] says why (the phone is locked,
+     * the history is switched off) in place of the usual hint.
      */
-    fun setClips(texts: List<String?>, emptyMessage: String? = null, images: List<Bitmap?> = emptyList()) {
+    fun setClips(
+        texts: List<String?>, emptyMessage: String? = null,
+        images: List<Bitmap?> = emptyList(), aspects: List<Float> = emptyList(),
+    ) {
         clips = texts
         clipImages = images
+        clipAspects = aspects
         clipMessage = emptyMessage
         clipLayouts.clear()
+        layoutClipCards()
         clipScroll = clipScroll.coerceIn(0f, maxClipScroll)
         invalidate()
         accessibility.changed()
@@ -461,6 +484,8 @@ class KeyboardView(context: Context, internal val listener: Listener) : View(con
     fun setClipImages(images: List<Bitmap?>) {
         if (images.size != clips.size) return
         clipImages = images
+        layoutClipCards()
+        clipScroll = clipScroll.coerceIn(0f, maxClipScroll)
         invalidate()
     }
 

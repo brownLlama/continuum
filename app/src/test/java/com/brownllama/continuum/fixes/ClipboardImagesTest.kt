@@ -113,6 +113,21 @@ class ClipboardImagesTest {
         assertTrue(kept.exists())
     }
 
+    @Test fun `a picture's size is kept, and v0_0_85's lines without one still read`() {
+        val file = tmp.newFile()
+        val h = history(file)
+        val sized = picture(h)
+        h.addImage(sized, 1, 1080, 2400)
+        val again = history(file).clips().single()
+        assertEquals(1080, again.width)
+        assertEquals(2400, again.height)
+        val old = picture(h)
+        file.writeText("image\t$clock\t5\t${old.name}\n")
+        val read = history(file).clips().single()
+        assertEquals(old.name, read.image?.name)
+        assertEquals(0, read.width)
+    }
+
     @Test fun `older history files still read, and a broken picture line is skipped`() {
         val file = tmp.newFile()
         file.writeText("1000000000\tplain text\nimage\tbroken\n")
