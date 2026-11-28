@@ -4,8 +4,10 @@ import android.animation.ValueAnimator
 import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.BitmapShader
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
@@ -20,6 +22,7 @@ import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import android.view.MotionEvent
+import android.view.VelocityTracker
 import android.view.View
 import android.view.WindowInsets
 import android.view.inputmethod.EditorInfo
@@ -396,6 +399,8 @@ class KeyboardView(context: Context, internal val listener: Listener) : View(con
     internal var emojiScroll = 0f
     /** Flings the emoji or the GIF grid, whichever is showing (see [gridScroll]). */
     internal val gridScroller = OverScroller(context)
+    /** Every finger's points, for the speed a scroll is flung at (see [flingSpeed]). */
+    internal val velocity: VelocityTracker = VelocityTracker.obtain()
     internal val maxEmojiScroll get() = max(0f, emojiRows * emojiRowH + dpu(56f) - emojiRect.height())
 
     // GIF panel. The IME fills [gifTiles] through setGifs; the view only shows and scrolls them.
@@ -433,9 +438,11 @@ class KeyboardView(context: Context, internal val listener: Listener) : View(con
     /** Per card, the picture's height ÷ width as kept with it; 0 if not known (then its thumbnail's, or square). */
     internal var clipAspects: List<Float> = emptyList()
     internal val clipImagePaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
-    /** Scratch for drawing a picture card: where the picture goes, and the card's rounded outline. */
+    /** Each thumbnail as a shader, so a picture is drawn with rounded corners in one step (no clip path). */
+    internal val clipShaders = HashMap<Bitmap, BitmapShader>()
+    /** Scratch for drawing a picture card: where the picture goes, and how its shader is placed there. */
     internal val clipDst = RectF()
-    internal val clipPath = Path()
+    internal val clipMatrix = Matrix()
     internal var clipScroll = 0f
     internal val clipRect = RectF()
     internal var clipCellW = 1f
@@ -472,6 +479,7 @@ class KeyboardView(context: Context, internal val listener: Listener) : View(con
         clips = texts
         clipImages = images
         clipAspects = aspects
+        clipShaders.keys.retainAll(images.filterNotNullTo(HashSet()))
         clipMessage = emptyMessage
         clipLayouts.clear()
         layoutClipCards()
@@ -484,6 +492,7 @@ class KeyboardView(context: Context, internal val listener: Listener) : View(con
     fun setClipImages(images: List<Bitmap?>) {
         if (images.size != clips.size) return
         clipImages = images
+        clipShaders.keys.retainAll(images.filterNotNullTo(HashSet()))
         layoutClipCards()
         clipScroll = clipScroll.coerceIn(0f, maxClipScroll)
         invalidate()

@@ -186,10 +186,12 @@ private fun thumbnail(file: File, w: Int, maxH: Int): Bitmap? {
     var sample = 1
     while (bounds.outWidth / (sample * 2) >= tw && bounds.outHeight / (sample * 2) >= th) sample *= 2
     val decoded = BitmapFactory.decodeFile(file.path, BitmapFactory.Options().apply { inSampleSize = sample }) ?: return null
-    if (decoded.width <= tw) return decoded
-    val scaled = Bitmap.createScaledBitmap(decoded, tw, th, true)
-    if (scaled !== decoded) decoded.recycle()
-    return scaled
+    val thumb = if (decoded.width <= tw) decoded else Bitmap.createScaledBitmap(decoded, tw, th, true).also {
+        if (it !== decoded) decoded.recycle()
+    }
+    // Uploaded to the GPU now, in the background, not in the first frame that scrolls it into view.
+    thumb.prepareToDraw()
+    return thumb
 }
 
 internal fun ContinuumIME.handleClipboardOpen() {
