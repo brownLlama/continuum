@@ -64,6 +64,8 @@ internal class Pointer(private val view: KeyboardView, val id: Int, val downX: F
     /** Dragging the suggestion strip sideways or the emoji grid up and down (its fling: [flingSpeed]). */
     var scrolling = false
     var scrollStart = 0f
+    /** It landed on a list still gliding and stopped it: not a tap or a hold. */
+    var caught = false
     val longPress = Runnable { view.onLongPress(this) }
     /** Holding on after the long press: a letter's German form joins the popup (see [GERMAN]). */
     val longerPress = Runnable { view.onLongerPress(this) }
