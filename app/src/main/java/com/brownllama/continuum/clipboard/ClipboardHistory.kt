@@ -27,11 +27,14 @@ class ClipboardHistory(
     val imageDir: File = File(file.absoluteFile.parentFile, IMAGE_DIR),
 ) {
 
-    /** One copy: its [text], or a picture ([image], a file in [imageDir]). */
-    class Clip(val text: String?, val image: File?)
+    /** One copy: its [text], or a picture ([image], a file in [imageDir], [width] × [height] pixels; 0 × 0 if not known). */
+    class Clip(val text: String?, val image: File?, val width: Int = 0, val height: Int = 0)
 
     /** [image]: the picture's file name in [imageDir] (then [text] is null); [source]: which clip it came from. */
-    private class Item(val text: String?, val time: Long, val image: String? = null, val source: Int = 0)
+    private class Item(
+        val text: String?, val time: Long, val image: String? = null, val source: Int = 0,
+        val width: Int = 0, val height: Int = 0,
+    )
 
     private val items = ArrayList<Item>()
 
@@ -68,15 +71,20 @@ class ClipboardHistory(
         if (prune()) save()
     }
 
-    /** An "image" line: "image", the time, the source, the file name (tab-separated); null if broken or the file is gone. */
+    /**
+     * An "image" line: "image", the time, the source, the file name, then its width and height
+     * (tab-separated; v0.0.85 wrote no size). Null if broken or the file is gone.
+     */
     private fun readImage(line: String): Item? {
         val parts = line.split('\t')
-        if (parts.size != 4) return null
+        if (parts.size != 4 && parts.size != 6) return null
         val time = parts[1].toLongOrNull() ?: return null
         val source = parts[2].toIntOrNull() ?: return null
         val name = parts[3]
         if (name.isEmpty() || '/' in name || !File(imageDir, name).isFile) return null
-        return Item(null, time, name, source)
+        val width = parts.getOrNull(4)?.toIntOrNull()?.coerceAtLeast(0) ?: 0
+        val height = parts.getOrNull(5)?.toIntOrNull()?.coerceAtLeast(0) ?: 0
+        return Item(null, time, name, source, width, height)
     }
 
     /** The copied texts, newest first (pictures left out). */
@@ -86,7 +94,7 @@ class ClipboardHistory(
     fun clips(): List<Clip> {
         loading.await()
         if (prune()) save()
-        return items.map { Clip(it.text, it.image?.let { name -> File(imageDir, name) }) }
+        return items.map { Clip(it.text, it.image?.let { name -> File(imageDir, name) }, it.width, it.height) }
     }
 
     /** Adds [text] at the top (or moves it there). Blank text is ignored. */
@@ -109,15 +117,16 @@ class ClipboardHistory(
 
     /**
      * Adds a picture at the top: [image], a file already in [imageDir] (the history now owns it),
-     * copied from the clip [source] identifies. A clip whose picture is already kept is not added twice.
+     * [width] × [height] pixels, copied from the clip [source] identifies. A clip whose picture is
+     * already kept is not added twice.
      */
-    fun addImage(image: File, source: Int) {
+    fun addImage(image: File, source: Int, width: Int = 0, height: Int = 0) {
         loading.await()
         if (hasImage(source)) {
             image.delete()
             return
         }
-        items.add(0, Item(null, now(), image.name, source))
+        items.add(0, Item(null, now(), image.name, source, width, height))
         prune()
         save()
     }
@@ -187,7 +196,8 @@ class ClipboardHistory(
             if (skippedTime != 0L) append(SKIP).append('\t').append(skippedTime).append('\n')
             for (item in items) {
                 if (item.image != null) {
-                    append(IMAGE).append('\t').append(item.time).append('\t').append(item.source).append('\t').append(item.image).append('\n')
+                    append(IMAGE).append('\t').append(item.time).append('\t').append(item.source).append('\t').append(item.image)
+                        .append('\t').append(item.width).append('\t').append(item.height).append('\n')
                 } else {
                     append(item.time).append('\t').append(escape(item.text.orEmpty())).append('\n')
                 }

@@ -14,9 +14,18 @@ internal const val GIF_COLUMNS = 3
 /** Slowest GIF frame interval while typing a search (see [invalidateDrawable]). */
 internal const val GIF_TYPING_FRAME_MS = 80L
 internal const val CLIP_COLUMNS = 2
-/** Lines of text shown on a clip card before it's cut off. */
-internal const val CLIP_LINES = 3
+/** What a screen reader reads of a clip, at most. */
 internal const val CLIP_PREVIEW_CHARS = 300
+/** What a card lays out of a long copy, at most (more never fits on one card). */
+internal const val CLIP_CARD_CHARS = 3000
+/** The clipboard panel is this much taller than the other panels ... */
+internal const val CLIP_PANEL_SCALE = 1.5f
+/** ... as long as it takes no more than this share of the screen's height. */
+internal const val CLIP_PANEL_MAX_SCREEN = 0.45f
+/** The shortest a clip card gets (a one-word clip, a thin strip of a picture). */
+internal const val CLIP_MIN_CARD_DP = 48f
+/** A text card grows up to this many times the panel's visible height (scrolled to read); only a longer copy is cut off. */
+internal const val CLIP_TEXT_MAX_SCREENS = 3
 /** The up-and-left swipe's sector, as across ÷ up: 0.4 is about 22° off vertical, 1.73 about 60° (see [gesture]). */
 internal const val LANGUAGE_MIN_SLOPE = 0.4f
 internal const val LANGUAGE_MAX_SLOPE = 1.73f

@@ -18,8 +18,8 @@ import kotlin.math.min
 import kotlin.math.roundToInt
 
 /**
- * The clipboard panel: its title in the bar, then a card per clip (up to [CLIP_LINES] lines, the
- * rest cut off with "…", or the picture), the one under a resting finger highlighted. A hint shows while it's empty.
+ * The clipboard panel: its title in the bar, then the cards (see [layoutClipCards]): the text, or
+ * the whole picture, the one under a resting finger highlighted. A hint shows while it's empty.
  */
 internal fun KeyboardView.drawClipboard(c: Canvas) {
     val t = theme
@@ -42,9 +42,7 @@ internal fun KeyboardView.drawClipboard(c: Canvas) {
         val pressed = pointers.values.firstOrNull { it.area == Area.GRID && !it.moved && !it.consumed }
             ?.let { clipAt(it.downX, it.downY) }
         val radius = dpu(10f)
-        val inset = dpu(10f)
-        clipPaint.textSize = dpu(14f)
-        clipPaint.typeface = regular
+        val inset = clipInset
         clipPaint.color = t.text
         for ((i, clip) in clips.withIndex()) {
             clipCardRect(i, tmp)
@@ -55,15 +53,7 @@ internal fun KeyboardView.drawClipboard(c: Canvas) {
                 clipImages.getOrNull(i)?.let { drawClipImage(c, it, radius) }
                 continue
             }
-            val textW = (tmp.width() - 2 * inset).toInt().coerceAtLeast(1)
-            val layout = clipLayouts.getOrPut(clip) {
-                // Only the start can show in three lines; don't lay out a long copy in full.
-                val preview = clip.take(CLIP_PREVIEW_CHARS)
-                StaticLayout.Builder.obtain(preview, 0, preview.length, clipPaint, textW)
-                    .setMaxLines(CLIP_LINES)
-                    .setEllipsize(TextUtils.TruncateAt.END)
-                    .build()
-            }
+            val layout = clipLayout(clip)
             c.withSave {
                 c.clipRect(tmp)
                 c.translate(tmp.left + inset, tmp.top + (tmp.height() - layout.height) / 2)
@@ -74,24 +64,21 @@ internal fun KeyboardView.drawClipboard(c: Canvas) {
 }
 
 /**
- * A copied picture on its card ([tmp]): it fills the card inside a thin edge (which shows the
- * card's highlight), cut at its longer sides and with the card's rounded corners.
+ * A copied picture on its card ([tmp]), whole: the card has its shape, so it fills it inside a thin
+ * edge (which shows the card's highlight); one taller than a card may be is shown smaller, centred.
  */
 private fun KeyboardView.drawClipImage(c: Canvas, image: Bitmap, radius: Float) {
     val edge = dpu(3f)
     tmp.inset(edge, edge)
-    val scale = max(tmp.width() / image.width, tmp.height() / image.height)
-    val sw = tmp.width() / scale
-    val sh = tmp.height() / scale
-    clipSrc.set(
-        ((image.width - sw) / 2).roundToInt(), ((image.height - sh) / 2).roundToInt(),
-        ((image.width + sw) / 2).roundToInt(), ((image.height + sh) / 2).roundToInt(),
-    )
+    val scale = min(tmp.width() / image.width, tmp.height() / image.height)
+    val w = image.width * scale
+    val h = image.height * scale
+    clipDst.set(tmp.centerX() - w / 2, tmp.centerY() - h / 2, tmp.centerX() + w / 2, tmp.centerY() + h / 2)
     clipPath.reset()
-    clipPath.addRoundRect(tmp, radius - edge, radius - edge, Path.Direction.CW)
+    clipPath.addRoundRect(clipDst, radius - edge, radius - edge, Path.Direction.CW)
     c.withSave {
         c.clipPath(clipPath)
-        c.drawBitmap(image, clipSrc, tmp, clipImagePaint)
+        c.drawBitmap(image, null, clipDst, clipImagePaint)
     }
 }
 

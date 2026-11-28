@@ -2,7 +2,10 @@
 package com.brownllama.continuum.keyboard
 
 import android.graphics.RectF
+import android.text.StaticLayout
+import android.text.TextUtils
 import kotlin.math.floor
+import kotlin.math.max
 
 /**
  * Emoji panel: one tab per section plus ⌫ in the bar, and the grid geometry. Sections are laid
@@ -55,18 +58,63 @@ internal fun KeyboardView.closeKey(w: Float, bottom: Float): Key {
 internal fun KeyboardView.layoutClipboard(w: Float, top: Float) {
     barKeys += Key(Kind.CLIP_CLEAR, RectF(w * 0.86f, 0f, w, top))
     clipRect.set(0f, top, w, top + bodyHeight())
-    val cellW = (w - 2 * pad - (CLIP_COLUMNS - 1) * gifGap) / CLIP_COLUMNS
-    if (cellW != clipCellW) clipLayouts.clear()
-    clipCellW = cellW
+    clipCellW = (w - 2 * pad - (CLIP_COLUMNS - 1) * gifGap) / CLIP_COLUMNS
+    layoutClipCards()
     clipScroll = clipScroll.coerceIn(0f, maxClipScroll)
     keys += closeKey(w, clipRect.bottom)
 }
 
+/**
+ * Places the cards Pinterest-style: two columns, each card under the shorter one, each as tall as
+ * what it holds: all of the text (up to [clipMaxTextH]), or the whole picture at its own shape (up to [clipMaxCardH]).
+ */
+internal fun KeyboardView.layoutClipCards() {
+    clipCards.clear()
+    clipContentH = 0f
+    val w = clipCellW
+    if (w <= 1f || clipRect.height() <= 0f) return
+    val maxH = clipMaxCardH
+    if (w != clipLayoutsW || maxH != clipLayoutsH) {
+        clipLayouts.clear()
+        clipLayoutsW = w
+        clipLayoutsH = maxH
+    }
+    val minH = dpu(CLIP_MIN_CARD_DP)
+    val columns = FloatArray(CLIP_COLUMNS) { gifGap }
+    for ((i, clip) in clips.withIndex()) {
+        val h = if (clip != null) {
+            (clipLayout(clip).height + 2 * clipInset).coerceIn(minH, clipMaxTextH)
+        } else {
+            val image = clipImages.getOrNull(i)
+            val aspect = image?.let { it.height.toFloat() / it.width } ?: clipAspects.getOrNull(i)?.takeIf { it > 0f } ?: 1f
+            (w * aspect).coerceIn(minH, maxH)
+        }
+        val col = columns.indices.minBy { columns[it] }
+        val l = pad + col * (w + gifGap)
+        clipCards += RectF(l, columns[col], l + w, columns[col] + h)
+        columns[col] += h + gifGap
+    }
+    clipContentH = columns.max()
+}
+
+/** A text card's laid-out text: all of it, unless more than fits on the tallest text card (then cut off with "…"). */
+internal fun KeyboardView.clipLayout(clip: String): StaticLayout = clipLayouts.getOrPut(clip) {
+    clipPaint.textSize = dpu(14f)
+    clipPaint.typeface = regular
+    val textW = (clipCellW - 2 * clipInset).toInt().coerceAtLeast(1)
+    val lines = max(1, ((clipMaxTextH - 2 * clipInset) / clipPaint.fontSpacing).toInt())
+    val text = clip.take(CLIP_CARD_CHARS)
+    StaticLayout.Builder.obtain(text, 0, text.length, clipPaint, textW)
+        .setMaxLines(lines)
+        .setEllipsize(TextUtils.TruncateAt.END)
+        .build()
+}
+
 /** Where clip card [i] is on screen (scrolled), into [out]. */
 internal fun KeyboardView.clipCardRect(i: Int, out: RectF) {
-    val l = pad + (i % CLIP_COLUMNS) * (clipCellW + gifGap)
-    val t = clipRect.top + (i / CLIP_COLUMNS) * (clipCellH + gifGap) + gifGap - clipScroll
-    out.set(l, t, l + clipCellW, t + clipCellH)
+    val card = clipCards.getOrNull(i) ?: return out.setEmpty()
+    out.set(card)
+    out.offset(0f, clipRect.top - clipScroll)
 }
 
 /** Index of the clip card under (x, y), or null. */
