@@ -1,6 +1,7 @@
-// Drawing: the clipboard, sticker, emoji and GIF panels.
+// Drawing: the clipboard, emoji and GIF panels.
 package com.brownllama.continuum.keyboard
 
+import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Path
@@ -18,7 +19,7 @@ import kotlin.math.roundToInt
 
 /**
  * The clipboard panel: its title in the bar, then a card per clip (up to [CLIP_LINES] lines, the
- * rest cut off with "…"), the one under a resting finger highlighted. A hint shows while it's empty.
+ * rest cut off with "…", or the picture), the one under a resting finger highlighted. A hint shows while it's empty.
  */
 internal fun KeyboardView.drawClipboard(c: Canvas) {
     val t = theme
@@ -50,6 +51,10 @@ internal fun KeyboardView.drawClipboard(c: Canvas) {
             if (!RectF.intersects(tmp, clipRect)) continue
             fill.color = if (i == pressed) t.keyPressed else t.keyFill
             c.drawRoundRect(tmp, radius, radius, fill)
+            if (clip == null) {
+                clipImages.getOrNull(i)?.let { drawClipImage(c, it, radius) }
+                continue
+            }
             val textW = (tmp.width() - 2 * inset).toInt().coerceAtLeast(1)
             val layout = clipLayouts.getOrPut(clip) {
                 // Only the start can show in three lines; don't lay out a long copy in full.
@@ -68,26 +73,25 @@ internal fun KeyboardView.drawClipboard(c: Canvas) {
     }
 }
 
-/** The sticker panel: its title in the bar, then the stickers, the one under a resting finger on a key-coloured tile. */
-internal fun KeyboardView.drawStickers(c: Canvas) {
-    val t = theme
-    drawText(c, resources.getString(R.string.sticker_title), width / 2f, barH / 2, barH * 0.42f, t.text, medium)
-    c.withClip(stickerRect) {
-        val pressed = pointers.values.firstOrNull { it.area == Area.GRID && !it.moved && !it.consumed }
-            ?.let { stickerAt(it.downX, it.downY) }
-        val radius = dpu(10f)
-        val inset = stickerCell * 0.06f
-        for ((i, image) in stickers.withIndex()) {
-            stickerCellRect(i, tmp)
-            if (!RectF.intersects(tmp, stickerRect)) continue
-            if (i == pressed) {
-                fill.color = t.keyPressed
-                c.drawRoundRect(tmp, radius, radius, fill)
-            }
-            if (image == null) continue
-            tmp.inset(inset, inset)
-            c.drawBitmap(image, null, tmp, stickerPaint)
-        }
+/**
+ * A copied picture on its card ([tmp]): it fills the card inside a thin edge (which shows the
+ * card's highlight), cut at its longer sides and with the card's rounded corners.
+ */
+private fun KeyboardView.drawClipImage(c: Canvas, image: Bitmap, radius: Float) {
+    val edge = dpu(3f)
+    tmp.inset(edge, edge)
+    val scale = max(tmp.width() / image.width, tmp.height() / image.height)
+    val sw = tmp.width() / scale
+    val sh = tmp.height() / scale
+    clipSrc.set(
+        ((image.width - sw) / 2).roundToInt(), ((image.height - sh) / 2).roundToInt(),
+        ((image.width + sw) / 2).roundToInt(), ((image.height + sh) / 2).roundToInt(),
+    )
+    clipPath.reset()
+    clipPath.addRoundRect(tmp, radius - edge, radius - edge, Path.Direction.CW)
+    c.withSave {
+        c.clipPath(clipPath)
+        c.drawBitmap(image, clipSrc, tmp, clipImagePaint)
     }
 }
 

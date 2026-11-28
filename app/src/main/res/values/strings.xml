@@ -102,7 +102,7 @@
     <string name="pref_vibrate_strength_summary">How strong each tick is. Phones that can\'t set the strength make the tick longer or shorter instead.</string>
     <string name="cat_clipboard">Clipboard</string>
     <string name="pref_clipboard">Clipboard history</string>
-    <string name="pref_clipboard_summary">Keep copied text for the clipboard panel. It stays on the phone and is hidden while the phone is locked. Turning this off deletes what was kept.</string>
+    <string name="pref_clipboard_summary">Keep copied text and pictures for the clipboard panel. It stays on the phone and is hidden while the phone is locked. Turning this off deletes what was kept.</string>
     <string name="pref_clipboard_keep">Keep copies for</string>
     <string name="cat_learned">Learned words</string>
     <string name="pref_clear">Forget learned words</string>
@@ -198,7 +198,7 @@
     <string name="guide_emoji_title">Emoji</string>
     <string name="guide_emoji">In mini mode, hold the row, slide up and onto ☺. In the full keyboard, hold the comma. Tabs at the top jump between groups; your most used emoji come first.</string>
     <string name="guide_clipboard_title">Clipboard</string>
-    <string name="guide_clipboard">In mini mode, hold the row, slide up and onto the clipboard at the far left. Tap a clip to paste it, hold to delete it, or tap the bin to clear all. Continuum keeps up to 30 clips for 7 days (or less: Typing → Clipboard), skips anything copied from password or private fields, and shows none of it while the phone is locked.</string>
+    <string name="guide_clipboard">In mini mode, hold the row, slide up and onto the clipboard at the far left. Tap a clip to paste it, hold to delete it, or tap the bin to clear all. Copied pictures show up too; an app that can\'t take a picture in its text field gets the share menu instead. Continuum keeps up to 30 clips (10 of them pictures) for 7 days (or less: Typing → Clipboard), skips anything copied from password or private fields, and shows none of it while the phone is locked.</string>
     <string name="guide_gif_title">GIFs</string>
     <string name="guide_gif">In the emoji panel, tap GIF. Tap the search field to type, enter to search, then tap a GIF to send it. Apps that don\'t take GIFs get the link instead. Needs a free KLIPY key (Settings → GIFs), where you can also hide the GIF tab.</string>
     <string name="guide_cat_5">Learning and privacy</string>
@@ -223,8 +223,12 @@
     <string name="gif_none">No GIFs found</string>
     <string name="gif_error">Couldn\'t reach KLIPY. Check your connection.</string>
     <string name="clip_title">Clipboard</string>
-    <string name="clip_empty">Copied text shows up here. Hold a clip to delete it.</string>
-    <string name="clip_locked">Unlock your phone to see copied text</string>
+    <string name="clip_empty">Copied text and pictures show up here. Hold a clip to delete it.</string>
+    <string name="clip_image_label">Copied picture</string>
+    <string name="clip_image_failed">Couldn\'t paste that picture</string>
+    <string name="clip_image_share_title">Send picture</string>
+    <string name="clip_image_shared">This app doesn\'t take pictures here, so pick where to send it</string>
+    <string name="clip_locked">Unlock your phone to see what you copied</string>
     <string name="clip_off">Clipboard history is off (Continuum → Typing)</string>
     <string name="gif_no_key">Add a free KLIPY key in Continuum → GIFs</string>
     <string name="gif_link_pasted">This app doesn\'t accept GIFs, so the link was pasted</string>
@@ -232,13 +236,6 @@
     <string name="forget_question">Remove “%1$s” from suggestions?</string>
     <string name="forget_remove">Remove</string>
     <string name="forget_cancel">Cancel</string>
-    <string name="sticker_title">Stickers</string>
-    <string name="sticker_added">Sticker added</string>
-    <string name="sticker_add_failed">Couldn\'t make a sticker from that image</string>
-    <string name="sticker_removed">Sticker deleted</string>
-    <string name="sticker_send_failed">Couldn\'t send that sticker</string>
-    <string name="sticker_share_title">Send sticker</string>
-    <string name="sticker_shared">This app doesn\'t take stickers here, so pick where to send it</string>
     <string name="autocorrect_on">Autocorrect on</string>
     <string name="autocorrect_off">Autocorrect off: words are typed and learned as written</string>
     <string name="mode_locked">This field needs the full keyboard</string>
@@ -264,10 +261,8 @@
     <string name="acc_close">Close</string>
     <string name="acc_gifs">GIFs</string>
     <string name="acc_gif">GIF %1$d</string>
-    <string name="acc_sticker">Sticker %1$d</string>
     <string name="acc_close_search">Close search</string>
-    <string name="acc_clip_clear">Delete all copied text</string>
-    <string name="acc_sticker_add">Add a sticker</string>
+    <string name="acc_clip_clear">Delete all copied text and pictures</string>
 
     <!-- Chameleon takes each app's colour; the rest are KeyboardTheme.PRESETS. -->
     <!-- How long the clipboard history keeps a copy; the values are hours (Prefs.CLIPBOARD_KEEP). -->

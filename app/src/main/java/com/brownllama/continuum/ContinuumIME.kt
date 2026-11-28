@@ -37,9 +37,6 @@ import com.brownllama.continuum.prediction.Mode
 import com.brownllama.continuum.prediction.Tap
 import com.brownllama.continuum.prediction.TouchModel
 import com.brownllama.continuum.prediction.UserModel
-import com.brownllama.continuum.sticker.AddStickerActivity
-import com.brownllama.continuum.sticker.Sticker
-import com.brownllama.continuum.sticker.StickerStore
 import com.brownllama.continuum.stats.TypingStats
 import com.brownllama.continuum.theme.AppThemes
 import java.io.File
@@ -75,7 +72,7 @@ import kotlin.math.roundToInt
  *   still get suggestions, but nothing typed there is learned or unlearned ([learning] off).
  *   The same goes for fields that ask for no suggestions (TYPE_TEXT_FLAG_NO_SUGGESTIONS: user
  *   names, codes), where full mode also types exactly what was tapped ([exactField]).
- * - Copied text is kept for the clipboard panel ([captureClip]), except what is copied while a
+ * - Copied text and pictures are kept for the clipboard panel ([captureClip]), except what is copied while a
  *   password, number or incognito field has focus ([privateField]), and never shown while the
  *   phone is locked.
  * - A word typed right after "word'" or "word-" is learned together with it ("zazzy's", see [Glue]).
@@ -89,7 +86,7 @@ import kotlin.math.roundToInt
  *
  * This file holds the state, the lifecycle and the [KeyboardView.Listener] entry points; most of the
  * work is in extension functions next to it: ImeEditing (what keys do to the text), ImeComposing
- * (decoding, committing, learning, the bar), ImeSettings, ImeShift, ImeClipboardStickers and
+ * (decoding, committing, learning, the bar), ImeSettings, ImeShift, ImeClipboard and
  * ImeGifSearch, with the small records in ImeTypes and the numbers in ImeConstants.
  */
 open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
@@ -152,9 +149,10 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
     internal var dict: Dictionary? = null
     internal lateinit var emojiHistory: EmojiHistory
     internal lateinit var clipboard: ClipboardHistory
-    internal lateinit var stickerStore: StickerStore
-    /** The stickers the panel shows, in its order (see [loadStickers]). */
-    internal var stickers: List<Sticker> = emptyList()
+    /** Thumbnails of the clipboard's pictures, by file name (see [showClips]). */
+    internal val clipThumbs = HashMap<String, android.graphics.Bitmap>()
+    /** Copied pictures being saved right now, by source (see [captureClip]), so none is saved twice. */
+    internal val copyingImages = HashSet<Int>()
     private val clipListener = ClipboardManager.OnPrimaryClipChangedListener { captureClip(fresh = true) }
     private var emojiGroups: List<EmojiGroup> = emptyList()
     /** Every emoji in [emojiGroups], i.e. the ones the font can draw. */
@@ -273,7 +271,11 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
         emojiHistory = EmojiHistory(File(filesDir, "emoji_usage.tsv"), DiskIo.executor)
         clipboard = ClipboardHistory(File(filesDir, "clipboard.tsv"), io = DiskIo.executor)
         applyClipboardPrefs()
-        stickerStore = StickerStore(this)
+        // Stickers were removed: drop the images v0.0.24 kept for them (photos the user picked, and copies made for sending).
+        DiskIo.executor.execute {
+            File(filesDir, "stickers").deleteRecursively()
+            File(cacheDir, "stickers").deleteRecursively()
+        }
         getSystemService(ClipboardManager::class.java)?.addPrimaryClipChangedListener(clipListener)
         appThemes = AppThemes(this)
         gifs = GifFeed(this, prefs)
@@ -306,7 +308,6 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
         prefs.unregisterOnSharedPreferenceChangeListener(this)
         getSystemService(ClipboardManager::class.java)?.removePrimaryClipChangedListener(clipListener)
         gifs.shutdown()
-        stickerStore.shutdown()
         main.removeCallbacksAndMessages(null)
         flushTouch()
         touch.save()
@@ -570,17 +571,6 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
 
     override fun onClipClear() = handleClipClear()
 
-    // ---- stickers ---------------------------------------------------------------------------
-
-    override fun onStickersOpen() = loadStickers()
-
-    override fun onStickerPicked(index: Int) = handleStickerPicked(index)
-
-    override fun onStickerRemove(index: Int) = handleStickerRemove(index)
-
-    /** Opens the photo picker (through [AddStickerActivity]); the new sticker shows when the keyboard comes back. */
-    override fun onStickerAdd() = handleStickerAdd()
-
     override fun onPickInputMethod() {
         (getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager).showInputMethodPicker()
     }
@@ -637,8 +627,6 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
         super.onWindowShown()
         showSystemButtons(!prefs.getBoolean(Prefs.HIDE_SYSTEM_BUTTONS, true))
         view?.keyboardShown()
-        // Back from adding a sticker: show the new one.
-        if (view?.panel == KeyboardView.Panel.STICKERS) loadStickers()
     }
 
     /** The keyboard went away: stop the animals, and give back the memory of the GIFs it was showing. */
@@ -647,5 +635,7 @@ open class ContinuumIME : InputMethodService(), KeyboardView.Listener,
         view?.keyboardHidden()
         view?.releaseGifs(force = true)
         gifs.release()
+        // The clipboard's thumbnails are decoded again the next time the panel opens.
+        clipThumbs.clear()
     }
 }

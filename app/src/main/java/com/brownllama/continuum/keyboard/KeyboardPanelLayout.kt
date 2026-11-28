@@ -1,4 +1,4 @@
-// Layout and hit-testing of the emoji, GIF, clipboard and sticker panels.
+// Layout and hit-testing of the emoji, GIF and clipboard panels.
 package com.brownllama.continuum.keyboard
 
 import android.graphics.RectF
@@ -10,15 +10,11 @@ import kotlin.math.floor
  */
 internal fun KeyboardView.layoutEmoji(w: Float, top: Float) {
     emojiSections = listOf(EmojiGroup(Emoji.FREQUENT, frequentShown)) + emojiGroups
-    // GIF and ⌫ tabs (or just ⌫), plus the sticker tab while stickers are offered (the clipboard is on mini mode's strip).
-    val extra = (if (showGifs) 2 else 1) + (if (STICKERS) 1 else 0)
+    // GIF and ⌫ tabs (or just ⌫); the clipboard is on mini mode's strip.
+    val extra = if (showGifs) 2 else 1
     val tabW = w / (emojiSections.size + extra)
     emojiSections.indices.forEach { i ->
         barKeys += Key(Kind.EMOJI_TAB, RectF(i * tabW, 0f, (i + 1) * tabW, top), value = i)
-    }
-    if (STICKERS) {
-        val stickerRight = w - (extra - 1) * tabW
-        barKeys += Key(Kind.STICKER_TAB, RectF(stickerRight - tabW, 0f, stickerRight, top))
     }
     if (showGifs) {
         barKeys += Key(Kind.GIF_TAB, RectF(w - 2 * tabW, 0f, w - tabW, top))
@@ -78,30 +74,6 @@ internal fun KeyboardView.clipAt(x: Float, y: Float): Int? {
     if (!clipRect.contains(x, y)) return null
     val r = hitRect
     return clips.indices.firstOrNull { clipCardRect(it, r); r.contains(x, y) }
-}
-
-/** Sticker panel: [☺ | title | +] in the bar, then a grid of square stickers with a floating ✕. */
-internal fun KeyboardView.layoutStickers(w: Float, top: Float) {
-    barKeys += Key(Kind.STICKER_BACK, RectF(0f, 0f, w * 0.12f, top))
-    barKeys += Key(Kind.STICKER_ADD, RectF(w * 0.86f, 0f, w, top))
-    stickerRect.set(0f, top, w, top + bodyHeight())
-    stickerCell = (w - 2 * pad - (STICKER_COLUMNS - 1) * gifGap) / STICKER_COLUMNS
-    stickerScroll = stickerScroll.coerceIn(0f, maxStickerScroll)
-    keys += closeKey(w, stickerRect.bottom)
-}
-
-/** Where sticker [i] is on screen (scrolled), into [out]. */
-internal fun KeyboardView.stickerCellRect(i: Int, out: RectF) {
-    val l = pad + (i % STICKER_COLUMNS) * (stickerCell + gifGap)
-    val t = stickerRect.top + (i / STICKER_COLUMNS) * (stickerCell + gifGap) + gifGap - stickerScroll
-    out.set(l, t, l + stickerCell, t + stickerCell)
-}
-
-/** Index of the sticker under (x, y), or null. */
-internal fun KeyboardView.stickerAt(x: Float, y: Float): Int? {
-    if (!stickerRect.contains(x, y)) return null
-    val r = hitRect
-    return stickers.indices.firstOrNull { stickerCellRect(it, r); r.contains(x, y) }
 }
 
 /** The search header above the keyboard's bar: [☺ | search field | ⌄], then the strip of GIFs. */

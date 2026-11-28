@@ -14,9 +14,6 @@ internal const val GIF_COLUMNS = 3
 /** Slowest GIF frame interval while typing a search (see [invalidateDrawable]). */
 internal const val GIF_TYPING_FRAME_MS = 80L
 internal const val CLIP_COLUMNS = 2
-internal const val STICKER_COLUMNS = 4
-/** Whether the emoji panel offers the sticker tab. Off for now, until the built-in stickers are redrawn. */
-internal const val STICKERS = false
 /** Lines of text shown on a clip card before it's cut off. */
 internal const val CLIP_LINES = 3
 internal const val CLIP_PREVIEW_CHARS = 300

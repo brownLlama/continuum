@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Files handed to the app being typed in: GIFs downloaded for sending (cacheDir/gifs, see GifFeed)
-     stickers ready to send (cacheDir/stickers, see StickerStore). -->
+     and copied pictures from the clipboard history (filesDir/clip_images, see ClipboardHistory). -->
 <paths>
     <cache-path name="gifs" path="gifs/" />
-    <cache-path name="stickers" path="stickers/" />
+    <files-path name="clip_images" path="clip_images/" />
 </paths>

@@ -97,7 +97,7 @@ internal fun KeyboardView.down(id: Int, x: Float, y: Float) {
         else -> hitKey(keys, x, y)?.let { Pointer(this, id, x, y, Area.KEY, it) }
     } ?: return
     pointers[id] = p
-    // A tick for a key or the letter row; not for the emoji / GIF / sticker grids, which scroll.
+    // A tick for a key or the letter row; not for the emoji / GIF grids, which scroll.
     if (p.area != Area.GRID) keyVibration.tap()
     if (p.area == Area.LETTERS || p.area == Area.STRIP) glows += Glow(p)
     if (p.key?.kind == Kind.BACKSPACE) {
@@ -112,8 +112,8 @@ internal fun KeyboardView.down(id: Int, x: Float, y: Float) {
         timer.postDelayed(r, REPEAT_DELAY_MS)
     } else if (p.area == Area.TREE || p.area == Area.CURSOR) {
         // The tree and the trackpad have no hold.
-    } else if (p.area != Area.GRID || panel == Panel.CLIPBOARD || panel == Panel.STICKERS) {
-        // Clip cards and the user's stickers can be held (to delete them); emoji and GIFs can't.
+    } else if (p.area != Area.GRID || panel == Panel.CLIPBOARD) {
+        // Clip cards can be held (to delete them); emoji and GIFs can't.
         timer.postDelayed(p.longPress, holdMs)
     }
     invalidate()
@@ -216,11 +216,6 @@ internal fun KeyboardView.onLongPress(p: Pointer) {
             clipAt(p.downX, p.downY)?.let {
                 p.consumed = true
                 listener.onClipRemove(it)
-            }
-        } else if (panel == Panel.STICKERS) {
-            stickerAt(p.downX, p.downY)?.takeIf { stickerRemovable.getOrElse(it) { false } }?.let {
-                p.consumed = true
-                listener.onStickerRemove(it)
             }
         }
         Area.KEY -> when (p.key!!.kind) {
@@ -453,7 +448,6 @@ internal fun KeyboardView.tap(p: Pointer) {
             when {
                 showsGifs -> gifAt(p.downX, p.downY)?.let(listener::onGifPicked)
                 panel == Panel.CLIPBOARD -> clipAt(p.downX, p.downY)?.let(listener::onClipPicked)
-                panel == Panel.STICKERS -> stickerAt(p.downX, p.downY)?.let(listener::onStickerPicked)
                 else -> emojiAt(p.downX, p.downY)?.let(listener::onEmoji)
             }
         }

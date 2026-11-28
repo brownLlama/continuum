@@ -61,9 +61,6 @@ internal fun KeyboardView.keyTap(k: Key, p: Pointer) {
         Kind.GIF_SEARCH -> openGifSearch()
         Kind.GIF_CANCEL -> closeGifSearch()
         Kind.CLIP_CLEAR -> if (clips.isNotEmpty()) listener.onClipClear()
-        Kind.STICKER_TAB -> showPanel(Panel.STICKERS)
-        Kind.STICKER_BACK -> showPanel(Panel.EMOJI)
-        Kind.STICKER_ADD -> listener.onStickerAdd()
     }
 }
 
