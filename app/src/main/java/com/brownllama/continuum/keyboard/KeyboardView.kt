@@ -91,8 +91,9 @@ class KeyboardView(context: Context, internal val listener: Listener) : View(con
         fun onText(text: String)
         /** An emoji picked from the emoji panel. */
         fun onEmoji(emoji: String)
+        /** Backspace tapped: one letter. */
         fun onBackspace()
-        /** Swipe left. */
+        /** Swipe left, or backspace held (repeatedly, faster and faster). */
         fun onDeleteWord()
         /** In the cursor mode, sliding sideways: move the cursor [steps] characters (negative: left). */
         fun onCursorMove(steps: Int)

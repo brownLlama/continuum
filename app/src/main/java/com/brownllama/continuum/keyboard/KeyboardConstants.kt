@@ -77,9 +77,16 @@ internal val GERMAN = mapOf('a' to "ä", 'o' to "ö", 'u' to "ü", 's' to "ß")
  * is offered: long enough to slide on to a number or symbol first without it getting in the way.
  */
 internal const val GERMAN_WAIT_MS = 700L
-/** Backspace: hold this long before it repeats, then repeat this often. */
+/**
+ * Holding backspace: after [REPEAT_DELAY_MS] it deletes a whole word, then the next one
+ * [DELETE_WORD_FIRST_MS] later, each gap [DELETE_WORD_SPEEDUP] of the one before, down to
+ * [DELETE_WORD_MIN_MS]: slow enough at first to stop after a word or two, fast enough to clear a
+ * paragraph in a few seconds.
+ */
 internal const val REPEAT_DELAY_MS = 400L
-internal const val REPEAT_MS = 55L
+internal const val DELETE_WORD_FIRST_MS = 250f
+internal const val DELETE_WORD_SPEEDUP = 0.8f
+internal const val DELETE_WORD_MIN_MS = 60f
 
 /** In the cursor mode: the finger travels this far (dp) sideways for each character the cursor moves. */
 internal const val CURSOR_STRIDE_DP = 4f
