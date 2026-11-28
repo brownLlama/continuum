@@ -72,12 +72,6 @@ internal fun KeyboardView.drawContent(canvas: Canvas) {
         for (k in keys) drawKey(canvas, k, false)
         return
     }
-    if (panel == Panel.STICKERS) {
-        drawStickers(canvas)
-        for (k in barKeys) drawKey(canvas, k, true)
-        for (k in keys) drawKey(canvas, k, false)
-        return
-    }
     if (gifSearching) {
         drawGifGrid(canvas)
         for (k in headerKeys) drawKey(canvas, k, true)
@@ -178,9 +172,6 @@ internal fun KeyboardView.drawKey(c: Canvas, k: Key, inBar: Boolean) {
         Kind.GIF_SEARCH -> drawGifSearchField(c, r)
         Kind.GIF_CANCEL -> icons.chevronDown(c, cx, cy, min(r.width(), r.height()) * 0.16f, t.dim)
         Kind.CLIP_CLEAR -> icons.trash(c, cx, cy, min(r.width(), r.height()) * 0.2f, if (clips.isEmpty()) hintColor else t.dim)
-        Kind.STICKER_TAB -> icons.sticker(c, cx, cy, min(r.width(), r.height()) * 0.2f, t.dim)
-        Kind.STICKER_BACK -> icons.smiley(c, cx, cy, min(r.width(), r.height()) * 0.22f, t.dim)
-        Kind.STICKER_ADD -> icons.plus(c, cx, cy, min(r.width(), r.height()) * 0.22f, t.dim)
         Kind.AUTOCORRECT -> icons.autocorrect(c, cx, cy, barH * 0.22f, autocorrectOn, if (autocorrectOn) t.accent else t.dim)
         Kind.SUGGESTION -> {} // drawn by drawSuggestions
     }

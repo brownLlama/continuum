@@ -74,11 +74,6 @@ internal fun KeyboardView.layoutKeys() {
         invalidate()
         return
     }
-    if (panel == Panel.STICKERS) {
-        layoutStickers(w, top)
-        invalidate()
-        return
-    }
     if (gifSearching) layoutGifHeader(w)
     if (mode == Mode.MINI) {
         barKeys += Key(Kind.SHIFT, RectF(0f, 0f, w * 0.12f, top))

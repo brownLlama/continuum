@@ -77,11 +77,8 @@ internal fun KeyboardView.buildAccessNodes(): List<AccessNode> {
         }
         panel == Panel.CLIPBOARD -> for ((i, clip) in clips.withIndex()) {
             clipCardRect(i, cell)
-            if (cell.intersect(clipRect)) add(cell, clip.take(CLIP_PREVIEW_CHARS)) { listener.onClipPicked(i) }
-        }
-        panel == Panel.STICKERS -> for (i in stickers.indices) {
-            stickerCellRect(i, cell)
-            if (cell.intersect(stickerRect)) add(cell, resources.getString(R.string.acc_sticker, i + 1)) { listener.onStickerPicked(i) }
+            val label = clip?.take(CLIP_PREVIEW_CHARS) ?: resources.getString(R.string.clip_image_label)
+            if (cell.intersect(clipRect)) add(cell, label) { listener.onClipPicked(i) }
         }
     }
     if (mode == Mode.MINI && panel == Panel.LETTERS) {
@@ -134,12 +131,10 @@ internal fun KeyboardView.keyLabel(k: Key): String? {
         Kind.EMOJI_TAB -> resources.getString(R.string.acc_emoji_group, emojiSections.getOrNull(k.value)?.id.orEmpty())
         Kind.CLOSE -> s(R.string.acc_close)
         Kind.GIF_TAB -> s(R.string.acc_gifs)
-        Kind.GIF_BACK, Kind.STICKER_BACK -> s(R.string.acc_emoji)
+        Kind.GIF_BACK -> s(R.string.acc_emoji)
         Kind.GIF_SEARCH -> gifQuery.ifEmpty { s(R.string.gif_search_hint) }
         Kind.GIF_CANCEL -> s(R.string.acc_close_search)
         Kind.CLIP_CLEAR -> s(R.string.acc_clip_clear)
-        Kind.STICKER_TAB -> s(R.string.sticker_title)
-        Kind.STICKER_ADD -> s(R.string.acc_sticker_add)
     }
 }
 

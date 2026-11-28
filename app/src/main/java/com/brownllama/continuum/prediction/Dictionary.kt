@@ -401,7 +401,6 @@ class Dictionary private constructor(
         private const val START_ROW = "<s>"
         const val OPEN_ASSET = "words.txt"
         const val MISSPELLINGS_ASSET = "misspellings.txt"
-        const val EMOJI_ASSET = "emoji_keywords.tsv"
 
         /**
          * Contractions for the open list, which drops their apostrophes; rough corpus counts. Each is

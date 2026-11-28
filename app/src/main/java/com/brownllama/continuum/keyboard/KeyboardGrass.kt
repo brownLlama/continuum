@@ -10,7 +10,6 @@ import android.graphics.Rect
 import android.graphics.RectF
 import androidx.core.graphics.ColorUtils
 import androidx.core.graphics.createBitmap
-import com.brownllama.continuum.R
 import com.brownllama.continuum.prediction.Mode
 import kotlin.math.ceil
 import kotlin.math.min

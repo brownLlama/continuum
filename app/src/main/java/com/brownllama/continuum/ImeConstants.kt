@@ -3,7 +3,6 @@ package com.brownllama.continuum
 
 import android.content.ClipDescription
 import android.text.InputType
-import com.brownllama.continuum.sticker.Sticker
 
 /** ClipDescription.EXTRA_IS_SENSITIVE (Android 13); the same key works as a plain extra before it. */
 internal const val EXTRA_IS_SENSITIVE = "android.content.extra.IS_SENSITIVE"
@@ -13,8 +12,6 @@ internal const val DEFAULT_SLOT = 1
 internal const val MAX_SUGGESTIONS = 12
 /** Four rows of the emoji panel's "frequently used" section. */
 internal const val FREQUENT_EMOJI = 32
-/** Sticker thumbnails are decoded about a quarter of the screen width across (the panel has 4 columns). */
-internal const val STICKER_THUMBS_ACROSS = 4
 /** Two shift taps within this time turn on caps lock. */
 internal const val DOUBLE_TAP_MS = 350L
 /** Full-mode autocorrect keeps a real typed word unless a correction scores this much better (log). */

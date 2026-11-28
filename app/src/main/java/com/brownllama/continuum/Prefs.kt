@@ -36,7 +36,6 @@ object Prefs {
     const val ANIMALS_DEFAULT = true
     /** The language typed in, a [com.brownllama.continuum.prediction.Language.code]: "en" or "de". */
     const val LANGUAGE = "language"
-    const val LANGUAGE_DEFAULT = "en"
 
     /** Species keys (Species.key); every one by default. */
     const val ANIMAL_KINDS = "animal_kinds"

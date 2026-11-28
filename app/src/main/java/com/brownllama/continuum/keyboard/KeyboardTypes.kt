@@ -20,9 +20,6 @@ internal enum class Kind {
     GIF_SEARCH, // the search field in the GIF panel's bar
     GIF_CANCEL, // the search header's ⌄: hide the keyboard, back to the GIF grid
     CLIP_CLEAR, // the clipboard panel's bin: delete every clip
-    STICKER_TAB, // emoji panel → sticker panel
-    STICKER_BACK, // sticker panel → emoji panel
-    STICKER_ADD, // the sticker panel's +: add one from the user's photos
 }
 
 /** How a TEXT key is drawn. */

@@ -44,12 +44,10 @@ import kotlin.math.roundToInt
  * - Full letters:  bar [autocorrect switch | suggestions | ✔], three letter rows with long-press
  *                  hints, then [123 | , | en (space) | . | enter].
  * - Full numbers:  the same bar over a 10-column symbol grid with a filled phone keypad.
- * - Emoji:         full-keyboard sized in either mode: group tabs (+ stickers, GIF, ⌫) in place of the bar,
+ * - Emoji:         full-keyboard sized in either mode: group tabs (+ GIF, ⌫) in place of the bar,
  *                  over one grid that scrolls through "frequently used" and every group; ✕ closes it.
- * - Clipboard:     same size: bar ["Clipboard" | bin] over cards of recently copied text; tap one
+ * - Clipboard:     same size: bar ["Clipboard" | bin] over cards of recently copied text and pictures; tap one
  *                  to paste it, hold one to delete it.
- * - Stickers:      same size: bar [☺ | "Stickers" | +] over a grid of stickers: the user's own,
- *                  then the built-in ones. Tap one to send it, hold one of your own to delete it.
  * - GIF:           same size: bar [☺ | search field] over a scrolling grid of GIFs from KLIPY.
  *                  Tapping the search field ([gifSearching]) brings back the normal keyboard (mini or
  *                  full, with its bar, numbers and gestures) under a header: [☺ | search field | ⌄]
@@ -132,7 +130,7 @@ class KeyboardView(context: Context, internal val listener: Listener) : View(con
         fun onGifSearchOpen()
         /** The search keyboard closed ([closeGifSearch]): typing goes to the app again. */
         fun onGifSearchClose()
-        /** The clipboard panel opened: send the copied texts through [setClips]. */
+        /** The clipboard panel opened: send the copies through [setClips]. */
         fun onClipboardOpen()
         /** Clip [index] (in the order given to [setClips]) was tapped: paste it. */
         fun onClipPicked(index: Int)
@@ -140,24 +138,16 @@ class KeyboardView(context: Context, internal val listener: Listener) : View(con
         fun onClipRemove(index: Int)
         /** The clipboard panel's bin: delete every clip. */
         fun onClipClear()
-        /** The sticker panel opened: send the sticker images through [setStickers]. */
-        fun onStickersOpen()
-        /** Sticker [index] (in the order given to [setStickers]) was tapped: send it. */
-        fun onStickerPicked(index: Int)
-        /** One of the user's own stickers was held: delete it. */
-        fun onStickerRemove(index: Int)
-        /** The sticker panel's +: add a sticker from the user's photos. */
-        fun onStickerAdd()
     }
 
     enum class Shift { OFF, ON, LOCK }
 
     /** What fills the keyboard below the bar. SYMBOLS / SYMBOLS2 are the two number pages. */
     enum class Panel {
-        LETTERS, SYMBOLS, SYMBOLS2, EMOJI, GIF, CLIPBOARD, STICKERS;
+        LETTERS, SYMBOLS, SYMBOLS2, EMOJI, GIF, CLIPBOARD;
 
-        /** Emoji, GIF, clipboard and sticker panels are full-keyboard sized in either mode and replace the bar. */
-        val big get() = this == EMOJI || this == GIF || this == CLIPBOARD || this == STICKERS
+        /** Emoji, GIF and clipboard panels are full-keyboard sized in either mode and replace the bar. */
+        val big get() = this == EMOJI || this == GIF || this == CLIPBOARD
     }
 
     /** One GIF in the panel: [image] (usually animated) arrives once its preview has downloaded. */
@@ -314,8 +304,6 @@ class KeyboardView(context: Context, internal val listener: Listener) : View(con
         val resize = p.big != panel.big
         markPanelChange()
         if (panel == Panel.GIF) stopGifs()
-        // Sticker images are only kept while their panel shows; it asks for them again when it opens.
-        if (panel == Panel.STICKERS) stickers = emptyList()
         panel = p
         if (!gifSearching) gridScroller.forceFinished(true)
         if (p == Panel.EMOJI) {
@@ -328,10 +316,6 @@ class KeyboardView(context: Context, internal val listener: Listener) : View(con
         if (p == Panel.CLIPBOARD) {
             clipScroll = 0f
             listener.onClipboardOpen()
-        }
-        if (p == Panel.STICKERS) {
-            stickerScroll = 0f
-            listener.onStickersOpen()
         }
     }
 
@@ -437,7 +421,14 @@ class KeyboardView(context: Context, internal val listener: Listener) : View(con
         else max(0f, gifRows * (gifCellH + gifGap) + dpu(56f) - gifRect.height())
 
     // Clipboard panel. The IME fills [clips] through setClips; the view only shows and scrolls them.
-    internal var clips: List<String> = emptyList()
+    /** Per card, its text; null for a picture (its thumbnail in [clipImages]). */
+    internal var clips: List<String?> = emptyList()
+    /** Per card, the picture's thumbnail; null for text, or while it is still being decoded. */
+    internal var clipImages: List<Bitmap?> = emptyList()
+    internal val clipImagePaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+    /** Scratch for drawing a picture card: the part of the picture shown, and the card's rounded outline. */
+    internal val clipSrc = android.graphics.Rect()
+    internal val clipPath = Path()
     internal var clipScroll = 0f
     internal val clipRect = RectF()
     internal var clipCellW = 1f
@@ -452,11 +443,13 @@ class KeyboardView(context: Context, internal val listener: Listener) : View(con
     internal var clipMessage: String? = null
 
     /**
-     * The copied texts to show, newest first. With none, [emptyMessage] says why (the phone is
-     * locked, the history is switched off) in place of the usual hint.
+     * The copies to show, newest first: each one's text, or null for a picture, whose thumbnail is
+     * at the same place in [images] (null until it's decoded, see [setClipImages]). With none,
+     * [emptyMessage] says why (the phone is locked, the history is switched off) in place of the usual hint.
      */
-    fun setClips(texts: List<String>, emptyMessage: String? = null) {
+    fun setClips(texts: List<String?>, emptyMessage: String? = null, images: List<Bitmap?> = emptyList()) {
         clips = texts
+        clipImages = images
         clipMessage = emptyMessage
         clipLayouts.clear()
         clipScroll = clipScroll.coerceIn(0f, maxClipScroll)
@@ -464,41 +457,24 @@ class KeyboardView(context: Context, internal val listener: Listener) : View(con
         accessibility.changed()
     }
 
-    // Sticker panel. The IME fills [stickers] through setStickers; the view only shows and scrolls them.
-    internal var stickers: List<Bitmap?> = emptyList()
-    /** Per sticker: whether it's one of the user's own (those can be held to delete them). */
-    internal var stickerRemovable: List<Boolean> = emptyList()
-    internal var stickerScroll = 0f
-    internal val stickerRect = RectF()
-    internal var stickerCell = 1f
-    private val stickerRows get() = (stickers.size + STICKER_COLUMNS - 1) / STICKER_COLUMNS
-    internal val maxStickerScroll get() =
-        max(0f, stickerRows * (stickerCell + gifGap) + dpu(56f) - stickerRect.height())
-    internal val stickerPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
-
-    /** The sticker panel's images (null: couldn't be read) and which of them the user added. */
-    fun setStickers(images: List<Bitmap?>, removable: List<Boolean>) {
-        if (panel != Panel.STICKERS) return
-        stickers = images
-        stickerRemovable = removable
-        stickerScroll = stickerScroll.coerceIn(0f, maxStickerScroll)
+    /** The pictures' thumbnails, decoded after [setClips] (in the same order); ignored if the cards changed meanwhile. */
+    fun setClipImages(images: List<Bitmap?>) {
+        if (images.size != clips.size) return
+        clipImages = images
         invalidate()
-        accessibility.changed()
     }
 
-    /** The scroll position of whichever grid is showing (emoji, GIF, clipboard or stickers). */
+    /** The scroll position of whichever grid is showing (emoji, GIF or clipboard). */
     internal var gridScroll: Float
         get() = when {
             showsGifs -> gifScroll
             panel == Panel.CLIPBOARD -> clipScroll
-            panel == Panel.STICKERS -> stickerScroll
             else -> emojiScroll
         }
         set(value) {
             when {
                 showsGifs -> gifScroll = value
                 panel == Panel.CLIPBOARD -> clipScroll = value
-                panel == Panel.STICKERS -> stickerScroll = value
                 else -> emojiScroll = value
             }
             if (showsGifs) maybeLoadMoreGifs()
@@ -506,7 +482,6 @@ class KeyboardView(context: Context, internal val listener: Listener) : View(con
     internal val maxGridScroll get() = when {
         showsGifs -> maxGifScroll
         panel == Panel.CLIPBOARD -> maxClipScroll
-        panel == Panel.STICKERS -> maxStickerScroll
         else -> maxEmojiScroll
     }
 
